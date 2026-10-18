@@ -3,7 +3,10 @@
   "minVersion": "0.8",
   "package": "dev.coyduck.mixin",
   "compatibilityLevel": "JAVA_21",
-  "client": [],
+  "client": [
+    "ClientPlayerInteractionManagerAccessor",
+    "PacketApplyBatcherEntryMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }
