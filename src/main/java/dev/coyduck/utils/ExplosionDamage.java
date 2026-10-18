@@ -38,6 +38,14 @@ public final class ExplosionDamage {
     }
 
     public static float explosion(LivingEntity target, Vec3d position, Box box, Vec3d center, float power, BlockView view) {
+        return mitigate(target, raw(target, position, box, center, power, view));
+    }
+
+    public static float crystalRaw(LivingEntity target, Vec3d position, Box box, Vec3d crystal, BlockView view) {
+        return raw(target, position, box, crystal, CRYSTAL_POWER, view);
+    }
+
+    public static float raw(LivingEntity target, Vec3d position, Box box, Vec3d center, float power, BlockView view) {
         if (isInvulnerable(target)) return 0;
 
         float radius = power * 2.0f;
@@ -46,7 +54,7 @@ public final class ExplosionDamage {
 
         double impact = (1.0 - distance) * exposure(center, box, view, ShapeContext.of(target));
         float damage = (float) ((impact * impact + impact) / 2.0 * 7.0 * radius + 1.0);
-        return reduce(target, damage);
+        return target instanceof PlayerEntity ? scale(damage, target.getEntityWorld().getDifficulty()) : damage;
     }
 
     public static float upperBound(LivingEntity target, Vec3d position, Vec3d crystal) {
@@ -61,6 +69,10 @@ public final class ExplosionDamage {
 
     public static float reduce(LivingEntity target, float damage) {
         if (target instanceof PlayerEntity) damage = scale(damage, target.getEntityWorld().getDifficulty());
+        return mitigate(target, damage);
+    }
+
+    public static float mitigate(LivingEntity target, float damage) {
         if (damage <= 0) return 0;
 
         damage = armor(damage, target.getArmor(), (float) target.getAttributeValue(EntityAttributes.ARMOR_TOUGHNESS));

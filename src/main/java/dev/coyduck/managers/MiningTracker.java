@@ -1,6 +1,7 @@
 package dev.coyduck.managers;
 
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.WorldResetEvent;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
@@ -77,6 +78,15 @@ public final class MiningTracker {
 
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
+        reset();
+    }
+
+    @EventHandler
+    private void onWorldReset(WorldResetEvent event) {
+        reset();
+    }
+
+    private void reset() {
         mining.clear();
         broken.clear();
     }

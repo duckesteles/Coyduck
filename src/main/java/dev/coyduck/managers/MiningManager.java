@@ -2,6 +2,7 @@ package dev.coyduck.managers;
 
 import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
@@ -76,6 +77,10 @@ public final class MiningManager {
 
     public boolean mine(Object owner, int priority, BlockPos target, boolean autoStop, InventoryManager.SwitchMode switchMode, InteractionManager.SwingMode swing) {
         if (pos != null && this.owner != owner && priority < this.priority) return false;
+        if (mc.interactionManager.isBreakingBlock()) return false;
+
+        boolean same = target.equals(pos);
+        if (!same && (!inRange(target) || mc.world.getBlockState(target).getHardness(mc.world, target) < 0)) return false;
 
         this.owner = owner;
         this.priority = priority;
@@ -83,8 +88,7 @@ public final class MiningManager {
         this.switchMode = switchMode;
         this.swing = swing;
 
-        if (target.equals(pos)) return true;
-        if (!inRange(target) || mc.world.getBlockState(target).getHardness(mc.world, target) < 0) return false;
+        if (same) return true;
         if (pos != null && !broken) send(PlayerActionC2SPacket.Action.ABORT_DESTROY_BLOCK);
 
         pos = target.toImmutable();
@@ -230,6 +234,11 @@ public final class MiningManager {
 
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
+        reset();
+    }
+
+    @EventHandler
+    private void onWorldReset(WorldResetEvent event) {
         reset();
     }
 

@@ -1,6 +1,7 @@
 package dev.coyduck.managers;
 
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientWorldAccessor;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -199,6 +200,15 @@ public final class InteractionManager {
 
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
+        reset();
+    }
+
+    @EventHandler
+    private void onWorldReset(WorldResetEvent event) {
+        reset();
+    }
+
+    private void reset() {
         pending.clear();
         attacked.clear();
     }

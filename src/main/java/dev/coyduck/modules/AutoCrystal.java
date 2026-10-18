@@ -62,7 +62,7 @@ public class AutoCrystal extends Module {
 
     private record Target(PlayerEntity player, Box box, Vec3d feet, float health, float minDamage) {}
 
-    private record Choice(Target target, float damage, float self) {
+    private record Choice(Target target, float damage, float raw, float self) {
         boolean beats(Choice other) {
             if (other == null) return true;
             if (Math.abs(damage - other.damage) > 0.5f) return damage > other.damage;
@@ -306,6 +306,7 @@ public class AutoCrystal extends Module {
         .build()
     );
 
+    private boolean destroyedCrystal;
     private int placeBudget;
     private int breakBudget;
     private boolean running;
@@ -355,13 +356,40 @@ public class AutoCrystal extends Module {
 
     @EventHandler
     private void onPacket(PacketApplyEvent.Post event) {
-        switch (event.packet) {
-            case ExplosionS2CPacket ignored -> pass();
-            case EntitiesDestroyS2CPacket ignored -> pass();
-            case BlockUpdateS2CPacket packet when packet.getState().isReplaceable() -> pass();
-            case ChunkDeltaUpdateS2CPacket ignored -> pass();
-            default -> {}
+        if (mc.player == null) return;
+
+        boolean relevant = switch (event.packet) {
+            case ExplosionS2CPacket packet -> near(packet.center());
+            case EntitiesDestroyS2CPacket ignored -> destroyedCrystal;
+            case BlockUpdateS2CPacket packet -> packet.getState().isReplaceable() && near(Vec3d.ofCenter(packet.getPos()));
+            case ChunkDeltaUpdateS2CPacket packet -> {
+                boolean[] found = {false};
+                packet.visitUpdates((pos, state) -> found[0] |= state.isReplaceable() && near(Vec3d.ofCenter(pos)));
+                yield found[0];
+            }
+            default -> false;
+        };
+
+        destroyedCrystal = false;
+        if (relevant) pass();
+    }
+
+    @EventHandler
+    private void onPacketPre(PacketApplyEvent.Pre event) {
+        if (!(event.packet instanceof EntitiesDestroyS2CPacket packet) || mc.world == null || mc.player == null) return;
+
+        for (int id : packet.getEntityIds()) {
+            Entity entity = mc.world.getEntityById(id);
+            if (entity instanceof EndCrystalEntity && near(entity.getEntityPos())) {
+                destroyedCrystal = true;
+                return;
+            }
         }
+    }
+
+    private boolean near(Vec3d pos) {
+        double range = placeRange.get() + ExplosionDamage.CRYSTAL_RANGE;
+        return mc.player.getEyePos().squaredDistanceTo(pos) <= range * range;
     }
 
     @EventHandler
@@ -437,14 +465,14 @@ public class AutoCrystal extends Module {
 
             for (Entity entity : mc.world.getEntities()) {
                 if (!(entity instanceof EndCrystalEntity crystal) || !tracker.isAlive(crystal)) continue;
-                if (tracker.isReserved(crystal.getBlockPos().down())) continue;
+                if (tracker.isReserved(crystal.getBlockPos().down()) || tracker.threatensReserved(crystal.getEntityPos())) continue;
                 if (crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > breakRange.get() * breakRange.get()) continue;
 
                 Choice choice = evaluate(targets, crystal.getEntityPos(), health);
                 if (choice == null) continue;
 
                 if (hurtSync.get()) {
-                    float effective = HurtTracker.get().effective(choice.target.player, choice.damage, arrival);
+                    float effective = HurtTracker.get().effective(choice.target.player, choice.raw, arrival);
                     if (effective < choice.target.minDamage && effective < choice.target.health) {
                         held = true;
                         continue;
@@ -462,7 +490,7 @@ public class AutoCrystal extends Module {
             if (!InteractionManager.get().attack(best, switchMode.get(), swing.get())) break;
 
             killAround(best.getEntityPos());
-            HurtTracker.get().expect(bestChoice.target.player, bestChoice.damage);
+            HurtTracker.get().expect(bestChoice.target.player, bestChoice.raw);
             lastTarget = bestChoice.target.player;
             breakBudget--;
             broke = true;
@@ -544,6 +572,8 @@ public class AutoCrystal extends Module {
         if (!InteractionManager.get().canHitWithHand()) return;
 
         int highest = CrystalTracker.get().highestId();
+        if (highest <= 0) return;
+
         for (int i = 1; i <= idPredictCount.get(); i++) {
             int id = highest + i;
             if (mc.world.getEntityById(id) != null) continue;
@@ -565,10 +595,11 @@ public class AutoCrystal extends Module {
             if (bound < target.minDamage && bound < target.health) continue;
             if (best != null && bound < best.damage) continue;
 
-            float damage = ExplosionDamage.crystal(target.player, target.feet, target.box, crystal, mc.world);
+            float raw = ExplosionDamage.crystalRaw(target.player, target.feet, target.box, crystal, mc.world);
+            float damage = ExplosionDamage.mitigate(target.player, raw);
             if (damage < target.minDamage && damage < target.health) continue;
 
-            Choice choice = new Choice(target, damage, self);
+            Choice choice = new Choice(target, damage, raw, self);
             if (choice.beats(best)) best = choice;
         }
 

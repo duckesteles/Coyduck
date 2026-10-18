@@ -239,6 +239,11 @@ public class CevBreaker extends Module {
             CrystalTracker.get().reserve(plan.block, this);
         }
 
+        if (!hasMaterials()) {
+            clear();
+            return;
+        }
+
         MiningManager mining = MiningManager.get();
         if (!mining.mine(this, PRIORITY, plan.block, false, switchMode.get(), swing.get())) return;
 
@@ -266,25 +271,26 @@ public class CevBreaker extends Module {
         BlockOverlay view = new BlockOverlay(mc.world).set(plan.block, Blocks.AIR.getDefaultState());
         if (!Targets.safe(center, view, maxSelfDamage.get())) return;
 
-        float damage = ExplosionDamage.crystal(target, Targets.feet(box), box, center, view);
+        float raw = ExplosionDamage.crystalRaw(target, Targets.feet(box), box, center, view);
+        float damage = ExplosionDamage.mitigate(target, raw);
         float health = target.getHealth() + target.getAbsorptionAmount();
         if (damage < minDamage.get() && damage < health) return;
 
         if (hurtSync.get()) {
             long arrival = Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2;
-            float effective = HurtTracker.get().effective(target, damage, arrival);
+            float effective = HurtTracker.get().effective(target, raw, arrival);
             if (effective < minDamage.get() && effective < health) return;
         }
 
-        fire(crystal, damage);
+        fire(crystal, raw);
     }
 
-    private void fire(EndCrystalEntity crystal, float damage) {
+    private void fire(EndCrystalEntity crystal, float raw) {
         if (!MiningManager.get().stop(this)) return;
         if (!InteractionManager.get().attack(crystal, switchMode.get(), swing.get())) return;
 
         CrystalTracker.get().kill(crystal, LatencyManager.get().timeout());
-        HurtTracker.get().expect(target, damage);
+        HurtTracker.get().expect(target, raw);
 
         if (placeObsidian()) placeCrystal();
     }
@@ -314,6 +320,13 @@ public class CevBreaker extends Module {
         if (InventoryManager.get().find(stack -> stack.isOf(Items.END_CRYSTAL), 0, InventoryManager.MAIN_END) == -1) return;
 
         InteractionManager.get().placeCrystal(block, switchMode.get(), swing.get(), null);
+    }
+
+    private boolean hasMaterials() {
+        InventoryManager inventory = InventoryManager.get();
+        if (inventory.find(stack -> stack.isOf(Items.END_CRYSTAL), 0, InventoryManager.MAIN_END) == -1) return false;
+        if (Targets.isBase(mc.world.getBlockState(plan.block)) && crystal() != null) return true;
+        return inventory.find(stack -> stack.isOf(Items.OBSIDIAN), 0, InventoryManager.MAIN_END) != -1;
     }
 
     private EndCrystalEntity crystal() {

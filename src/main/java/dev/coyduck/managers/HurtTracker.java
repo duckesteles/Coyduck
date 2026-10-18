@@ -1,6 +1,8 @@
 package dev.coyduck.managers;
 
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.utils.ExplosionDamage;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -18,7 +20,15 @@ public final class HurtTracker {
     private static final long MARGIN = 50;
     private static final long LIFETIME = 3_000;
 
-    private record Hurt(long start, float amount) {}
+    private static final class Hurt {
+        final long start;
+        float raw;
+
+        Hurt(long start, float raw) {
+            this.start = start;
+            this.raw = raw;
+        }
+    }
 
     private record Expected(float amount, long time) {}
 
@@ -31,14 +41,24 @@ public final class HurtTracker {
         return INSTANCE;
     }
 
-    public void expect(LivingEntity entity, float damage) {
-        expected.put(entity.getId(), new Expected(damage, Util.getMeasuringTimeMs()));
+    public void expect(LivingEntity entity, float raw) {
+        long now = Util.getMeasuringTimeMs();
+        Hurt hurt = hurts.get(entity.getId());
+        long arrival = now + LatencyManager.get().rtt() / 2;
+
+        if (hurt != null && arrival < hurt.start + window()) {
+            if (!Float.isNaN(hurt.raw) && raw > hurt.raw) hurt.raw = raw;
+            return;
+        }
+
+        expected.put(entity.getId(), new Expected(raw, now));
     }
 
-    public float effective(LivingEntity entity, float damage, long arrival) {
+    public float effective(LivingEntity entity, float raw, long arrival) {
         Hurt hurt = hurts.get(entity.getId());
-        if (hurt == null || arrival >= hurt.start + window() + MARGIN) return damage;
-        return Float.isNaN(hurt.amount) ? 0 : Math.max(0, damage - hurt.amount);
+        if (hurt == null || arrival >= hurt.start + window() + MARGIN) return ExplosionDamage.mitigate(entity, raw);
+        if (Float.isNaN(hurt.raw) || raw <= hurt.raw) return 0;
+        return ExplosionDamage.mitigate(entity, raw - hurt.raw);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -62,6 +82,15 @@ public final class HurtTracker {
 
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
+        reset();
+    }
+
+    @EventHandler
+    private void onWorldReset(WorldResetEvent event) {
+        reset();
+    }
+
+    private void reset() {
         hurts.clear();
         expected.clear();
     }

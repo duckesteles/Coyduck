@@ -1,6 +1,7 @@
 package dev.coyduck.managers;
 
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.WorldResetEvent;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -14,6 +15,7 @@ import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.network.packet.s2c.play.EntitiesDestroyS2CPacket;
 import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
+import dev.coyduck.utils.ExplosionDamage;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
@@ -24,6 +26,7 @@ public final class CrystalTracker {
     private static final CrystalTracker INSTANCE = new CrystalTracker();
 
     private static final long OWN_LIFETIME = 10_000;
+    private static final float MIN_RADIUS = 2.0f;
 
     private final Long2LongOpenHashMap placing = new Long2LongOpenHashMap();
     private final Int2LongOpenHashMap own = new Int2LongOpenHashMap();
@@ -87,6 +90,16 @@ public final class CrystalTracker {
         return reserved.get(base.asLong()) == owner;
     }
 
+    public boolean threatensReserved(Vec3d explosion) {
+        double range = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
+        for (Entity entity : mc.world.getEntities()) {
+            if (!(entity instanceof EndCrystalEntity) || !isAlive(entity)) continue;
+            if (!isReserved(entity.getBlockPos().down())) continue;
+            if (entity.getEntityPos().squaredDistanceTo(explosion) <= range) return true;
+        }
+        return false;
+    }
+
     public int highestId() {
         return highestId;
     }
@@ -101,7 +114,7 @@ public final class CrystalTracker {
         if (mc.world == null) return;
 
         switch (event.packet) {
-            case ExplosionS2CPacket packet -> explode(packet.center(), packet.radius() * 2.0);
+            case ExplosionS2CPacket packet when packet.radius() >= MIN_RADIUS -> explode(packet.center(), packet.radius() * 2.0);
             case EntitiesDestroyS2CPacket packet -> {
                 for (int id : packet.getEntityIds()) {
                     dead.remove(id);
@@ -130,6 +143,15 @@ public final class CrystalTracker {
 
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
+        reset();
+    }
+
+    @EventHandler
+    private void onWorldReset(WorldResetEvent event) {
+        reset();
+    }
+
+    private void reset() {
         placing.clear();
         own.clear();
         dead.clear();

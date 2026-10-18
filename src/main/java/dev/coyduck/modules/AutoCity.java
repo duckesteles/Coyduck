@@ -176,7 +176,14 @@ public class AutoCity extends Module {
     @EventHandler
     private void onPacket(PacketApplyEvent.Post event) {
         if (target == null) return;
-        if (event.packet instanceof BlockUpdateS2CPacket || event.packet instanceof ChunkDeltaUpdateS2CPacket) update();
+
+        boolean relevant = switch (event.packet) {
+            case BlockUpdateS2CPacket packet -> packet.getPos().isWithinDistance(target.getBlockPos(), 3);
+            case ChunkDeltaUpdateS2CPacket ignored -> true;
+            default -> false;
+        };
+
+        if (relevant) update();
     }
 
     @EventHandler
@@ -218,7 +225,13 @@ public class AutoCity extends Module {
             return;
         }
 
-        mining.mine(this, PRIORITY, current, rebreak.get(), switchMode.get(), swing.get());
+        if (!rebreak.get() && mining.owns(this) && mining.isMining(current) && mining.wasBroken()) {
+            mining.release(this);
+            current = null;
+            return;
+        }
+
+        mining.mine(this, PRIORITY, current, true, switchMode.get(), swing.get());
     }
 
     private boolean shouldSwitch(Choice best) {

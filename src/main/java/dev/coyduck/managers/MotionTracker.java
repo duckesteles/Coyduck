@@ -1,5 +1,6 @@
 package dev.coyduck.managers;
 
+import dev.coyduck.events.WorldResetEvent;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntSet;
@@ -82,6 +83,15 @@ public final class MotionTracker {
 
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
+        reset();
+    }
+
+    @EventHandler
+    private void onWorldReset(WorldResetEvent event) {
+        reset();
+    }
+
+    private void reset() {
         history.clear();
     }
 }

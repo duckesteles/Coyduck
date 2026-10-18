@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "ClientPlayerEntityMixin",
+    "ClientPlayNetworkHandlerMixin",
     "ClientPlayerInteractionManagerAccessor",
     "ClientWorldAccessor",
     "EntityMixin",

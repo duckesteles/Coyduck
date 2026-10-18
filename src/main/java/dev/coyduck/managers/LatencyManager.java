@@ -1,6 +1,7 @@
 package dev.coyduck.managers;
 
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.WorldResetEvent;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
@@ -105,6 +106,13 @@ public final class LatencyManager {
         long now = Util.getMeasuringTimeMs();
         synchronized (sequences) {
             sequences.int2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > SEQUENCE_LIFETIME);
+        }
+    }
+
+    @EventHandler
+    private void onWorldReset(WorldResetEvent event) {
+        synchronized (sequences) {
+            sequences.clear();
         }
     }
 
