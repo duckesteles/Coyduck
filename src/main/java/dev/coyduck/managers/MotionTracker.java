@@ -32,7 +32,10 @@ public final class MotionTracker {
     }
 
     public Vec3d position(PlayerEntity player) {
-        return player == mc.player ? player.getEntityPos() : player.getTrackedPosition().getPos();
+        if (player == mc.player) return player.getEntityPos();
+
+        Vec3d tracked = player.getTrackedPosition().getPos();
+        return tracked.equals(Vec3d.ZERO) ? player.getEntityPos() : tracked;
     }
 
     public Vec3d velocity(PlayerEntity player) {
@@ -70,7 +73,7 @@ public final class MotionTracker {
 
             seen.add(player.getId());
             ArrayDeque<Vec3d> samples = history.computeIfAbsent(player.getId(), id -> new ArrayDeque<>());
-            samples.addLast(player.getTrackedPosition().getPos());
+            samples.addLast(position(player));
             while (samples.size() > SAMPLES + 1) samples.removeFirst();
         }
 
