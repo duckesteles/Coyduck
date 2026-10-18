@@ -1,6 +1,7 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
@@ -39,6 +40,8 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket;
+import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
+import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.EntitiesDestroyS2CPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.util.Hand;
@@ -150,7 +153,7 @@ public class AutoCrystal extends Module {
     private final Setting<Double> minDamage = sgDamage.add(new DoubleSetting.Builder()
         .name("min-damage")
         .description("Least damage a crystal must deal to the target.")
-        .defaultValue(6)
+        .defaultValue(4)
         .range(0, 36)
         .sliderRange(0, 36)
         .build()
@@ -329,6 +332,10 @@ public class AutoCrystal extends Module {
         renderPos = null;
     }
 
+    public PlayerEntity target() {
+        return isActive() ? lastTarget : null;
+    }
+
     @Override
     public String getInfoString() {
         return lastTarget == null ? null : lastTarget.getName().getString();
@@ -348,7 +355,18 @@ public class AutoCrystal extends Module {
 
     @EventHandler
     private void onPacket(PacketApplyEvent.Post event) {
-        if (event.packet instanceof ExplosionS2CPacket || event.packet instanceof EntitiesDestroyS2CPacket) pass();
+        switch (event.packet) {
+            case ExplosionS2CPacket ignored -> pass();
+            case EntitiesDestroyS2CPacket ignored -> pass();
+            case BlockUpdateS2CPacket packet when packet.getState().isReplaceable() -> pass();
+            case ChunkDeltaUpdateS2CPacket ignored -> pass();
+            default -> {}
+        }
+    }
+
+    @EventHandler
+    private void onMineStop(MineStopEvent event) {
+        if (!CrystalTracker.get().isReserved(event.pos)) pass();
     }
 
     @EventHandler
@@ -388,8 +406,7 @@ public class AutoCrystal extends Module {
         if (placeBudget <= 0 || holding) return;
         if (pauseEating.get() && mc.player.isUsingItem()) return;
 
-        int crystalSlot = InventoryManager.get().find(stack -> stack.isOf(Items.END_CRYSTAL), 0, InventoryManager.MAIN_END);
-        if (crystalSlot == -1) return;
+        if (InventoryManager.get().find(stack -> stack.isOf(Items.END_CRYSTAL), 0, InventoryManager.MAIN_END) == -1) return;
 
         BlockPos spot = null;
         Choice spotChoice = null;
@@ -402,9 +419,9 @@ public class AutoCrystal extends Module {
         }
 
         if (spot != null) {
-            placeCrystal(spot, crystalSlot, spotChoice);
+            placeCrystal(spot, spotChoice);
         } else if (basePlace.get() && !CrystalTracker.get().hasPlacing()) {
-            placeBase(targets, health, crystalSlot);
+            placeBase(targets, health);
         }
     }
 
@@ -420,6 +437,7 @@ public class AutoCrystal extends Module {
 
             for (Entity entity : mc.world.getEntities()) {
                 if (!(entity instanceof EndCrystalEntity crystal) || !tracker.isAlive(crystal)) continue;
+                if (tracker.isReserved(crystal.getBlockPos().down())) continue;
                 if (crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > breakRange.get() * breakRange.get()) continue;
 
                 Choice choice = evaluate(targets, crystal.getEntityPos(), health);
@@ -463,17 +481,13 @@ public class AutoCrystal extends Module {
         }
     }
 
-    private void placeCrystal(BlockPos base, int crystalSlot, Choice choice) {
+    private void placeCrystal(BlockPos base, Choice choice) {
         Box box = new Box(base);
         Vec3d aim = new Vec3d(base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5);
         if (!rotationReady(box, aim, placeRange.get() + 1)) return;
 
-        InventoryManager.get().withItem(crystalSlot, switchMode.get(), () -> {
-            mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, new BlockHitResult(aim, Direction.UP, base, false));
-            InteractionManager.get().swing(swing.get());
-            CrystalTracker.get().placed(base);
-            if (idPredict.get()) predictAttack();
-        });
+        Runnable after = idPredict.get() ? this::predictAttack : null;
+        if (!InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), after)) return;
 
         placeBudget--;
         lastTarget = choice.target.player;
@@ -481,7 +495,7 @@ public class AutoCrystal extends Module {
         renderTime = Util.getMeasuringTimeMs();
     }
 
-    private void placeBase(List<Target> targets, float health, int crystalSlot) {
+    private void placeBase(List<Target> targets, float health) {
         int blockSlot = baseSlot();
         if (blockSlot == -1) return;
 
@@ -498,6 +512,7 @@ public class AutoCrystal extends Module {
                     for (int dy = -1; dy <= 0; dy++) {
                         BlockPos base = feet.add(dx, dy, dz);
                         if (!interaction.canPlace(base) || !mc.world.isAir(base.up())) continue;
+                        if (CrystalTracker.get().isReserved(base) || CrystalTracker.get().isReserved(base.up())) continue;
                         if (!inPlaceRange(base) || !interaction.obstructions(base).isEmpty() || blocked(base)) continue;
                         if (target.box.intersects(new Box(base))) continue;
 
@@ -522,7 +537,7 @@ public class AutoCrystal extends Module {
         InventoryManager.get().withItem(blockSlot, switchMode.get(), () -> interaction.place(base, hit, swing.get()));
 
         if (!isBase(mc.world.getBlockState(base))) return;
-        placeCrystal(base, crystalSlot, bestChoice);
+        placeCrystal(base, bestChoice);
     }
 
     private void predictAttack() {
@@ -612,6 +627,7 @@ public class AutoCrystal extends Module {
                     BlockPos base = eye.add(dx, dy, dz);
                     if (!inPlaceRange(base) || !isBase(mc.world.getBlockState(base))) continue;
                     if (!mc.world.isAir(base.up()) || CrystalTracker.get().isPlacing(base) || blocked(base)) continue;
+                    if (CrystalTracker.get().isReserved(base) || CrystalTracker.get().isReserved(base.up())) continue;
                     candidates.add(base);
                 }
             }

@@ -3,6 +3,7 @@ package dev.coyduck.managers;
 import dev.coyduck.events.PacketApplyEvent;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import meteordevelopment.meteorclient.events.entity.EntityAddedEvent;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -27,6 +28,7 @@ public final class CrystalTracker {
     private final Long2LongOpenHashMap placing = new Long2LongOpenHashMap();
     private final Int2LongOpenHashMap own = new Int2LongOpenHashMap();
     private final Int2LongOpenHashMap dead = new Int2LongOpenHashMap();
+    private final Long2ObjectOpenHashMap<Object> reserved = new Long2ObjectOpenHashMap<>();
     private int highestId;
 
     private CrystalTracker() {}
@@ -67,6 +69,22 @@ public final class CrystalTracker {
 
     public boolean isAlive(Entity entity) {
         return entity.isAlive() && !isDead(entity);
+    }
+
+    public void reserve(BlockPos base, Object owner) {
+        reserved.put(base.asLong(), owner);
+    }
+
+    public void release(Object owner) {
+        reserved.values().removeIf(value -> value == owner);
+    }
+
+    public boolean isReserved(BlockPos base) {
+        return reserved.containsKey(base.asLong());
+    }
+
+    public boolean isReservedBy(BlockPos base, Object owner) {
+        return reserved.get(base.asLong()) == owner;
     }
 
     public int highestId() {
@@ -115,6 +133,7 @@ public final class CrystalTracker {
         placing.clear();
         own.clear();
         dead.clear();
+        reserved.clear();
         highestId = 0;
     }
 
