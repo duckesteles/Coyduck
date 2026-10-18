@@ -148,11 +148,25 @@ public class AutoTotem extends Module {
         updateMainhand();
 
         totems = InventoryManager.get().count(AutoTotem::isTotem);
+        if (pending != Pending.NONE) return;
         if (totems > 0) warned = false;
         else if (warn.get() && !warned) {
             warned = true;
             warning("Out of totems.");
         }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    private void onPacketPre(PacketApplyEvent.Pre event) {
+        if (pending != Pending.CLICK && pending != Pending.VERIFY) return;
+
+        boolean offhand = switch (event.packet) {
+            case ScreenHandlerSlotUpdateS2CPacket packet -> packet.getSyncId() == 0 && packet.getSlot() == PlayerScreenHandler.OFFHAND_ID;
+            case SetPlayerInventoryS2CPacket packet -> packet.slot() == InventoryManager.OFFHAND;
+            default -> false;
+        };
+
+        if (offhand) event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)

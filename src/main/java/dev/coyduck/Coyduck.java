@@ -1,8 +1,11 @@
 package dev.coyduck;
 
+import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.LatencyManager;
+import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.managers.PopManager;
 import dev.coyduck.modules.AutoTotem;
+import dev.coyduck.modules.Surround;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
@@ -22,8 +25,11 @@ public class Coyduck extends MeteorAddon {
 
         MeteorClient.EVENT_BUS.subscribe(LatencyManager.get());
         MeteorClient.EVENT_BUS.subscribe(PopManager.get());
+        MeteorClient.EVENT_BUS.subscribe(InteractionManager.get());
+        MeteorClient.EVENT_BUS.subscribe(MiningTracker.get());
 
         Modules.get().add(new AutoTotem());
+        Modules.get().add(new Surround());
     }
 
     @Override

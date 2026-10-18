@@ -30,6 +30,11 @@ public final class InventoryManager {
         HANDS
     }
 
+    public enum SwitchMode {
+        Silent,
+        InvSwap
+    }
+
     private InventoryManager() {}
 
     public static InventoryManager get() {
@@ -103,6 +108,26 @@ public final class InventoryManager {
         if (id == -1) return false;
 
         mc.interactionManager.clickSlot(handler.syncId, id, hotbar, SlotActionType.SWAP, mc.player);
+        return true;
+    }
+
+    public boolean withItem(int index, SwitchMode mode, Runnable action) {
+        int selected = selectedSlot();
+        if (index == selected) {
+            action.run();
+            return true;
+        }
+
+        if (mode == SwitchMode.Silent && PlayerInventory.isValidHotbarIndex(index)) {
+            select(index);
+            action.run();
+            select(selected);
+            return true;
+        }
+
+        if (!swapWithHotbar(index, selected)) return false;
+        action.run();
+        swapWithHotbar(index, selected);
         return true;
     }
 
