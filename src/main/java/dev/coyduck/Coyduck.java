@@ -13,6 +13,8 @@ import dev.coyduck.modules.AntiSurround;
 import dev.coyduck.modules.AutoCity;
 import dev.coyduck.modules.AutoCrystal;
 import dev.coyduck.modules.AutoTotem;
+import dev.coyduck.modules.AutoTrap;
+import dev.coyduck.modules.AutoWeb;
 import dev.coyduck.modules.CevBreaker;
 import dev.coyduck.modules.Surround;
 import meteordevelopment.meteorclient.MeteorClient;
@@ -48,6 +50,8 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new AutoCity());
         Modules.get().add(new AntiSurround());
         Modules.get().add(new CevBreaker());
+        Modules.get().add(new AutoTrap());
+        Modules.get().add(new AutoWeb());
     }
 
     @Override

@@ -81,7 +81,7 @@ public class CevBreaker extends Module {
     private final Setting<Double> minDamage = sgGeneral.add(new DoubleSetting.Builder()
         .name("min-damage")
         .description("Least damage one cycle must deal to the target.")
-        .defaultValue(10)
+        .defaultValue(4)
         .range(0, 36)
         .sliderRange(0, 36)
         .build()

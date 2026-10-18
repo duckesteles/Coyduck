@@ -93,6 +93,18 @@ public final class Targets {
         return ring;
     }
 
+    public static boolean isHoled(LongSet columns) {
+        for (BlockPos pos : ring(columns, 0)) {
+            if (mc.world.getBlockState(pos).isReplaceable()) return false;
+        }
+        return true;
+    }
+
+    public static boolean isStill(PlayerEntity player, double speed) {
+        Vec3d velocity = MotionTracker.get().velocity(player);
+        return velocity.horizontalLengthSquared() <= speed * speed;
+    }
+
     public static boolean isBase(BlockState state) {
         return state.isOf(Blocks.OBSIDIAN) || state.isOf(Blocks.BEDROCK);
     }

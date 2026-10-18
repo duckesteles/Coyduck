@@ -69,7 +69,7 @@ public class AutoCity extends Module {
     private final Setting<Double> minDamage = sgGeneral.add(new DoubleSetting.Builder()
         .name("min-damage")
         .description("Least crystal damage the opened gap must allow on the target.")
-        .defaultValue(6)
+        .defaultValue(4)
         .range(0, 36)
         .sliderRange(0, 36)
         .build()
