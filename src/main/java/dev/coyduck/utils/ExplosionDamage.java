@@ -49,6 +49,16 @@ public final class ExplosionDamage {
         return reduce(target, damage);
     }
 
+    public static float upperBound(LivingEntity target, Vec3d position, Vec3d crystal) {
+        if (isInvulnerable(target)) return 0;
+
+        double distance = Math.sqrt(position.squaredDistanceTo(crystal)) / CRYSTAL_RANGE;
+        if (distance > 1.0) return 0;
+
+        double impact = 1.0 - distance;
+        return reduce(target, (float) ((impact * impact + impact) / 2.0 * 7.0 * CRYSTAL_RANGE + 1.0));
+    }
+
     public static float reduce(LivingEntity target, float damage) {
         if (target instanceof PlayerEntity) damage = scale(damage, target.getEntityWorld().getDifficulty());
         if (damage <= 0) return 0;

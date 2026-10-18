@@ -2,6 +2,7 @@ package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.MiningTracker;
@@ -36,6 +37,7 @@ import net.minecraft.network.packet.s2c.play.BlockBreakingProgressS2CPacket;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.EntitiesDestroyS2CPacket;
+import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
 import net.minecraft.util.Util;
 import net.minecraft.util.hit.BlockHitResult;
@@ -229,6 +231,7 @@ public class Surround extends Module {
             case BlockBreakingProgressS2CPacket packet -> near(packet.getPos());
             case ChunkDeltaUpdateS2CPacket ignored -> true;
             case EntitiesDestroyS2CPacket ignored -> true;
+            case ExplosionS2CPacket ignored -> true;
             case PlayerActionResponseS2CPacket ignored -> true;
             default -> false;
         };
@@ -316,6 +319,7 @@ public class Surround extends Module {
     private boolean clear(BlockPos pos) {
         InteractionManager interaction = InteractionManager.get();
         List<Entity> entities = interaction.obstructions(pos);
+        entities.removeIf(entity -> entity instanceof EndCrystalEntity && CrystalTracker.get().isDead(entity));
         if (entities.isEmpty()) return true;
         if (!breakCrystals.get()) return false;
 

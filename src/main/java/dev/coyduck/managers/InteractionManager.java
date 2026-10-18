@@ -108,7 +108,7 @@ public final class InteractionManager {
             swing(swing);
         };
 
-        if (attackDamage(mc.player.getMainHandStack()) > 0) {
+        if (canHitWithHand()) {
             hit.run();
         } else {
             int weapon = weaponSlot();
@@ -117,6 +117,10 @@ public final class InteractionManager {
 
         attacked.put(target.getId(), Util.getMeasuringTimeMs());
         return true;
+    }
+
+    public boolean canHitWithHand() {
+        return attackDamage(mc.player.getMainHandStack()) > 0;
     }
 
     public boolean recentlyAttacked(Entity entity) {

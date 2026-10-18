@@ -4,8 +4,12 @@
   "package": "dev.coyduck.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "ClientPlayerEntityMixin",
     "ClientPlayerInteractionManagerAccessor",
     "ClientWorldAccessor",
+    "EntityMixin",
+    "KeyboardInputMixin",
+    "LivingEntityMixin",
     "PacketApplyBatcherEntryMixin"
   ],
   "injectors": {
