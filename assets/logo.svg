@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1130 1130" width="100%" height="100%" fill="none">
+    <g id="meteor-trails">
+        <polygon points="365,290 600,427 651,399 416,262" fill="#B94AE6" />
+        <polygon points="165,290 216,262 551,455 501,486" fill="#B94AE6" />
+        <polygon points="165,290 501,486 501,545 165,349" fill="#6E2DC8" />
+        <polygon points="265,463 502,600 502,658 265,522" fill="#6E2DC8" />
+    </g>
+
+    <g id="duck-head">
+        <polygon points="564,521 764,406 964,521 764,636" fill="#FFEB3B" />
+        <polygon points="564,521 764,636 764,867 564,752" fill="#F57F17" />
+        <polygon points="764,636 964,521 964,752 764,867" fill="#FBC02D" />
+    </g>
+
+    <g id="duck-beak">
+        <polygon points="794,738.9 934,658.4 1014,704.4 874,784.9" fill="#FF9800" />
+        <polygon points="794,738.9 874,784.9 874,842.6 794,796.6" fill="#D84315" />
+        <polygon points="874,784.9 1014,704.4 1014,762.1 874,842.6" fill="#F57C00" />
+    </g>
+
+    <g id="coy-wink-eye">
+        <polygon points="696,684.7 720,673.1 742,711.1 734,715.8 720,689.2 704,698.5" fill="#212121" />
+        <polygon points="660,696.3 696,717.0 696,744.7 660,724.0" fill="#FF5252" opacity="0.85" />
+    </g>
+
+    <g id="minecraft-eye" display="none">
+        <polygon points="694,660.4 744,689.2 744,735.4 694,706.6" fill="#FFFFFF" />
+        <polygon points="720,675.4 744,689.2 744,735.4 720,721.6" fill="#1A1A1A" />
+    </g>
+</svg>

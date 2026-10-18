@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "coyduck",
+  "version": "${version}",
+  "name": "Coyduck",
+  "description": "Crystal PvP addon for Meteor Client.",
+  "authors": [
+    "duckesteles"
+  ],
+  "contact": {
+    "sources": "https://github.com/duckesteles/Coyduck"
+  },
+  "license": "GPL-3.0-only",
+  "icon": "assets/coyduck/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "meteor": [
+      "dev.coyduck.Coyduck"
+    ]
+  },
+  "mixins": [
+    "coyduck.mixins.json"
+  ],
+  "accessWidener": "coyduck.accesswidener",
+  "custom": {
+    "meteor-client:color": "251,192,45",
+    "modmenu": {
+      "parent": {
+        "id": "meteor-client"
+      }
+    }
+  },
+  "depends": {
+    "java": ">=${jdk_version}",
+    "minecraft": "${mc_version}",
+    "meteor-client": "*"
+  }
+}
