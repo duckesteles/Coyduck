@@ -57,6 +57,11 @@ public final class LatencyManager {
         return FALLBACK;
     }
 
+    public int jitter() {
+        long now = Util.getMeasuringTimeMs();
+        return (int) (action.fresh(now) ? action.deviation() : network.deviation());
+    }
+
     public int timeout() {
         long now = Util.getMeasuringTimeMs();
         double deviation = action.fresh(now) ? action.deviation() : network.deviation();

@@ -91,8 +91,8 @@ public class CevBreaker extends Module {
 
     private final Setting<Double> maxSelfDamage = sgGeneral.add(new DoubleSetting.Builder()
         .name("max-self-damage")
-        .description("Most damage a cycle may deal to you. A cycle that would pop or kill you never fires.")
-        .defaultValue(8)
+        .description("Most damage a cycle may deal to you. The crystal sits two blocks above the target, so a few blocks away it often deals 10 or more. A cycle that would pop or kill you never fires.")
+        .defaultValue(12)
         .range(0, 36)
         .sliderRange(0, 36)
         .build()
@@ -123,6 +123,13 @@ public class CevBreaker extends Module {
         .name("swing")
         .description("How the hand swing is shown.")
         .defaultValue(InteractionManager.SwingMode.Packet)
+        .build()
+    );
+
+    private final Setting<Boolean> debug = sgGeneral.add(new BoolSetting.Builder()
+        .name("debug")
+        .description("Tells you in chat what the module is waiting for.")
+        .defaultValue(false)
         .build()
     );
 
@@ -157,9 +164,13 @@ public class CevBreaker extends Module {
         .build()
     );
 
+    private static final long STUCK_TIME = 2_000;
+
     private PlayerEntity target;
     private Plan plan;
     private long releaseAt;
+    private String status;
+    private long stuckSince;
     private boolean running;
 
     public CevBreaker() {
@@ -180,7 +191,17 @@ public class CevBreaker extends Module {
 
     @Override
     public String getInfoString() {
+        if (debug.get()) return status;
         return plan == null ? null : plan.mode.name();
+    }
+
+    private void status(String text) {
+        if (text.equals(status)) return;
+
+        String kind = text.split(",", 2)[0];
+        boolean changed = status == null || !status.split(",", 2)[0].equals(kind);
+        status = text;
+        if (debug.get() && changed) info(text);
     }
 
     @EventHandler
@@ -234,6 +255,7 @@ public class CevBreaker extends Module {
         target = Targets.find(targetRange.get(), plan != null ? target : null);
         if (target == null) {
             clear();
+            status("No target");
             return;
         }
 
@@ -243,12 +265,17 @@ public class CevBreaker extends Module {
         if (plan != null && !valid(plan, columns)) clear();
         if (plan == null) {
             plan = choose(box, columns);
-            if (plan == null) return;
+            if (plan == null) {
+                status("No safe cev spot");
+                return;
+            }
+            stuckSince = 0;
             CrystalTracker.get().reserve(plan.block, this);
         }
 
         if (!hasMaterials()) {
             clear();
+            status("Out of obsidian or crystals");
             return;
         }
 
@@ -256,68 +283,129 @@ public class CevBreaker extends Module {
         BlockPos above = plan.block.up();
         if (!mc.world.getBlockState(above).isAir()) {
             mining.mine(this, PRIORITY, above, true, switchMode.get(), swing.get());
+            status("Mining the block on the cev spot");
             return;
         }
 
-        if (!mining.mine(this, PRIORITY, plan.block, false, switchMode.get(), swing.get())) return;
+        if (!mining.mine(this, PRIORITY, plan.block, false, switchMode.get(), swing.get())) {
+            status("Another module is mining");
+            return;
+        }
 
         BlockState state = mc.world.getBlockState(plan.block);
 
         if (state.isReplaceable()) {
             int lead = LatencyManager.get().rtt() / 50 + 2;
-            if (mining.remainingTicks(Blocks.OBSIDIAN.getDefaultState()) > lead) return;
-            if (placeObsidian() && crystalDue()) placeCrystal();
-            return;
+            int left = mining.remainingTicks(Blocks.OBSIDIAN.getDefaultState());
+            if (left > lead) {
+                status("Arming, " + left + " ticks");
+                return;
+            }
+            if (!placeObsidian()) {
+                status("Cannot place obsidian");
+                return;
+            }
         }
 
+        state = mc.world.getBlockState(plan.block);
         if (!Targets.isBase(state)) {
             mining.stop(this);
+            status("Mining their block, " + mining.remainingTicks() + " ticks");
             return;
         }
 
         EndCrystalEntity crystal = crystal();
         if (crystal == null) {
-            if (crystalDue()) placeCrystal();
+            placeCrystalTimed(box);
             return;
         }
 
-        if (!mining.isReady()) return;
+        if (!mining.isReady()) {
+            status("Mining, " + mining.remainingTicks() + " ticks");
+            return;
+        }
 
         Vec3d center = crystal.getEntityPos();
         BlockOverlay view = new BlockOverlay(mc.world).set(plan.block, Blocks.AIR.getDefaultState());
-        if (!Targets.safe(center, view, maxSelfDamage.get())) return;
+        if (!Targets.safe(center, view, maxSelfDamage.get())) {
+            float self = ExplosionDamage.crystal(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), center, view);
+            blocked(String.format("Too dangerous, %.1f damage to you", self));
+            return;
+        }
 
         float raw = ExplosionDamage.crystalRaw(target, Targets.feet(box), box, center, view);
         float damage = ExplosionDamage.mitigate(target, raw);
         float health = target.getHealth() + target.getAbsorptionAmount();
-        if (damage < minDamage.get() && damage < health) return;
+        if (damage < minDamage.get() && damage < health) {
+            blocked(String.format("Too weak, %.1f damage", damage));
+            return;
+        }
 
         if (hurtSync.get()) {
             long arrival = Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2;
             float effective = HurtTracker.get().effective(target, raw, arrival);
             if (effective < minDamage.get() && effective < health) {
                 releaseAt = HurtTracker.get().releaseTime(target);
+                status("Waiting for damage immunity to end");
                 return;
             }
         }
 
         releaseAt = 0;
+        stuckSince = 0;
         fire(crystal, raw);
     }
 
-    private boolean crystalDue() {
+    private void blocked(String reason) {
+        status(reason);
+
+        long now = Util.getMeasuringTimeMs();
+        if (stuckSince == 0) stuckSince = now;
+        else if (now - stuckSince >= STUCK_TIME) clear();
+    }
+
+    private void placeCrystalTimed(Box box) {
         int lead = LatencyManager.get().rtt() / 50 + 2;
-        return MiningManager.get().remainingTicks() <= lead;
+        int left = MiningManager.get().remainingTicks();
+        if (left > lead) {
+            status("Mining, " + left + " ticks");
+            return;
+        }
+
+        if (hurtSync.get()) {
+            long release = HurtTracker.get().releaseTime(target);
+            long spawn = Util.getMeasuringTimeMs() + LatencyManager.get().rtt();
+            if (release > spawn) {
+                releaseAt = release - LatencyManager.get().rtt();
+                status("Timing the crystal to damage immunity");
+                return;
+            }
+        }
+
+        if (!Targets.canHoldCrystal(mc.world, plan.block)) {
+            status("Crystal spot is blocked");
+            return;
+        }
+
+        placeCrystal();
+        status("Waiting for the crystal to spawn");
     }
 
     private void fire(EndCrystalEntity crystal, float raw) {
-        if (!MiningManager.get().stop(this)) return;
-        if (!InteractionManager.get().attack(crystal, switchMode.get(), swing.get())) return;
+        if (!MiningManager.get().stop(this)) {
+            status("Break was not sent");
+            return;
+        }
+        if (!InteractionManager.get().attack(crystal, switchMode.get(), swing.get())) {
+            status("Cannot hit the crystal");
+            return;
+        }
 
         CrystalTracker.get().explodeAt(crystal.getEntityPos());
         HurtTracker.get().expect(target, raw);
+        status("Fired");
 
-        if (placeObsidian()) placeCrystal();
+        placeObsidian();
     }
 
     private boolean placeObsidian() {
@@ -450,6 +538,7 @@ public class CevBreaker extends Module {
 
     private void clear() {
         releaseAt = 0;
+        stuckSince = 0;
         MiningManager.get().release(this);
         CrystalTracker.get().release(this);
         plan = null;

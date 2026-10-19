@@ -129,7 +129,9 @@ public final class MiningManager {
 
         float delta = bestDelta(state);
         if (delta <= 0) return Integer.MAX_VALUE;
-        return Math.max(0, (int) Math.ceil(SERVER_THRESHOLD / delta - elapsed()));
+
+        float margin = (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
+        return Math.max(0, (int) Math.ceil(SERVER_THRESHOLD / delta - elapsed() + margin));
     }
 
     public boolean isReady() {
@@ -141,7 +143,10 @@ public final class MiningManager {
     }
 
     private boolean isReady(BlockState state) {
-        return !state.isReplaceable() && bestDelta(state) * elapsed() >= SERVER_THRESHOLD;
+        if (state.isReplaceable()) return false;
+
+        float margin = (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
+        return bestDelta(state) * (elapsed() - margin) >= SERVER_THRESHOLD;
     }
 
     private boolean stop(Object owner, BlockState state) {
