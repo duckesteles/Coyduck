@@ -97,7 +97,11 @@ public class ElytraFly extends Module {
 
         boolean fluid = fluids.get() && inFluid();
         if (!fluid && !mc.player.isGliding()) return;
-        if (fluid && !mc.player.isOnGround()) fluidFlight = true;
+        if (fluid) {
+            if (!mc.player.isOnGround()) fluidFlight = true;
+            mc.player.setSprinting(false);
+            mc.player.setSwimming(false);
+        }
 
         PlayerInput input = mc.player.input.playerInput;
         double forward = (input.forward() ? 1 : 0) - (input.backward() ? 1 : 0);

@@ -131,6 +131,11 @@ public final class InventoryManager {
     }
 
     public boolean withItem(int index, SwitchMode mode, Runnable action) {
+        if (index != selectedSlot() && isEating()) return false;
+        return withItemWhileEating(index, mode, action);
+    }
+
+    public boolean withItemWhileEating(int index, SwitchMode mode, Runnable action) {
         boolean[] done = {false};
         PacketBatch.run(() -> done[0] = withItemNow(index, mode, action));
         return done[0];

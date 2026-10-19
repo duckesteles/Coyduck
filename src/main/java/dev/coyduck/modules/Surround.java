@@ -303,7 +303,7 @@ public class Surround extends Module {
         int slot = blockSlot();
         if (slot == -1) return;
 
-        InventoryManager.get().withItem(slot, switchMode.get(), () -> {
+        InventoryManager.get().withItemWhileEating(slot, switchMode.get(), () -> {
             for (BlockPos pos : placeable) {
                 if (budget <= 0 || !isBlock(mc.player.getMainHandStack())) break;
                 place(pos);
