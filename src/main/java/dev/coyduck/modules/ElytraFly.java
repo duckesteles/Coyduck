@@ -26,8 +26,8 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> fluids = sgGeneral.add(new BoolSetting.Builder()
         .name("fluids")
-        .description("Keeps the same control in water and lava instead of swimming, and keeps flying when you come out.")
-        .defaultValue(true)
+        .description("Also forces the flight controls in water and lava instead of swimming normally. Experimental, the server may pull you back.")
+        .defaultValue(false)
         .build()
     );
 
@@ -59,9 +59,10 @@ public class ElytraFly extends Module {
     );
 
     private boolean fluidFlight;
+    private boolean wasGliding;
 
     public ElytraFly() {
-        super(Coyduck.CATEGORY, "elytra-fly+", "Flies with an elytra at a set speed in any direction, through water and lava too.");
+        super(Coyduck.CATEGORY, "elytra-fly+", "Flies with an elytra at a set speed in any direction and picks the flight back up after water or lava.");
     }
 
     @Override
@@ -73,17 +74,25 @@ public class ElytraFly extends Module {
         }
 
         fluidFlight = false;
+        wasGliding = false;
     }
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         if (mc.player == null) return;
 
-        if (mc.player.isOnGround()) {
-            fluidFlight = false;
+        if (inFluid()) {
+            if (wasGliding) fluidFlight = true;
             return;
         }
-        if (inFluid() || mc.player.isGliding() || !fluidFlight) return;
+        if (mc.player.isOnGround()) {
+            fluidFlight = false;
+            wasGliding = false;
+            return;
+        }
+
+        wasGliding = mc.player.isGliding();
+        if (wasGliding || !fluidFlight) return;
 
         fluidFlight = false;
         if (canTakeoff() && mc.player.checkGliding()) {
