@@ -1,6 +1,7 @@
 package dev.coyduck.managers;
 
 import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
+import dev.coyduck.utils.PacketBatch;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
@@ -10,6 +11,7 @@ import net.minecraft.screen.ScreenHandler;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.screen.sync.ItemStackHash;
+import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 
@@ -73,7 +75,17 @@ public final class InventoryManager {
         return ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).coyduck$getLastSelectedSlot();
     }
 
-    public void select(int slot) {
+    public boolean isEating() {
+        return mc.player.isUsingItem() && mc.player.getActiveHand() == Hand.MAIN_HAND;
+    }
+
+    public boolean select(int slot) {
+        if (slot != selectedSlot() && isEating()) return false;
+        selectNow(slot);
+        return true;
+    }
+
+    private void selectNow(int slot) {
         mc.player.getInventory().setSelectedSlot(slot);
         ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).coyduck$syncSelectedSlot();
     }
@@ -95,12 +107,12 @@ public final class InventoryManager {
             return Swap.CLICK;
         }
 
-        if (!PlayerInventory.isValidHotbarIndex(index)) return Swap.NONE;
+        if (!PlayerInventory.isValidHotbarIndex(index) || mc.player.isUsingItem()) return Swap.NONE;
 
         int selected = selectedSlot();
-        if (selected != index) select(index);
+        if (selected != index) selectNow(index);
         mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.SWAP_ITEM_WITH_OFFHAND, BlockPos.ORIGIN, Direction.DOWN));
-        if (selected != index) select(selected);
+        if (selected != index) selectNow(selected);
 
         PlayerInventory inventory = mc.player.getInventory();
         ItemStack held = inventory.getStack(index);
@@ -119,16 +131,22 @@ public final class InventoryManager {
     }
 
     public boolean withItem(int index, SwitchMode mode, Runnable action) {
+        boolean[] done = {false};
+        PacketBatch.run(() -> done[0] = withItemNow(index, mode, action));
+        return done[0];
+    }
+
+    private boolean withItemNow(int index, SwitchMode mode, Runnable action) {
         int selected = selectedSlot();
         if (index == selected) {
             action.run();
             return true;
         }
 
-        if (mode == SwitchMode.Silent && PlayerInventory.isValidHotbarIndex(index)) {
-            select(index);
+        if (mode == SwitchMode.Silent && PlayerInventory.isValidHotbarIndex(index) && !isEating()) {
+            selectNow(index);
             action.run();
-            select(selected);
+            selectNow(selected);
             return true;
         }
 

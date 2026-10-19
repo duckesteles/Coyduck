@@ -2,7 +2,6 @@ package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
-import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
@@ -176,7 +175,7 @@ public class AutoWeb extends Module {
 
                 BlockPos pos = BlockPos.fromLong(key);
                 if (!interaction.canPlace(pos) || mc.world.getBlockState(pos).isOf(Blocks.COBWEB)) continue;
-                if (self.intersects(new Box(pos)) || CrystalTracker.get().isReserved(pos) || CrystalTracker.get().isReserved(pos.down())) continue;
+                if (self.intersects(new Box(pos))) continue;
 
                 BlockHitResult hit = interaction.hit(pos, airplace.get());
                 if (hit == null) continue;

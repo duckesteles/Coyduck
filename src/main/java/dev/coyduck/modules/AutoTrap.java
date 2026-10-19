@@ -5,10 +5,6 @@ import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
-import dev.coyduck.managers.MiningManager;
-import dev.coyduck.managers.MiningTracker;
-import dev.coyduck.utils.BlockOverlay;
-import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
@@ -39,9 +35,8 @@ import net.minecraft.network.packet.s2c.play.EntitiesDestroyS2CPacket;
 import net.minecraft.util.Util;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.BlockView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -55,9 +50,6 @@ public class AutoTrap extends Module {
 
     private static final long RENDER_TIME = 500;
     private static final double STILL_SPEED = 0.05;
-    private static final double PLACE_RANGE = 5.5;
-    private static final float MAX_DAMAGE_LOSS = 1.0f;
-    private static final long BROKEN_TIME = 2_000;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgRender = settings.createGroup("Render");
@@ -88,18 +80,8 @@ public class AutoTrap extends Module {
 
     private final Setting<Face> face = sgGeneral.add(new EnumSetting.Builder<Face>()
         .name("face")
-        .description("Smart covers the blocks beside the target's head, except where a crystal on the surround below would still hurt them.")
+        .description("Smart only covers escape routes: nothing for a target in a full hole, the head-level block over a gap a crystal cannot fill, and every open side in the open. Always covers the whole head ring.")
         .defaultValue(Face.Smart)
-        .build()
-    );
-
-    private final Setting<Double> keepDamage = sgGeneral.add(new DoubleSetting.Builder()
-        .name("keep-damage")
-        .description("Smart leaves a face block open while a crystal under it would deal at least this much.")
-        .defaultValue(4)
-        .range(0, 36)
-        .sliderRange(0, 36)
-        .visible(() -> face.get() == Face.Smart)
         .build()
     );
 
@@ -281,36 +263,36 @@ public class AutoTrap extends Module {
 
     private List<BlockPos> positions(Box box, LongSet columns) {
         List<BlockPos> positions = new ArrayList<>();
+        int height = Math.max(1, MathHelper.ceil(box.getLengthY() - 1.0E-3));
 
         if (top.get()) {
-            for (long key : columns) {
-                BlockPos pos = BlockPos.fromLong(key).up(2);
-                if (placeable(pos)) positions.add(pos);
-            }
+            for (long key : columns) add(positions, BlockPos.fromLong(key).up(height));
         }
 
-        if (face.get() != Face.Off) {
-            Vec3d feet = Targets.feet(box);
-            float before = Float.NaN;
+        if (face.get() == Face.Off || height < 2) return positions;
 
-            for (BlockPos pos : Targets.ring(columns, 1)) {
-                if (!placeable(pos)) continue;
+        List<BlockPos> ring = Targets.ring(columns, 0);
+        int open = 0;
+        for (BlockPos cell : ring) {
+            if (mc.world.getBlockState(cell).isReplaceable()) open++;
+        }
 
-                if (face.get() == Face.Smart) {
-                    BlockPos below = pos.down();
-                    if (MiningManager.get().isMining(below) || MiningTracker.get().wasBroken(below, BROKEN_TIME)) continue;
-                    if (keepsCrystal(pos, box, feet)) continue;
-
-                    if (Float.isNaN(before)) before = bestDamage(box, feet, mc.world);
-                    BlockOverlay view = new BlockOverlay(mc.world).set(pos, Blocks.OBSIDIAN.getDefaultState());
-                    if (before - bestDamage(box, feet, view) > MAX_DAMAGE_LOSS) continue;
-                }
-
-                positions.add(pos);
-            }
+        for (BlockPos cell : ring) {
+            if (face.get() == Face.Smart && !escape(cell, open)) continue;
+            add(positions, cell.up());
         }
 
         return positions;
+    }
+
+    private boolean escape(BlockPos cell, int open) {
+        if (!mc.world.getBlockState(cell).isReplaceable()) return false;
+        if (open > 1) return true;
+        return !Targets.isBase(mc.world.getBlockState(cell.down()));
+    }
+
+    private void add(List<BlockPos> positions, BlockPos pos) {
+        if (placeable(pos) && !positions.contains(pos)) positions.add(pos);
     }
 
     private boolean placeable(BlockPos pos) {
@@ -318,38 +300,11 @@ public class AutoTrap extends Module {
         if (!interaction.canPlace(pos)) return false;
 
         CrystalTracker tracker = CrystalTracker.get();
-        if (tracker.isReserved(pos) || tracker.isReserved(pos.down())) return false;
         if (mc.player.getBoundingBox().intersects(new Box(pos))) return false;
 
         List<Entity> entities = interaction.obstructions(pos);
         entities.removeIf(entity -> entity instanceof EndCrystalEntity && tracker.isDead(entity));
         return entities.isEmpty();
-    }
-
-    private float bestDamage(Box box, Vec3d feet, BlockView view) {
-        BlockPos center = BlockPos.ofFloored(feet);
-        float best = 0;
-
-        for (int dx = -2; dx <= 2; dx++) {
-            for (int dz = -2; dz <= 2; dz++) {
-                for (int dy = -1; dy <= 0; dy++) {
-                    BlockPos base = center.add(dx, dy, dz);
-                    if (!Targets.canHoldCrystal(view, base)) continue;
-                    if (new Box(base).squaredMagnitude(mc.player.getEyePos()) > PLACE_RANGE * PLACE_RANGE) continue;
-
-                    float damage = ExplosionDamage.crystal(target, feet, box, Targets.crystalCenter(base), view);
-                    if (damage > best) best = damage;
-                }
-            }
-        }
-
-        return best;
-    }
-
-    private boolean keepsCrystal(BlockPos pos, Box box, Vec3d feet) {
-        BlockPos base = pos.down();
-        if (!Targets.canHoldCrystal(mc.world, base)) return false;
-        return ExplosionDamage.crystal(target, feet, box, Targets.crystalCenter(base), mc.world) >= keepDamage.get();
     }
 
     private int blockSlot() {

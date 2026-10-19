@@ -1,5 +1,6 @@
 package dev.coyduck;
 
+import dev.coyduck.managers.ConfigSaver;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
@@ -7,15 +8,12 @@ import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.managers.MotionTracker;
-import dev.coyduck.managers.PopManager;
 import dev.coyduck.managers.RotationManager;
-import dev.coyduck.modules.AntiSurround;
 import dev.coyduck.modules.AutoCity;
 import dev.coyduck.modules.AutoCrystal;
 import dev.coyduck.modules.AutoTotem;
 import dev.coyduck.modules.AutoTrap;
 import dev.coyduck.modules.AutoWeb;
-import dev.coyduck.modules.CevBreaker;
 import dev.coyduck.modules.LadderTrap;
 import dev.coyduck.modules.Surround;
 import meteordevelopment.meteorclient.MeteorClient;
@@ -35,8 +33,8 @@ public class Coyduck extends MeteorAddon {
     public void onInitialize() {
         LOG.info("Initializing Coyduck");
 
+        MeteorClient.EVENT_BUS.subscribe(ConfigSaver.get());
         MeteorClient.EVENT_BUS.subscribe(LatencyManager.get());
-        MeteorClient.EVENT_BUS.subscribe(PopManager.get());
         MeteorClient.EVENT_BUS.subscribe(InteractionManager.get());
         MeteorClient.EVENT_BUS.subscribe(MiningTracker.get());
         MeteorClient.EVENT_BUS.subscribe(CrystalTracker.get());
@@ -49,8 +47,6 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new Surround());
         Modules.get().add(new AutoCrystal());
         Modules.get().add(new AutoCity());
-        Modules.get().add(new AntiSurround());
-        Modules.get().add(new CevBreaker());
         Modules.get().add(new AutoTrap());
         Modules.get().add(new AutoWeb());
         Modules.get().add(new LadderTrap());

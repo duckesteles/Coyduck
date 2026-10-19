@@ -6,7 +6,6 @@ import dev.coyduck.utils.ExplosionDamage;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import meteordevelopment.meteorclient.events.entity.EntityAddedEvent;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -19,7 +18,6 @@ import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
@@ -34,7 +32,6 @@ public final class CrystalTracker {
     private final Long2LongOpenHashMap placing = new Long2LongOpenHashMap();
     private final Int2LongOpenHashMap own = new Int2LongOpenHashMap();
     private final Int2LongOpenHashMap dead = new Int2LongOpenHashMap();
-    private final Long2ObjectOpenHashMap<Object> reserved = new Long2ObjectOpenHashMap<>();
     private final Int2ObjectOpenHashMap<Removed> removed = new Int2ObjectOpenHashMap<>();
 
     private record Removed(Vec3d pos, long time) {}
@@ -78,44 +75,6 @@ public final class CrystalTracker {
 
     public boolean isAlive(Entity entity) {
         return entity.isAlive() && !isDead(entity);
-    }
-
-    public void reserve(BlockPos base, Object owner) {
-        reserved.put(base.asLong(), owner);
-    }
-
-    public void release(Object owner) {
-        reserved.values().removeIf(value -> value == owner);
-    }
-
-    public boolean isReserved(BlockPos base) {
-        return reserved.containsKey(base.asLong());
-    }
-
-    public boolean isReservedBy(BlockPos base, Object owner) {
-        return reserved.get(base.asLong()) == owner;
-    }
-
-    public boolean threatensReserved(Vec3d explosion) {
-        double range = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
-        for (Entity entity : mc.world.getEntities()) {
-            if (!(entity instanceof EndCrystalEntity) || !isAlive(entity)) continue;
-            if (!isReserved(entity.getBlockPos().down())) continue;
-            if (entity.getEntityPos().squaredDistanceTo(explosion) <= range) return true;
-        }
-        return false;
-    }
-
-    public boolean conflictsReserved(BlockPos base) {
-        if (reserved.isEmpty()) return false;
-
-        Box crystal = new Box(base.getX() - 0.5, base.getY() + 1, base.getZ() - 0.5, base.getX() + 1.5, base.getY() + 3, base.getZ() + 1.5);
-        for (long key : reserved.keySet()) {
-            BlockPos block = BlockPos.fromLong(key);
-            Box column = new Box(block.getX(), block.getY(), block.getZ(), block.getX() + 1, block.getY() + 3, block.getZ() + 1);
-            if (crystal.intersects(column)) return true;
-        }
-        return false;
     }
 
     public void explodeAt(Vec3d center) {
@@ -197,7 +156,6 @@ public final class CrystalTracker {
         placing.clear();
         own.clear();
         dead.clear();
-        reserved.clear();
         removed.clear();
         highestId = 0;
     }

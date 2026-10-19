@@ -31,7 +31,6 @@ import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
 import net.minecraft.network.packet.s2c.play.ScreenHandlerSlotUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.SetPlayerInventoryS2CPacket;
 import net.minecraft.screen.PlayerScreenHandler;
-import net.minecraft.util.Hand;
 import net.minecraft.util.Util;
 
 import java.util.List;
@@ -77,7 +76,7 @@ public class AutoTotem extends Module {
 
     private final Setting<Integer> resumeDelay = sgGeneral.add(new IntSetting.Builder()
         .name("resume-delay")
-        .description("Ticks to wait after you switch away from the main hand totem before taking it back.")
+        .description("Ticks to wait after you switch away from the main hand totem, eat or hold food before taking it back.")
         .defaultValue(20)
         .range(0, 200)
         .sliderRange(0, 100)
@@ -334,8 +333,7 @@ public class AutoTotem extends Module {
             return;
         }
 
-        boolean eating = mc.player.isUsingItem() && mc.player.getActiveHand() == Hand.MAIN_HAND;
-        if (eating) resumeTicks = Math.max(resumeTicks, 2);
+        if (busy(inventory.stack(selected))) resumeTicks = Math.max(resumeTicks, resumeDelay.get());
         if (resumeTicks > 0 || !isTotem(mc.player.getOffHandStack())) return;
 
         int hotbar = inventory.find(AutoTotem::isTotem, 0, InventoryManager.HOTBAR_END);
@@ -343,22 +341,44 @@ public class AutoTotem extends Module {
             int source = inventory.find(AutoTotem::isTotem, InventoryManager.HOTBAR_END, InventoryManager.MAIN_END);
             if (source == NONE) return;
 
-            hotbar = slot.get() - 1;
-            if (!inventory.swapWithHotbar(source, hotbar)) return;
+            hotbar = reserveHotbar();
+            if (hotbar == NONE || !inventory.swapWithHotbar(source, hotbar)) return;
         }
 
+        if (!inventory.select(hotbar)) return;
         if (previousSlot == NONE) previousSlot = selected;
         reserveSlot = hotbar;
         expectedSlot = hotbar;
-        inventory.select(hotbar);
+    }
+
+    private boolean busy(ItemStack held) {
+        if (mc.player.isUsingItem() || mc.options.useKey.isPressed()) return true;
+        return held.contains(DataComponentTypes.FOOD) || held.contains(DataComponentTypes.CONSUMABLE);
+    }
+
+    private int reserveHotbar() {
+        InventoryManager inventory = InventoryManager.get();
+        int preferred = slot.get() - 1;
+        if (!busyItem(inventory.stack(preferred))) return preferred;
+
+        for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
+            if (inventory.stack(i).isEmpty()) return i;
+        }
+        for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
+            if (!busyItem(inventory.stack(i))) return i;
+        }
+        return NONE;
+    }
+
+    private static boolean busyItem(ItemStack stack) {
+        return stack.contains(DataComponentTypes.FOOD) || stack.contains(DataComponentTypes.CONSUMABLE);
     }
 
     private void release() {
-        resumeTicks = 0;
         if (reserveSlot == NONE) return;
 
         InventoryManager inventory = InventoryManager.get();
-        if (restore.get() && previousSlot != NONE && inventory.selectedSlot() == reserveSlot) inventory.select(previousSlot);
+        if (restore.get() && previousSlot != NONE && inventory.selectedSlot() == reserveSlot && !inventory.select(previousSlot)) return;
 
         reserveSlot = NONE;
         previousSlot = NONE;

@@ -17,6 +17,8 @@ import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.entity.EntityAddedEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -65,12 +67,14 @@ public class AutoCrystal extends Module {
     private static final int ROTATION_PRIORITY = 100;
     private static final long RENDER_TIME = 500;
 
-    private record Target(PlayerEntity player, Box box, Vec3d feet, float health, float minDamage) {}
+    private record Target(PlayerEntity player, Box box, Vec3d feet, float health, float minDamage, LongSet gaps) {}
 
     private static final int FOCUS_TICKS = 20;
     private static final float FOCUS_BONUS = 1.0f;
     private static final int MAX_PREDICT_TICKS = 6;
     private static final long BROKEN_GAP_TIME = 2_000;
+    private static final float GAP_BONUS = 2.0f;
+    private static final int GAP_PLACES = 1;
 
     private record Choice(Target target, float damage, float raw, float self, float score) {
         boolean beats(Choice other) {
@@ -236,6 +240,13 @@ public class AutoCrystal extends Module {
         .build()
     );
 
+    private final Setting<Boolean> antiSurround = sgGeneral.add(new BoolSetting.Builder()
+        .name("anti-surround")
+        .description("Fills a gap in the target's surround with a crystal the moment it opens, and prefers crystals that keep it open, so the gap cannot be closed again.")
+        .defaultValue(true)
+        .build()
+    );
+
     private final Setting<Boolean> basePlace = sgBase.add(new BoolSetting.Builder()
         .name("base-place")
         .description("Places a block to put a crystal on when no existing spot deals enough damage.")
@@ -318,6 +329,7 @@ public class AutoCrystal extends Module {
 
     private boolean destroyedCrystal;
     private int placeBudget;
+    private int gapBudget;
     private int breakBudget;
     private boolean running;
 
@@ -344,6 +356,7 @@ public class AutoCrystal extends Module {
         }
 
         placeBudget = placesPerTick.get();
+        gapBudget = GAP_PLACES;
         breakBudget = breaksPerTick.get();
         lastTarget = null;
         focus = null;
@@ -368,6 +381,7 @@ public class AutoCrystal extends Module {
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         placeBudget = placesPerTick.get();
+        gapBudget = GAP_PLACES;
         breakBudget = breaksPerTick.get();
         pass();
         updateFocus();
@@ -434,7 +448,7 @@ public class AutoCrystal extends Module {
 
     @EventHandler
     private void onMineStop(MineStopEvent event) {
-        if (!CrystalTracker.get().isReserved(event.pos)) pass();
+        pass();
     }
 
     @EventHandler
@@ -480,6 +494,7 @@ public class AutoCrystal extends Module {
 
         float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
         if (breakBudget > 0) breakCrystals(targets, health);
+        if (antiSurround.get() && gapBudget > 0) fillGaps(targets, health);
         if (placeBudget <= 0) return;
         if (pauseEating.get() && mc.player.isUsingItem()) return;
 
@@ -502,6 +517,36 @@ public class AutoCrystal extends Module {
         }
     }
 
+    private void fillGaps(List<Target> targets, float health) {
+        CrystalTracker tracker = CrystalTracker.get();
+
+        for (Target target : targets) {
+            for (long key : target.gaps) {
+                if (gapBudget <= 0) return;
+
+                BlockPos gap = BlockPos.fromLong(key);
+                BlockPos base = gap.down();
+                if (!mc.world.getBlockState(gap).isAir() || !isBase(mc.world.getBlockState(base))) continue;
+                if (tracker.isPlacing(base) || blocked(base) || !inPlaceRange(base) || overlapsOwnCells(base)) continue;
+
+                Vec3d center = crystalCenter(base);
+                float self = ExplosionDamage.crystal(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), center, mc.world);
+                if (self >= health || self > maxSelfDamage.get() || hurtsFriend(center, mc.world)) continue;
+
+                float raw = ExplosionDamage.crystalRaw(target.player, target.feet, target.box, center, mc.world);
+                float damage = ExplosionDamage.mitigate(target.player, raw);
+                if (damage < facePlaceDamage.get()) continue;
+                if (!rotationReady(new Box(base), center, placeRange.get() + 1)) return;
+
+                if (!InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), null)) return;
+                gapBudget--;
+                lastTarget = target.player;
+                renderPos = base;
+                renderTime = Util.getMeasuringTimeMs();
+            }
+        }
+    }
+
     private void breakCrystals(List<Target> targets, float health) {
         CrystalTracker tracker = CrystalTracker.get();
         long arrival = Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2;
@@ -513,7 +558,6 @@ public class AutoCrystal extends Module {
 
             for (Entity entity : mc.world.getEntities()) {
                 if (!(entity instanceof EndCrystalEntity crystal) || !tracker.isAlive(crystal)) continue;
-                if (tracker.isReserved(crystal.getBlockPos().down()) || tracker.threatensReserved(crystal.getEntityPos())) continue;
                 if (crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > breakRange.get() * breakRange.get()) continue;
 
                 Vec3d center = crystal.getEntityPos();
@@ -567,7 +611,6 @@ public class AutoCrystal extends Module {
         if (blockSlot == -1) return;
 
         InteractionManager interaction = InteractionManager.get();
-        CrystalTracker tracker = CrystalTracker.get();
         BlockPos best = null;
         BlockHitResult bestHit = null;
         Choice bestChoice = null;
@@ -581,7 +624,6 @@ public class AutoCrystal extends Module {
                     for (int dy = -1; dy <= 0; dy++) {
                         BlockPos base = feet.add(dx, dy, dz);
                         if (!interaction.canPlace(base) || !mc.world.isAir(base.up())) continue;
-                        if (tracker.isReserved(base) || tracker.isReserved(base.up()) || tracker.conflictsReserved(base)) continue;
                         if (ring.contains(base) || ownCells.contains(base) || overlapsOwnCells(base)) continue;
                         if (MiningManager.get().isMining(base) || MiningTracker.get().wasBroken(base, BROKEN_GAP_TIME)) continue;
                         if (!inPlaceRange(base) || !interaction.obstructions(base).isEmpty() || blocked(base)) continue;
@@ -684,6 +726,7 @@ public class AutoCrystal extends Module {
             if (damage < target.minDamage && damage < target.health) continue;
 
             float score = damage + (target.player == focus ? FOCUS_BONUS : 0);
+            if (antiSurround.get() && target.gaps.contains(key)) score += GAP_BONUS;
             Choice choice = new Choice(target, damage, raw, self, score);
             if (choice.beats(best)) best = choice;
         }
@@ -724,7 +767,9 @@ public class AutoCrystal extends Module {
             Box box = MotionTracker.get().predict(player, ticks);
             Vec3d feet = new Vec3d((box.minX + box.maxX) / 2, box.minY, (box.minZ + box.maxZ) / 2);
             float health = player.getHealth() + player.getAbsorptionAmount();
-            targets.add(new Target(player, box, feet, health, minDamage(player, health)));
+            LongSet gaps = new LongOpenHashSet();
+            for (BlockPos cell : Targets.ring(Targets.columns(Targets.box(player)), 0)) gaps.add(cell.asLong());
+            targets.add(new Target(player, box, feet, health, minDamage(player, health), gaps));
         }
 
         return targets;
@@ -755,8 +800,7 @@ public class AutoCrystal extends Module {
                     BlockPos base = eye.add(dx, dy, dz);
                     if (!inPlaceRange(base) || !isBase(mc.world.getBlockState(base))) continue;
                     if (!mc.world.isAir(base.up()) || CrystalTracker.get().isPlacing(base) || blocked(base)) continue;
-                    if (CrystalTracker.get().isReserved(base) || CrystalTracker.get().isReserved(base.up()) || CrystalTracker.get().conflictsReserved(base)) continue;
-                    if (CrystalTracker.get().threatensReserved(crystalCenter(base)) || overlapsOwnCells(base)) continue;
+                    if (overlapsOwnCells(base)) continue;
                     candidates.add(base);
                 }
             }

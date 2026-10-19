@@ -12,7 +12,4 @@
 - AutoTrap
 - AutoWeb
 - AutoCity
-- CevBreaker
-- AntiSurround
 - LadderTrap
-- PopCounter
