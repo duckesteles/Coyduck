@@ -14,8 +14,10 @@ import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.entity.EntityAddedEvent;
+import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
+import meteordevelopment.meteorclient.mixininterface.IVec3d;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.BlockListSetting;
 import meteordevelopment.meteorclient.settings.BoolSetting;
@@ -28,9 +30,11 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
+import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.MovementType;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
@@ -59,6 +63,7 @@ public class Surround extends Module {
     private static final long HOT_TIME = 2_000;
     private static final long RENDER_TIME = 500;
     private static final double EDGE = 1.0E-4;
+    private static final double CENTER_SPEED = 0.2;
     private static final double NEAR = 5 * 5;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -93,6 +98,13 @@ public class Surround extends Module {
         .defaultValue(10)
         .range(1, 30)
         .sliderRange(1, 30)
+        .build()
+    );
+
+    private final Setting<Boolean> extend = sgGeneral.add(new BoolSetting.Builder()
+        .name("extend")
+        .description("Surrounds every block you stand on. Off pulls you to the middle of your block and surrounds just that one.")
+        .defaultValue(false)
         .build()
     );
 
@@ -233,6 +245,21 @@ public class Surround extends Module {
     @EventHandler
     private void onEntityAdded(EntityAddedEvent event) {
         if (event.entity instanceof EndCrystalEntity && canAct() && near(event.entity.getBlockPos())) pass();
+    }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    private void onMove(PlayerMoveEvent event) {
+        if (extend.get() || event.type != MovementType.SELF || !canAct() || anchored.size() != 1) return;
+        if (!mc.player.isOnGround() || hasInput() || level() != anchorY) return;
+
+        BlockPos column = BlockPos.fromLong(anchored.iterator().nextLong());
+        double dx = column.getX() + 0.5 - mc.player.getX();
+        double dz = column.getZ() + 0.5 - mc.player.getZ();
+        double fit = 0.5 - mc.player.getWidth() / 2 - EDGE;
+        if (Math.abs(dx) <= fit && Math.abs(dz) <= fit) return;
+
+        ((IVec3d) event.movement).meteor$set(MathHelper.clamp(dx, -CENTER_SPEED, CENTER_SPEED), event.movement.y, MathHelper.clamp(dz, -CENTER_SPEED, CENTER_SPEED));
+        mc.player.setVelocity(0, mc.player.getVelocity().y, 0);
     }
 
     @EventHandler
@@ -408,9 +435,16 @@ public class Surround extends Module {
         if (ground && level > anchorY) return leave(level);
 
         LongSet current = columns(anchorY);
-        if (current.longStream().noneMatch(anchored::contains)) return !ground || leave(level);
+        if (current.longStream().noneMatch(anchored::contains)) {
+            if (!ground) return true;
+            if (hasInput()) return leave(level);
 
-        if (!hasInput()) anchored.addAll(current);
+            anchored = current;
+            return true;
+        }
+
+        if (anchored.containsAll(current)) anchored = current;
+        else if (!hasInput()) anchored.addAll(current);
         return true;
     }
 
@@ -432,6 +466,11 @@ public class Surround extends Module {
     private LongSet columns(int y) {
         Box box = mc.player.getBoundingBox();
         LongSet columns = new LongOpenHashSet();
+
+        if (!extend.get()) {
+            columns.add(BlockPos.asLong(MathHelper.floor(mc.player.getX()), y, MathHelper.floor(mc.player.getZ())));
+            return columns;
+        }
 
         int minX = MathHelper.floor(box.minX + EDGE);
         int maxX = MathHelper.floor(box.maxX - EDGE);
