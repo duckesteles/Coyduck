@@ -119,6 +119,17 @@ public final class MiningManager {
         return Math.min(bestDelta(state) * elapsed() / SERVER_THRESHOLD, 1);
     }
 
+    public int remainingTicks() {
+        if (pos == null || mc.world == null) return Integer.MAX_VALUE;
+
+        BlockState state = mc.world.getBlockState(pos);
+        if (state.isReplaceable()) return Integer.MAX_VALUE;
+
+        float delta = bestDelta(state);
+        if (delta <= 0) return Integer.MAX_VALUE;
+        return Math.max(0, (int) Math.ceil(SERVER_THRESHOLD / delta - elapsed()));
+    }
+
     public boolean isReady() {
         return pos != null && isReady(mc.world.getBlockState(pos));
     }

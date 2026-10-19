@@ -6,6 +6,7 @@ import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
+import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -21,6 +22,7 @@ import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.List;
 
@@ -42,6 +44,15 @@ public class AntiSurround extends Module {
         .name("keep-filled")
         .description("Also fills open gaps every tick while the target is in a hole, not only the moment a block breaks.")
         .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Double> minDamage = sgGeneral.add(new DoubleSetting.Builder()
+        .name("min-damage")
+        .description("Least damage the gap crystal must deal to the target.")
+        .defaultValue(4)
+        .range(0, 36)
+        .sliderRange(0, 36)
         .build()
     );
 
@@ -132,7 +143,12 @@ public class AntiSurround extends Module {
         if (!mc.world.getBlockState(gap).isAir() || CrystalTracker.get().isPlacing(base)) return;
         if (!Targets.canHoldCrystal(mc.world, base)) return;
         if (new Box(base).squaredMagnitude(mc.player.getEyePos()) > PLACE_RANGE * PLACE_RANGE) return;
-        if (!Targets.safe(Targets.crystalCenter(base), mc.world, maxSelfDamage.get())) return;
+        Vec3d center = Targets.crystalCenter(base);
+        if (!Targets.safe(center, mc.world, maxSelfDamage.get())) return;
+
+        Box box = Targets.box(target);
+        float damage = ExplosionDamage.crystal(target, Targets.feet(box), box, center, mc.world);
+        if (damage < minDamage.get() && damage < target.getHealth() + target.getAbsorptionAmount()) return;
 
         InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), null);
     }

@@ -5,6 +5,7 @@ import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
+import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.utils.ExplosionDamage;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
@@ -65,8 +66,8 @@ public class Surround extends Module {
 
     private final Setting<List<Block>> blocks = sgGeneral.add(new BlockListSetting.Builder()
         .name("blocks")
-        .description("Blocks to surround with, in order of preference.")
-        .defaultValue(Blocks.OBSIDIAN, Blocks.CRYING_OBSIDIAN, Blocks.ENDER_CHEST)
+        .description("Blocks to surround with, in order of preference. Crying obsidian first, since crystals cannot be placed on it.")
+        .defaultValue(Blocks.CRYING_OBSIDIAN, Blocks.OBSIDIAN, Blocks.ENDER_CHEST)
         .filter(block -> block.getBlastResistance() >= 600)
         .build()
     );
@@ -271,8 +272,9 @@ public class Surround extends Module {
         InteractionManager interaction = InteractionManager.get();
         List<BlockPos> placeable = new ArrayList<>();
 
+        MiningManager mining = MiningManager.get();
         for (BlockPos pos : targets()) {
-            if (!interaction.canPlace(pos)) continue;
+            if (!interaction.canPlace(pos) || mining.isMining(pos)) continue;
             if (airplace.get() && interaction.hit(pos, true) == null) continue;
             if (!clear(pos)) continue;
             placeable.add(pos);
@@ -329,6 +331,7 @@ public class Surround extends Module {
         for (Entity entity : entities) {
             if (interaction.recentlyAttacked(entity)) continue;
             if (!interaction.attack(entity, switchMode.get(), swing.get())) return false;
+            CrystalTracker.get().explodeAt(entity.getEntityPos());
         }
 
         return true;
@@ -401,16 +404,36 @@ public class Surround extends Module {
 
     private boolean updateAnchor() {
         int level = level();
-        if (level < anchorY || (mc.player.isOnGround() && level > anchorY)) anchorY = level;
+        boolean ground = mc.player.isOnGround();
+
+        if (level < anchorY) {
+            anchorY = level;
+            anchored = columns(level);
+            return true;
+        }
+
+        if (ground && level > anchorY) return leave(level);
 
         LongSet current = columns(anchorY);
-        if (disable.get() == Disable.Leave && current.longStream().noneMatch(anchored::contains)) {
+        if (current.longStream().noneMatch(anchored::contains)) return !ground || leave(level);
+
+        if (!hasInput()) anchored.addAll(current);
+        return true;
+    }
+
+    private boolean leave(int level) {
+        if (disable.get() == Disable.Leave) {
             toggle();
             return false;
         }
 
-        anchored = current;
+        anchorY = level;
+        anchored = columns(level);
         return true;
+    }
+
+    private boolean hasInput() {
+        return mc.player.input.getMovementInput().lengthSquared() > 1.0E-4f || mc.player.input.playerInput.jump();
     }
 
     private LongSet columns(int y) {

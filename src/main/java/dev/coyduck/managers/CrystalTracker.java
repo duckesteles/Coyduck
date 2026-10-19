@@ -2,7 +2,9 @@ package dev.coyduck.managers;
 
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.utils.ExplosionDamage;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import meteordevelopment.meteorclient.events.entity.EntityAddedEvent;
@@ -15,9 +17,9 @@ import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.network.packet.s2c.play.EntitiesDestroyS2CPacket;
 import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
-import dev.coyduck.utils.ExplosionDamage;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
@@ -27,11 +29,15 @@ public final class CrystalTracker {
 
     private static final long OWN_LIFETIME = 10_000;
     private static final float MIN_RADIUS = 2.0f;
+    private static final long REMOVED_LIFETIME = 2_000;
 
     private final Long2LongOpenHashMap placing = new Long2LongOpenHashMap();
     private final Int2LongOpenHashMap own = new Int2LongOpenHashMap();
     private final Int2LongOpenHashMap dead = new Int2LongOpenHashMap();
     private final Long2ObjectOpenHashMap<Object> reserved = new Long2ObjectOpenHashMap<>();
+    private final Int2ObjectOpenHashMap<Removed> removed = new Int2ObjectOpenHashMap<>();
+
+    private record Removed(Vec3d pos, long time) {}
     private int highestId;
 
     private CrystalTracker() {}
@@ -100,13 +106,48 @@ public final class CrystalTracker {
         return false;
     }
 
+    public boolean conflictsReserved(BlockPos base) {
+        if (reserved.isEmpty()) return false;
+
+        Box crystal = new Box(base.getX() - 0.5, base.getY() + 1, base.getZ() - 0.5, base.getX() + 1.5, base.getY() + 3, base.getZ() + 1.5);
+        for (long key : reserved.keySet()) {
+            BlockPos block = BlockPos.fromLong(key);
+            Box column = new Box(block.getX(), block.getY(), block.getZ(), block.getX() + 1, block.getY() + 3, block.getZ() + 1);
+            if (crystal.intersects(column)) return true;
+        }
+        return false;
+    }
+
+    public void explodeAt(Vec3d center) {
+        double range = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
+        long duration = LatencyManager.get().timeout();
+
+        for (Entity entity : mc.world.getEntities()) {
+            if (entity instanceof EndCrystalEntity && entity.getEntityPos().squaredDistanceTo(center) <= range) kill(entity, duration);
+        }
+    }
+
+    public Vec3d removedPosition(int id) {
+        Removed entry = removed.get(id);
+        return entry == null ? null : entry.pos;
+    }
+
     public int highestId() {
         return highestId;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onApplyPre(PacketApplyEvent.Pre event) {
-        if (event.packet instanceof EntitySpawnS2CPacket packet) highestId = Math.max(highestId, packet.getEntityId());
+        switch (event.packet) {
+            case EntitySpawnS2CPacket packet -> highestId = Math.max(highestId, packet.getEntityId());
+            case EntitiesDestroyS2CPacket packet when mc.world != null -> {
+                long now = Util.getMeasuringTimeMs();
+                for (int id : packet.getEntityIds()) {
+                    if (mc.world.getEntityById(id) instanceof EndCrystalEntity crystal) removed.put(id, new Removed(crystal.getEntityPos(), now));
+                }
+            }
+            default -> {}
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -139,6 +180,7 @@ public final class CrystalTracker {
         placing.values().removeIf(until -> now >= until);
         dead.values().removeIf(until -> now >= until);
         own.values().removeIf(time -> now - time > OWN_LIFETIME);
+        removed.values().removeIf(entry -> now - entry.time > REMOVED_LIFETIME);
     }
 
     @EventHandler
@@ -156,6 +198,7 @@ public final class CrystalTracker {
         own.clear();
         dead.clear();
         reserved.clear();
+        removed.clear();
         highestId = 0;
     }
 

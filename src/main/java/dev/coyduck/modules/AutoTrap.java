@@ -5,6 +5,9 @@ import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
+import dev.coyduck.managers.MiningManager;
+import dev.coyduck.managers.MiningTracker;
+import dev.coyduck.utils.BlockOverlay;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
@@ -38,6 +41,7 @@ import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.BlockView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +55,9 @@ public class AutoTrap extends Module {
 
     private static final long RENDER_TIME = 500;
     private static final double STILL_SPEED = 0.05;
+    private static final double PLACE_RANGE = 5.5;
+    private static final float MAX_DAMAGE_LOSS = 1.0f;
+    private static final long BROKEN_TIME = 2_000;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgRender = settings.createGroup("Render");
@@ -284,9 +291,21 @@ public class AutoTrap extends Module {
 
         if (face.get() != Face.Off) {
             Vec3d feet = Targets.feet(box);
+            float before = Float.NaN;
+
             for (BlockPos pos : Targets.ring(columns, 1)) {
                 if (!placeable(pos)) continue;
-                if (face.get() == Face.Smart && keepsCrystal(pos, box, feet)) continue;
+
+                if (face.get() == Face.Smart) {
+                    BlockPos below = pos.down();
+                    if (MiningManager.get().isMining(below) || MiningTracker.get().wasBroken(below, BROKEN_TIME)) continue;
+                    if (keepsCrystal(pos, box, feet)) continue;
+
+                    if (Float.isNaN(before)) before = bestDamage(box, feet, mc.world);
+                    BlockOverlay view = new BlockOverlay(mc.world).set(pos, Blocks.OBSIDIAN.getDefaultState());
+                    if (before - bestDamage(box, feet, view) > MAX_DAMAGE_LOSS) continue;
+                }
+
                 positions.add(pos);
             }
         }
@@ -305,6 +324,26 @@ public class AutoTrap extends Module {
         List<Entity> entities = interaction.obstructions(pos);
         entities.removeIf(entity -> entity instanceof EndCrystalEntity && tracker.isDead(entity));
         return entities.isEmpty();
+    }
+
+    private float bestDamage(Box box, Vec3d feet, BlockView view) {
+        BlockPos center = BlockPos.ofFloored(feet);
+        float best = 0;
+
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                for (int dy = -1; dy <= 0; dy++) {
+                    BlockPos base = center.add(dx, dy, dz);
+                    if (!Targets.canHoldCrystal(view, base)) continue;
+                    if (new Box(base).squaredMagnitude(mc.player.getEyePos()) > PLACE_RANGE * PLACE_RANGE) continue;
+
+                    float damage = ExplosionDamage.crystal(target, feet, box, Targets.crystalCenter(base), view);
+                    if (damage > best) best = damage;
+                }
+            }
+        }
+
+        return best;
     }
 
     private boolean keepsCrystal(BlockPos pos, Box box, Vec3d feet) {

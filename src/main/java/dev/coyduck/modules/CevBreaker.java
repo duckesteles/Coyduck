@@ -157,6 +157,7 @@ public class CevBreaker extends Module {
 
     private PlayerEntity target;
     private Plan plan;
+    private long releaseAt;
     private boolean running;
 
     public CevBreaker() {
@@ -207,6 +208,11 @@ public class CevBreaker extends Module {
 
     @EventHandler
     private void onRender(Render3DEvent event) {
+        if (releaseAt != 0 && Util.getMeasuringTimeMs() >= releaseAt) {
+            releaseAt = 0;
+            pass();
+        }
+
         if (!render.get() || plan == null) return;
         event.renderer.box(plan.block, sideColor.get(), lineColor.get(), shapeMode.get(), 0);
     }
@@ -223,7 +229,7 @@ public class CevBreaker extends Module {
     }
 
     private void run() {
-        target = Targets.find(targetRange.get());
+        target = Targets.find(targetRange.get(), plan != null ? target : null);
         if (target == null) {
             clear();
             return;
@@ -250,7 +256,7 @@ public class CevBreaker extends Module {
         BlockState state = mc.world.getBlockState(plan.block);
 
         if (state.isReplaceable()) {
-            if (placeObsidian()) placeCrystal();
+            if (placeObsidian() && crystalDue()) placeCrystal();
             return;
         }
 
@@ -261,7 +267,7 @@ public class CevBreaker extends Module {
 
         EndCrystalEntity crystal = crystal();
         if (crystal == null) {
-            placeCrystal();
+            if (crystalDue()) placeCrystal();
             return;
         }
 
@@ -279,17 +285,26 @@ public class CevBreaker extends Module {
         if (hurtSync.get()) {
             long arrival = Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2;
             float effective = HurtTracker.get().effective(target, raw, arrival);
-            if (effective < minDamage.get() && effective < health) return;
+            if (effective < minDamage.get() && effective < health) {
+                releaseAt = HurtTracker.get().releaseTime(target);
+                return;
+            }
         }
 
+        releaseAt = 0;
         fire(crystal, raw);
+    }
+
+    private boolean crystalDue() {
+        int lead = LatencyManager.get().rtt() / 50 + 2;
+        return MiningManager.get().remainingTicks() <= lead;
     }
 
     private void fire(EndCrystalEntity crystal, float raw) {
         if (!MiningManager.get().stop(this)) return;
         if (!InteractionManager.get().attack(crystal, switchMode.get(), swing.get())) return;
 
-        CrystalTracker.get().kill(crystal, LatencyManager.get().timeout());
+        CrystalTracker.get().explodeAt(crystal.getEntityPos());
         HurtTracker.get().expect(target, raw);
 
         if (placeObsidian()) placeCrystal();
@@ -383,6 +398,7 @@ public class CevBreaker extends Module {
 
     private boolean usable(BlockPos block) {
         if (!MiningManager.get().inRange(block)) return false;
+        if (Targets.ownRing().contains(block)) return false;
         if (new Box(block).squaredMagnitude(mc.player.getEyePos()) > PLACE_RANGE * PLACE_RANGE) return false;
         if (CrystalTracker.get().isReserved(block) && !CrystalTracker.get().isReservedBy(block, this)) return false;
 
@@ -410,6 +426,7 @@ public class CevBreaker extends Module {
     }
 
     private void clear() {
+        releaseAt = 0;
         MiningManager.get().release(this);
         CrystalTracker.get().release(this);
         plan = null;

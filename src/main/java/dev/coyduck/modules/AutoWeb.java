@@ -37,6 +37,7 @@ public class AutoWeb extends Module {
     }
 
     private static final double SELF_MARGIN = 0.1;
+    private static final int MAX_PREDICT_TICKS = 7;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -159,8 +160,11 @@ public class AutoWeb extends Module {
 
         LongSet cells = cells(box);
         if (predict.get()) {
-            int ticks = MathHelper.ceil(LatencyManager.get().rtt() / 2.0 / 50.0) + 1;
-            cells.addAll(cells(MotionTracker.get().predict(target, ticks)));
+            int ticks = Math.min(MathHelper.ceil(LatencyManager.get().rtt() / 50.0) + 1, MAX_PREDICT_TICKS);
+            LongSet current = new LongOpenHashSet(cells);
+            for (long key : cells(MotionTracker.get().predict(target, ticks))) {
+                if (current.contains(key) || !Targets.canHoldCrystal(mc.world, BlockPos.fromLong(key).down())) cells.add(key);
+            }
         }
 
         Box self = selfBox();

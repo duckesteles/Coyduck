@@ -201,7 +201,7 @@ public class AutoCity extends Module {
         if (mc.player == null || mc.world == null || !mc.player.isAlive()) return;
 
         MiningManager mining = MiningManager.get();
-        target = Targets.find(targetRange.get());
+        target = Targets.find(targetRange.get(), current != null ? target : null);
 
         if (target == null || (needCrystals.get() && !hasCrystals())) {
             mining.release(this);
@@ -262,7 +262,7 @@ public class AutoCity extends Module {
         if (burrow.get()) {
             for (long key : columns) {
                 BlockPos pos = BlockPos.fromLong(key);
-                if (!Targets.isMinable(pos) || !mining.inRange(pos)) continue;
+                if (!Targets.isMinable(pos) || !mining.inRange(pos) || !Targets.isBurrowedIn(box, pos)) continue;
                 if (mc.world.getBlockState(pos).isOf(Blocks.BEDROCK)) continue;
 
                 Choice choice = new Choice(pos, BURROW_SCORE + mining.delta(mc.world.getBlockState(pos), pos, mc.player.getMainHandStack()));
@@ -273,9 +273,10 @@ public class AutoCity extends Module {
 
         Vec3d feet = Targets.feet(box);
         List<BlockPos> ring = Targets.ring(columns, 0);
+        List<BlockPos> own = Targets.ownRing();
 
         for (BlockPos pos : ring) {
-            if (!Targets.isMinable(pos) || !mining.inRange(pos)) continue;
+            if (!Targets.isMinable(pos) || !mining.inRange(pos) || own.contains(pos)) continue;
 
             float damage = gapDamage(pos, box, feet);
             if (damage < minDamage.get()) continue;
@@ -288,13 +289,15 @@ public class AutoCity extends Module {
 
     private float gapDamage(BlockPos gap, Box box, Vec3d feet) {
         BlockOverlay view = new BlockOverlay(mc.world).set(gap, Blocks.AIR.getDefaultState());
+        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
+        double range = autoCrystal != null && autoCrystal.isActive() ? autoCrystal.placeRange() : 5.5;
         float best = 0;
 
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
                 BlockPos base = gap.add(dx, -1, dz);
                 if (!Targets.canHoldCrystal(view, base)) continue;
-                if (new Box(base).squaredMagnitude(mc.player.getEyePos()) > 5.5 * 5.5) continue;
+                if (new Box(base).squaredMagnitude(mc.player.getEyePos()) > range * range) continue;
 
                 Vec3d crystal = Targets.crystalCenter(base);
                 if (!Targets.safe(crystal, view, maxSelfDamage.get())) continue;

@@ -16,6 +16,7 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.BlockView;
 
 import java.util.ArrayList;
@@ -25,8 +26,13 @@ import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 public final class Targets {
     private static final double EDGE = 1.0E-4;
+    private static final int MAX_DROP = 3;
 
     private Targets() {}
+
+    public static PlayerEntity find(double range, PlayerEntity keep) {
+        return valid(keep, range) ? keep : find(range);
+    }
 
     public static PlayerEntity find(double range) {
         AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
@@ -62,8 +68,41 @@ public final class Targets {
         return new Vec3d((box.minX + box.maxX) / 2, box.minY, (box.minZ + box.maxZ) / 2);
     }
 
+    public static int level(Box box) {
+        int top = MathHelper.floor(box.minY + 0.4);
+        int lowest = MathHelper.floor(box.minY) - MAX_DROP;
+
+        for (int level = top; level > lowest; level--) {
+            if (supported(box, level)) return level;
+        }
+        return top;
+    }
+
+    private static boolean supported(Box box, int level) {
+        BlockPos.Mutable below = new BlockPos.Mutable();
+        for (int x = MathHelper.floor(box.minX + EDGE); x <= MathHelper.floor(box.maxX - EDGE); x++) {
+            for (int z = MathHelper.floor(box.minZ + EDGE); z <= MathHelper.floor(box.maxZ - EDGE); z++) {
+                below.set(x, level - 1, z);
+                if (!mc.world.getBlockState(below).getCollisionShape(mc.world, below).isEmpty()) return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean isBurrowedIn(Box box, BlockPos pos) {
+        BlockState state = mc.world.getBlockState(pos);
+        VoxelShape shape = state.getCollisionShape(mc.world, pos);
+        if (shape.isEmpty()) return false;
+
+        Box inner = box.contract(1.0E-3);
+        for (Box part : shape.offset(pos.getX(), pos.getY(), pos.getZ()).getBoundingBoxes()) {
+            if (part.intersects(inner)) return true;
+        }
+        return false;
+    }
+
     public static LongSet columns(Box box) {
-        int y = MathHelper.floor(box.minY + 0.4);
+        int y = level(box);
         LongSet columns = new LongOpenHashSet();
 
         for (int x = MathHelper.floor(box.minX + EDGE); x <= MathHelper.floor(box.maxX - EDGE); x++) {
@@ -105,6 +144,13 @@ public final class Targets {
         return velocity.horizontalLengthSquared() <= speed * speed;
     }
 
+    public static List<BlockPos> ownRing() {
+        LongSet columns = columns(mc.player.getBoundingBox());
+        List<BlockPos> cells = ring(columns, 0);
+        for (long key : columns) cells.add(BlockPos.fromLong(key).down());
+        return cells;
+    }
+
     public static boolean isBase(BlockState state) {
         return state.isOf(Blocks.OBSIDIAN) || state.isOf(Blocks.BEDROCK);
     }
@@ -129,7 +175,8 @@ public final class Targets {
         double range = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
         for (PlayerEntity player : mc.world.getPlayers()) {
             if (player == mc.player || !Friends.get().isFriend(player) || player.squaredDistanceTo(crystal) > range) continue;
-            if (ExplosionDamage.crystal(player, player.getEntityPos(), player.getBoundingBox(), crystal, view) >= player.getHealth() + player.getAbsorptionAmount()) return false;
+            float damage = ExplosionDamage.crystal(player, player.getEntityPos(), player.getBoundingBox(), crystal, view);
+            if (damage >= player.getHealth() + player.getAbsorptionAmount() || damage > maxSelfDamage) return false;
         }
         return true;
     }
