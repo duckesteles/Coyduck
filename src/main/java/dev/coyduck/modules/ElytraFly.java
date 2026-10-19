@@ -20,22 +20,13 @@ import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.util.PlayerInput;
 
 public class ElytraFly extends Module {
-    private static final int GRACE_TICKS = 3;
-    private static final int TAKEOFF_COOLDOWN = 5;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgSpeed = settings.createGroup("Speed");
 
-    private final Setting<Boolean> takeoff = sgGeneral.add(new BoolSetting.Builder()
-        .name("auto-takeoff")
-        .description("Starts gliding by itself when you fall with an elytra on, and again right after leaving water or lava.")
-        .defaultValue(true)
-        .build()
-    );
-
     private final Setting<Boolean> fluids = sgGeneral.add(new BoolSetting.Builder()
         .name("fluids")
-        .description("Keeps the same control in water and lava instead of swimming.")
+        .description("Keeps the same control in water and lava instead of swimming, and keeps flying when you come out.")
         .defaultValue(true)
         .build()
     );
@@ -52,7 +43,7 @@ public class ElytraFly extends Module {
     private final Setting<Double> up = sgSpeed.add(new DoubleSetting.Builder()
         .name("up-speed")
         .description("Blocks moved up per tick while holding jump.")
-        .defaultValue(1)
+        .defaultValue(2.4)
         .min(0)
         .sliderRange(0, 5)
         .build()
@@ -61,31 +52,13 @@ public class ElytraFly extends Module {
     private final Setting<Double> down = sgSpeed.add(new DoubleSetting.Builder()
         .name("down-speed")
         .description("Blocks moved down per tick while holding sneak.")
-        .defaultValue(1)
+        .defaultValue(2.4)
         .min(0)
         .sliderRange(0, 5)
         .build()
     );
 
-    private final Setting<Double> fall = sgSpeed.add(new DoubleSetting.Builder()
-        .name("fall-speed")
-        .description("Blocks sunk per tick with neither key held.")
-        .defaultValue(0.01)
-        .min(0)
-        .sliderRange(0, 1)
-        .build()
-    );
-
-    private final Setting<Boolean> smartFall = sgSpeed.add(new BoolSetting.Builder()
-        .name("smart-fall")
-        .description("Only sinks as much as you look down, so looking straight ahead holds your height.")
-        .defaultValue(true)
-        .build()
-    );
-
-    private int glidingTicks;
-    private int takeoffCooldown;
-    private boolean wasInFluid;
+    private boolean fluidFlight;
 
     public ElytraFly() {
         super(Coyduck.CATEGORY, "elytra-fly+", "Flies with an elytra at a set speed in any direction, through water and lava too.");
@@ -99,24 +72,23 @@ public class ElytraFly extends Module {
             info("Disabled %s, it controls the same flight.", meteor.title);
         }
 
-        glidingTicks = 0;
-        takeoffCooldown = 0;
-        wasInFluid = false;
+        fluidFlight = false;
     }
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         if (mc.player == null) return;
 
-        if (takeoffCooldown > 0) takeoffCooldown--;
-        glidingTicks = mc.player.isGliding() ? glidingTicks + 1 : 0;
-
-        boolean inFluid = inFluid();
-        if (takeoff.get() && canTakeoff() && (mc.player.getVelocity().y < 0 || wasInFluid)) {
-            if (mc.player.checkGliding()) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
-            takeoffCooldown = TAKEOFF_COOLDOWN;
+        if (mc.player.isOnGround()) {
+            fluidFlight = false;
+            return;
         }
-        wasInFluid = inFluid;
+        if (inFluid() || mc.player.isGliding() || !fluidFlight) return;
+
+        fluidFlight = false;
+        if (canTakeoff() && mc.player.checkGliding()) {
+            mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -124,8 +96,8 @@ public class ElytraFly extends Module {
         if (event.type != MovementType.SELF || mc.player == null || !hasElytra()) return;
 
         boolean fluid = fluids.get() && inFluid();
-        boolean flying = mc.player.isGliding() && glidingTicks >= GRACE_TICKS;
-        if (!fluid && !flying) return;
+        if (!fluid && !mc.player.isGliding()) return;
+        if (fluid && !mc.player.isOnGround()) fluidFlight = true;
 
         PlayerInput input = mc.player.input.playerInput;
         double forward = (input.forward() ? 1 : 0) - (input.backward() ? 1 : 0);
@@ -140,18 +112,16 @@ public class ElytraFly extends Module {
             z = Math.cos(angle) * horizontal.get();
         }
 
-        double y;
+        double y = 0;
         if (input.jump() && !input.sneak()) y = up.get();
         else if (input.sneak() && !input.jump()) y = -down.get();
-        else y = -fall.get() * (smartFall.get() ? Math.abs(Math.sin(Math.toRadians(mc.player.getPitch()))) : 1);
 
         ((IVec3d) event.movement).meteor$set(x, y, z);
         mc.player.setVelocity(0, 0, 0);
     }
 
     private boolean canTakeoff() {
-        return takeoffCooldown == 0 && hasElytra() && !mc.player.isGliding() && !mc.player.isOnGround()
-            && !mc.player.hasVehicle() && !inFluid() && !mc.player.getAbilities().flying;
+        return hasElytra() && !mc.player.hasVehicle() && !mc.player.getAbilities().flying;
     }
 
     private boolean hasElytra() {
