@@ -104,7 +104,7 @@ public class Surround extends Module {
     private final Setting<Boolean> extend = sgGeneral.add(new BoolSetting.Builder()
         .name("extend")
         .description("Surrounds every block you stand on. Off pulls you to the middle of your block and surrounds just that one.")
-        .defaultValue(false)
+        .defaultValue(true)
         .build()
     );
 
