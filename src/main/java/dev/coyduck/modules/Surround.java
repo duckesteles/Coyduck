@@ -3,8 +3,10 @@ package dev.coyduck.modules;
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.managers.CrystalTracker;
+import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
+import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.utils.ExplosionDamage;
@@ -18,7 +20,6 @@ import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.BlockListSetting;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
@@ -123,20 +124,10 @@ public class Surround extends Module {
         .build()
     );
 
-    private final Setting<Double> maxSelfDamage = sgProtect.add(new DoubleSetting.Builder()
-        .name("max-self-damage")
-        .description("Most damage a crystal break may deal to you.")
-        .defaultValue(10)
-        .range(0, 40)
-        .sliderRange(0, 40)
-        .visible(breakCrystals::get)
-        .build()
-    );
-
     private final Setting<Boolean> allowPop = sgProtect.add(new BoolSetting.Builder()
         .name("allow-pop")
-        .description("Breaks a crystal in your surround even when it pops you, but only while Auto Totem+ has a confirmed offhand totem and a spare. The enemy would break it anyway.")
-        .defaultValue(false)
+        .description("Also breaks a crystal in your surround that pops you, once Auto Totem+ has confirmed your offhand totem. The enemy would explode it anyway, this way you pick the moment and close the gap.")
+        .defaultValue(true)
         .visible(breakCrystals::get)
         .build()
     );
@@ -338,10 +329,12 @@ public class Surround extends Module {
     }
 
     private boolean safe(EndCrystalEntity crystal) {
-        float damage = ExplosionDamage.crystal(mc.player, crystal.getEntityPos());
-        float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
-        if (damage < health && damage <= maxSelfDamage.get()) return true;
-        return allowPop.get() && AutoTotem.canAffordPop();
+        float raw = ExplosionDamage.crystalRaw(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), crystal.getEntityPos(), mc.world);
+        long arrival = Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2;
+        float damage = HurtTracker.get().effectiveOnSelf(raw, arrival);
+
+        if (damage < mc.player.getHealth() + mc.player.getAbsorptionAmount()) return true;
+        return allowPop.get() && AutoTotem.hasConfirmedTotem();
     }
 
     private List<BlockPos> targets() {

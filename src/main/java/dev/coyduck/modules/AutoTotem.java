@@ -136,10 +136,10 @@ public class AutoTotem extends Module {
         super(Coyduck.CATEGORY, "auto-totem+", "Keeps a totem in your offhand at any ping, under any screen.");
     }
 
-    public static boolean canAffordPop() {
+    public static boolean hasConfirmedTotem() {
         AutoTotem module = Modules.get().get(AutoTotem.class);
         return module != null && module.isActive() && module.canAct() && !module.pending && module.confirmed
-            && isTotem(module.mc.player.getOffHandStack()) && module.totems >= 2;
+            && isTotem(module.mc.player.getOffHandStack());
     }
 
     @Override
