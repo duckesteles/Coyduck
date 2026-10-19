@@ -22,11 +22,13 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
@@ -39,6 +41,7 @@ public class AutoCity extends Module {
     private static final float BURROW_SCORE = 1000;
     private static final float SWITCH_GAIN = 4;
     private static final float SWITCH_PROGRESS = 0.3f;
+    private static final float SUPPORT_PENALTY = 1;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgRender = settings.createGroup("Render");
@@ -81,6 +84,13 @@ public class AutoCity extends Module {
         .defaultValue(8)
         .range(0, 36)
         .sliderRange(0, 36)
+        .build()
+    );
+
+    private final Setting<Boolean> placeSupport = sgGeneral.add(new BoolSetting.Builder()
+        .name("support")
+        .description("When the block under a gap is not obsidian, mines it and places obsidian there first, so a crystal fits in the gap.")
+        .defaultValue(true)
         .build()
     );
 
@@ -138,6 +148,7 @@ public class AutoCity extends Module {
 
     private PlayerEntity target;
     private BlockPos current;
+    private BlockPos currentSupport;
     private float currentScore;
 
     public AutoCity() {
@@ -218,6 +229,7 @@ public class AutoCity extends Module {
         if (best != null && (current == null || shouldSwitch(best))) {
             current = best.pos;
             currentScore = best.score;
+            currentSupport = best.support;
         }
 
         if (current == null) {
@@ -230,6 +242,8 @@ public class AutoCity extends Module {
             current = null;
             return;
         }
+
+        if (currentSupport != null && !prepareSupport(currentSupport)) return;
 
         mining.mine(this, PRIORITY, current, true, switchMode.get(), swing.get());
     }
@@ -253,7 +267,7 @@ public class AutoCity extends Module {
         return rebreak.get() && MiningManager.get().owns(this) && MiningManager.get().isMining(pos);
     }
 
-    private record Choice(BlockPos pos, float score) {}
+    private record Choice(BlockPos pos, float score, BlockPos support) {}
 
     private Choice choose(Box box, LongSet columns) {
         Choice best = null;
@@ -265,7 +279,7 @@ public class AutoCity extends Module {
                 if (!Targets.isMinable(pos) || !mining.inRange(pos) || !Targets.isBurrowedIn(box, pos)) continue;
                 if (mc.world.getBlockState(pos).isOf(Blocks.BEDROCK)) continue;
 
-                Choice choice = new Choice(pos, BURROW_SCORE + mining.delta(mc.world.getBlockState(pos), pos, mc.player.getMainHandStack()));
+                Choice choice = new Choice(pos, BURROW_SCORE + mining.delta(mc.world.getBlockState(pos), pos, mc.player.getMainHandStack()), null);
                 if (best == null || choice.score > best.score) best = choice;
             }
             if (best != null) return best;
@@ -278,17 +292,54 @@ public class AutoCity extends Module {
         for (BlockPos pos : ring) {
             if (!Targets.isMinable(pos) || !mining.inRange(pos) || own.contains(pos)) continue;
 
-            float damage = gapDamage(pos, box, feet);
+            BlockPos support = null;
+            float damage = gapDamage(pos, box, feet, null);
+            if (damage < minDamage.get() && supportable(pos.down(), own)) {
+                support = pos.down();
+                damage = gapDamage(pos, box, feet, support) - SUPPORT_PENALTY;
+            }
             if (damage < minDamage.get()) continue;
 
-            if (best == null || damage > best.score) best = new Choice(pos, damage);
+            if (best == null || damage > best.score) best = new Choice(pos, damage, support);
         }
 
         return best;
     }
 
-    private float gapDamage(BlockPos gap, Box box, Vec3d feet) {
+    private boolean supportable(BlockPos support, List<BlockPos> own) {
+        if (!placeSupport.get() || own.contains(support)) return false;
+        if (InventoryManager.get().find(stack -> stack.isOf(Items.OBSIDIAN), 0, InventoryManager.MAIN_END) == -1) return false;
+
+        BlockState state = mc.world.getBlockState(support);
+        if (Targets.isBase(state)) return false;
+        if (state.isReplaceable()) return true;
+        return state.getHardness(mc.world, support) >= 0 && MiningManager.get().inRange(support);
+    }
+
+    private boolean prepareSupport(BlockPos support) {
+        BlockState state = mc.world.getBlockState(support);
+        if (Targets.isBase(state)) return true;
+
+        MiningManager mining = MiningManager.get();
+        if (!state.isReplaceable()) {
+            mining.mine(this, PRIORITY, support, true, switchMode.get(), swing.get());
+            return false;
+        }
+
+        if (!mining.mine(this, PRIORITY, current, true, switchMode.get(), swing.get())) return false;
+
+        InteractionManager interaction = InteractionManager.get();
+        int slot = InventoryManager.get().find(stack -> stack.isOf(Items.OBSIDIAN), 0, InventoryManager.MAIN_END);
+        BlockHitResult hit = slot == -1 || !interaction.canPlace(support) ? null : interaction.hit(support, true);
+        if (hit == null) return false;
+
+        InventoryManager.get().withItem(slot, switchMode.get(), () -> interaction.place(support, hit, swing.get()));
+        return Targets.isBase(mc.world.getBlockState(support));
+    }
+
+    private float gapDamage(BlockPos gap, Box box, Vec3d feet, BlockPos support) {
         BlockOverlay view = new BlockOverlay(mc.world).set(gap, Blocks.AIR.getDefaultState());
+        if (support != null) view.set(support, Blocks.OBSIDIAN.getDefaultState());
         AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
         double range = autoCrystal != null && autoCrystal.isActive() ? autoCrystal.placeRange() : 5.5;
         float best = 0;

@@ -121,9 +121,11 @@ public final class MiningManager {
 
     public int remainingTicks() {
         if (pos == null || mc.world == null) return Integer.MAX_VALUE;
+        return remainingTicks(mc.world.getBlockState(pos));
+    }
 
-        BlockState state = mc.world.getBlockState(pos);
-        if (state.isReplaceable()) return Integer.MAX_VALUE;
+    public int remainingTicks(BlockState state) {
+        if (pos == null || mc.world == null || state.isReplaceable()) return Integer.MAX_VALUE;
 
         float delta = bestDelta(state);
         if (delta <= 0) return Integer.MAX_VALUE;

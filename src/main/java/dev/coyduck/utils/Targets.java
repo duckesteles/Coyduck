@@ -11,6 +11,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
@@ -91,6 +92,8 @@ public final class Targets {
 
     public static boolean isBurrowedIn(Box box, BlockPos pos) {
         BlockState state = mc.world.getBlockState(pos);
+        if (state.isIn(BlockTags.CLIMBABLE)) return false;
+
         VoxelShape shape = state.getCollisionShape(mc.world, pos);
         if (shape.isEmpty()) return false;
 

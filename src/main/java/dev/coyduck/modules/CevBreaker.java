@@ -48,6 +48,8 @@ import java.util.List;
 public class CevBreaker extends Module {
     public static final int PRIORITY = 60;
 
+    private static final float CLEAR_PENALTY = 2;
+
     private static final double PLACE_RANGE = 5.5;
 
     public enum Mode {
@@ -57,7 +59,7 @@ public class CevBreaker extends Module {
         Trap
     }
 
-    private record Plan(BlockPos block, Mode mode, LongSet columns, float damage) {}
+    private record Plan(BlockPos block, BlockPos clear, Mode mode, LongSet columns, float damage) {}
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgRender = settings.createGroup("Render");
@@ -251,11 +253,19 @@ public class CevBreaker extends Module {
         }
 
         MiningManager mining = MiningManager.get();
+        BlockPos above = plan.block.up();
+        if (!mc.world.getBlockState(above).isAir()) {
+            mining.mine(this, PRIORITY, above, true, switchMode.get(), swing.get());
+            return;
+        }
+
         if (!mining.mine(this, PRIORITY, plan.block, false, switchMode.get(), swing.get())) return;
 
         BlockState state = mc.world.getBlockState(plan.block);
 
         if (state.isReplaceable()) {
+            int lead = LatencyManager.get().rtt() / 50 + 2;
+            if (mining.remainingTicks(Blocks.OBSIDIAN.getDefaultState()) > lead) return;
             if (placeObsidian() && crystalDue()) placeCrystal();
             return;
         }
@@ -363,7 +373,11 @@ public class CevBreaker extends Module {
             BlockPos block = candidate.block;
             if (!usable(block)) continue;
 
+            BlockPos above = block.up();
+            BlockPos clear = mc.world.getBlockState(above).isAir() ? null : above;
+
             BlockOverlay view = new BlockOverlay(mc.world).set(block, Blocks.AIR.getDefaultState());
+            if (clear != null) view.set(clear, Blocks.AIR.getDefaultState());
             Vec3d center = Targets.crystalCenter(block);
             if (!Targets.safe(center, view, maxSelfDamage.get())) continue;
 
@@ -371,7 +385,8 @@ public class CevBreaker extends Module {
             float health = target.getHealth() + target.getAbsorptionAmount();
             if (damage < minDamage.get() && damage < health) continue;
 
-            if (best == null || damage > best.damage + 0.5f) best = new Plan(block, candidate.mode, columns, damage);
+            float score = clear == null ? damage : damage - CLEAR_PENALTY;
+            if (best == null || score > best.damage + 0.5f) best = new Plan(block, clear, candidate.mode, columns, score);
         }
 
         return best;
@@ -406,7 +421,8 @@ public class CevBreaker extends Module {
         if (state.isOf(Blocks.BEDROCK)) return false;
 
         BlockPos above = block.up();
-        if (!mc.world.getBlockState(above).isAir()) return false;
+        if (!mc.world.getBlockState(above).isAir() && !clearable(above)) return false;
+        if (!mc.world.getBlockState(above.up()).isAir()) return false;
         Box crystalBox = new Box(above.getX(), above.getY(), above.getZ(), above.getX() + 1, above.getY() + 2, above.getZ() + 1);
         if (!mc.world.getOtherEntities(null, crystalBox, entity -> !(entity instanceof EndCrystalEntity)).isEmpty()) return false;
 
@@ -422,7 +438,14 @@ public class CevBreaker extends Module {
         if (!plan.columns.equals(columns)) return false;
         if (!MiningManager.get().inRange(plan.block)) return false;
         if (mc.world.getBlockState(plan.block).isOf(Blocks.BEDROCK)) return false;
-        return mc.world.getBlockState(plan.block.up()).isAir();
+
+        BlockPos above = plan.block.up();
+        return mc.world.getBlockState(above).isAir() || clearable(above);
+    }
+
+    private boolean clearable(BlockPos pos) {
+        BlockState state = mc.world.getBlockState(pos);
+        return !state.isOf(Blocks.BEDROCK) && state.getHardness(mc.world, pos) >= 0 && MiningManager.get().inRange(pos);
     }
 
     private void clear() {

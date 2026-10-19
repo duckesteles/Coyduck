@@ -14,4 +14,5 @@
 - AutoCity
 - CevBreaker
 - AntiSurround
+- LadderTrap
 - PopCounter

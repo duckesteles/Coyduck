@@ -16,6 +16,7 @@ import dev.coyduck.modules.AutoTotem;
 import dev.coyduck.modules.AutoTrap;
 import dev.coyduck.modules.AutoWeb;
 import dev.coyduck.modules.CevBreaker;
+import dev.coyduck.modules.LadderTrap;
 import dev.coyduck.modules.Surround;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.addons.GithubRepo;
@@ -52,6 +53,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new CevBreaker());
         Modules.get().add(new AutoTrap());
         Modules.get().add(new AutoWeb());
+        Modules.get().add(new LadderTrap());
     }
 
     @Override
