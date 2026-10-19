@@ -28,6 +28,7 @@ import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BlockItem;
@@ -165,12 +166,17 @@ public class CevBreaker extends Module {
     );
 
     private static final long STUCK_TIME = 2_000;
+    private static final int MAX_REJECTED = 2;
 
     private PlayerEntity target;
     private Plan plan;
     private long releaseAt;
     private String status;
     private long stuckSince;
+    private long crystalSentAt;
+    private int rejected;
+    private long firedAt;
+    private EndCrystalEntity firedCrystal;
     private boolean running;
 
     public CevBreaker() {
@@ -314,11 +320,15 @@ public class CevBreaker extends Module {
             return;
         }
 
+        verifyFire();
+
         EndCrystalEntity crystal = crystal();
         if (crystal == null) {
             placeCrystalTimed(box);
             return;
         }
+        crystalSentAt = 0;
+        rejected = 0;
 
         if (!mining.isReady()) {
             status("Mining, " + mining.remainingTicks() + " ticks");
@@ -383,12 +393,48 @@ public class CevBreaker extends Module {
         }
 
         if (!Targets.canHoldCrystal(mc.world, plan.block)) {
-            status("Crystal spot is blocked");
+            blocked("Crystal spot is blocked by " + blocker());
             return;
         }
 
-        placeCrystal();
+        long now = Util.getMeasuringTimeMs();
+        if (crystalSentAt != 0 && now - crystalSentAt > LatencyManager.get().timeout()) {
+            crystalSentAt = 0;
+            if (++rejected >= MAX_REJECTED) {
+                status("Server rejected the crystal twice, replanning");
+                clear();
+                return;
+            }
+        }
+
+        if (crystalSentAt == 0) {
+            placeCrystal();
+            crystalSentAt = now;
+        }
         status("Waiting for the crystal to spawn");
+    }
+
+    private String blocker() {
+        BlockPos above = plan.block.up();
+        if (!mc.world.getBlockState(above).isAir()) return "a block";
+
+        Box box = new Box(above.getX(), above.getY(), above.getZ(), above.getX() + 1, above.getY() + 2, above.getZ() + 1);
+        for (Entity entity : mc.world.getOtherEntities(null, box)) {
+            if (entity instanceof EndCrystalEntity && !CrystalTracker.get().isAlive(entity)) continue;
+            return entity instanceof ItemEntity ? "a dropped item" : entity.getName().getString();
+        }
+        return "something";
+    }
+
+    private void verifyFire() {
+        if (firedAt == 0) return;
+
+        long now = Util.getMeasuringTimeMs();
+        if (now - firedAt < LatencyManager.get().timeout()) return;
+
+        if (firedCrystal != null && !firedCrystal.isRemoved()) status("Server did not destroy the crystal");
+        firedAt = 0;
+        firedCrystal = null;
     }
 
     private void fire(EndCrystalEntity crystal, float raw) {
@@ -404,6 +450,10 @@ public class CevBreaker extends Module {
         CrystalTracker.get().explodeAt(crystal.getEntityPos());
         HurtTracker.get().expect(target, raw);
         status("Fired");
+        firedAt = Util.getMeasuringTimeMs();
+        firedCrystal = crystal;
+        crystalSentAt = 0;
+        rejected = 0;
 
         placeObsidian();
     }
@@ -539,6 +589,10 @@ public class CevBreaker extends Module {
     private void clear() {
         releaseAt = 0;
         stuckSince = 0;
+        crystalSentAt = 0;
+        rejected = 0;
+        firedAt = 0;
+        firedCrystal = null;
         MiningManager.get().release(this);
         CrystalTracker.get().release(this);
         plan = null;
