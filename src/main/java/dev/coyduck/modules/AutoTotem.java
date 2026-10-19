@@ -2,6 +2,7 @@ package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.utils.ExplosionDamage;
@@ -13,6 +14,7 @@ import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
+import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.systems.modules.combat.Offhand;
@@ -22,9 +24,10 @@ import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityStatuses;
 import net.minecraft.entity.decoration.EndCrystalEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
-import net.minecraft.network.packet.s2c.play.InventoryS2CPacket;
+import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
 import net.minecraft.network.packet.s2c.play.ScreenHandlerSlotUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.SetPlayerInventoryS2CPacket;
 import net.minecraft.screen.PlayerScreenHandler;
@@ -40,31 +43,45 @@ public class AutoTotem extends Module {
         Always
     }
 
-    private enum Pending {
-        NONE,
-        CLICK,
-        VERIFY,
-        HANDS
-    }
-
     private static final int NONE = -1;
+    private static final int MAX_ATTEMPTS = 3;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
     private final Setting<Mainhand> mainhand = sgGeneral.add(new EnumSetting.Builder<Mainhand>()
         .name("mainhand")
-        .description("Holds a second totem in the main hand. The main hand pops first, so the offhand totem survives a double pop.")
-        .defaultValue(Mainhand.Off)
+        .description("Holds a second totem in the main hand. The main hand pops first, so a second hit before the refill arrives still finds a totem.")
+        .defaultValue(Mainhand.Smart)
+        .build()
+    );
+
+    private final Setting<Double> combatRange = sgGeneral.add(new DoubleSetting.Builder()
+        .name("combat-range")
+        .description("Smart holds the main hand totem while an enemy is this close.")
+        .defaultValue(12)
+        .range(0, 32)
+        .sliderRange(0, 32)
+        .visible(() -> mainhand.get() == Mainhand.Smart)
         .build()
     );
 
     private final Setting<Double> health = sgGeneral.add(new DoubleSetting.Builder()
         .name("health")
-        .description("Smart holds the main hand totem at or below this health, or while a crystal near you is lethal.")
-        .defaultValue(10)
+        .description("Smart also holds the main hand totem at or below this health, or while a crystal near you is lethal.")
+        .defaultValue(12)
         .range(0, 40)
         .sliderRange(0, 40)
         .visible(() -> mainhand.get() == Mainhand.Smart)
+        .build()
+    );
+
+    private final Setting<Integer> resumeDelay = sgGeneral.add(new IntSetting.Builder()
+        .name("resume-delay")
+        .description("Ticks to wait after you switch away from the main hand totem before taking it back.")
+        .defaultValue(20)
+        .range(0, 200)
+        .sliderRange(0, 100)
+        .visible(() -> mainhand.get() != Mainhand.Off)
         .build()
     );
 
@@ -86,6 +103,13 @@ public class AutoTotem extends Module {
         .build()
     );
 
+    private final Setting<Boolean> closeContainers = sgGeneral.add(new BoolSetting.Builder()
+        .name("close-containers")
+        .description("Closes an open container when you pop. The server never reports the offhand while a container is open, so the refill could not be confirmed.")
+        .defaultValue(true)
+        .build()
+    );
+
     private final Setting<Boolean> warn = sgGeneral.add(new BoolSetting.Builder()
         .name("warn")
         .description("Warns in chat when you run out of totems.")
@@ -93,14 +117,18 @@ public class AutoTotem extends Module {
         .build()
     );
 
-    private Pending pending = Pending.NONE;
+    private boolean pending;
     private int pendingSource = NONE;
+    private int pendingSyncId;
+    private int barrier;
     private long pendingUntil;
-    private int resyncs;
+    private int attempts;
+    private boolean confirmed;
 
     private int reserveSlot = NONE;
     private int previousSlot = NONE;
-    private boolean suspended;
+    private int expectedSlot = NONE;
+    private int resumeTicks;
 
     private int totems;
     private boolean warned;
@@ -109,22 +137,23 @@ public class AutoTotem extends Module {
         super(Coyduck.CATEGORY, "auto-totem+", "Keeps a totem in your offhand at any ping, under any screen.");
     }
 
+    public static boolean canAffordPop() {
+        AutoTotem module = Modules.get().get(AutoTotem.class);
+        return module != null && module.isActive() && module.canAct() && !module.pending && module.confirmed
+            && isTotem(module.mc.player.getOffHandStack()) && module.totems >= 2;
+    }
+
     @Override
     public void onActivate() {
         clearPending();
-        resyncs = 0;
+        attempts = 0;
+        confirmed = false;
         reserveSlot = NONE;
         previousSlot = NONE;
-        suspended = false;
+        expectedSlot = NONE;
+        resumeTicks = 0;
         warned = false;
-
-        for (Class<? extends Module> conflict : List.of(meteordevelopment.meteorclient.systems.modules.combat.AutoTotem.class, Offhand.class)) {
-            Module module = Modules.get().get(conflict);
-            if (module != null && module.isActive()) {
-                module.toggle();
-                info("Disabled %s, it fights over the offhand.", module.title);
-            }
-        }
+        disableConflicts();
     }
 
     @Override
@@ -132,6 +161,7 @@ public class AutoTotem extends Module {
         if (canAct()) release();
         reserveSlot = NONE;
         previousSlot = NONE;
+        expectedSlot = NONE;
     }
 
     @Override
@@ -143,12 +173,14 @@ public class AutoTotem extends Module {
     private void onTick(TickEvent.Pre event) {
         if (!canAct()) return;
 
-        if (pending != Pending.NONE && Util.getMeasuringTimeMs() >= pendingUntil) onTimeout();
+        disableConflicts();
+        if (resumeTicks > 0) resumeTicks--;
+        if (pending && Util.getMeasuringTimeMs() >= pendingUntil) retry();
         refill(false);
         updateMainhand();
 
         totems = InventoryManager.get().count(AutoTotem::isTotem);
-        if (pending != Pending.NONE) return;
+        if (pending) return;
         if (totems > 0) warned = false;
         else if (warn.get() && !warned) {
             warned = true;
@@ -157,27 +189,14 @@ public class AutoTotem extends Module {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
-    private void onPacketPre(PacketApplyEvent.Pre event) {
-        if (pending != Pending.CLICK && pending != Pending.VERIFY) return;
-
-        boolean offhand = switch (event.packet) {
-            case ScreenHandlerSlotUpdateS2CPacket packet -> packet.getSyncId() == 0 && packet.getSlot() == PlayerScreenHandler.OFFHAND_ID;
-            case SetPlayerInventoryS2CPacket packet -> packet.slot() == InventoryManager.OFFHAND;
-            default -> false;
-        };
-
-        if (offhand) event.setCancelled(true);
-    }
-
-    @EventHandler(priority = EventPriority.HIGHEST)
     private void onPacket(PacketApplyEvent.Post event) {
         if (!canAct()) return;
 
         switch (event.packet) {
             case EntityStatusS2CPacket packet when packet.getStatus() == EntityStatuses.USE_TOTEM_OF_UNDYING && packet.getEntity(mc.world) == mc.player -> onPop();
-            case InventoryS2CPacket packet when packet.syncId() == mc.player.currentScreenHandler.syncId -> onInventory();
-            case ScreenHandlerSlotUpdateS2CPacket packet when packet.getSyncId() == 0 && packet.getSlot() == PlayerScreenHandler.OFFHAND_ID -> refill(false);
-            case SetPlayerInventoryS2CPacket packet when packet.slot() == InventoryManager.OFFHAND -> refill(false);
+            case PlayerActionResponseS2CPacket packet when pending && packet.sequence() >= barrier -> onBarrier();
+            case ScreenHandlerSlotUpdateS2CPacket packet when packet.getSyncId() == 0 && packet.getSlot() == PlayerScreenHandler.OFFHAND_ID -> onOffhandUpdate();
+            case SetPlayerInventoryS2CPacket packet when packet.slot() == InventoryManager.OFFHAND -> onOffhandUpdate();
             default -> {}
         }
     }
@@ -185,6 +204,16 @@ public class AutoTotem extends Module {
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onEntityAdded(EntityAddedEvent event) {
         if (event.entity instanceof EndCrystalEntity && canAct()) updateMainhand();
+    }
+
+    @EventHandler
+    private void onWorldReset(WorldResetEvent event) {
+        clearPending();
+        attempts = 0;
+        confirmed = false;
+        reserveSlot = NONE;
+        previousSlot = NONE;
+        expectedSlot = NONE;
     }
 
     private void onPop() {
@@ -195,69 +224,72 @@ public class AutoTotem extends Module {
             main.decrement(1);
         } else {
             mc.player.getOffHandStack().decrement(1);
+            confirmed = false;
+
+            if (closeContainers.get() && mc.player.currentScreenHandler != mc.player.playerScreenHandler) mc.player.closeHandledScreen();
+
             clearPending();
+            attempts = 0;
             refill(true);
         }
 
         updateMainhand();
     }
 
-    private void onInventory() {
-        if (resyncs > 0) resyncs--;
-        if (resyncs > 0) return;
-        if (pending != Pending.CLICK && pending != Pending.VERIFY) return;
+    private void onOffhandUpdate() {
+        if (pending) return;
 
-        if (applied()) {
-            clearPending();
-            refill(false);
-        } else if (pending == Pending.CLICK) {
-            verify();
-        } else {
+        confirmed = isTotem(mc.player.getOffHandStack());
+        refill(false);
+    }
+
+    private void onBarrier() {
+        if (mc.player.currentScreenHandler.syncId != pendingSyncId) {
             clearPending();
             refill(true);
+            return;
         }
-    }
 
-    private void onTimeout() {
-        switch (pending) {
-            case CLICK -> verify();
-            case VERIFY -> {
-                clearPending();
-                refill(true);
-            }
-            default -> clearPending();
+        boolean playerScreen = mc.player.currentScreenHandler == mc.player.playerScreenHandler;
+        boolean moved = pendingSource == NONE || !isTotem(InventoryManager.get().stack(pendingSource));
+        boolean holding = isTotem(mc.player.getOffHandStack());
+
+        clearPending();
+
+        if (holding && (moved || !playerScreen)) {
+            attempts = 0;
+            confirmed = playerScreen;
+            return;
         }
+
+        if (++attempts <= MAX_ATTEMPTS) refill(true);
     }
 
-    private void verify() {
-        pending = Pending.VERIFY;
-        pendingUntil = deadline();
-        resyncs = 0;
-        resync();
-    }
-
-    private boolean applied() {
-        return !isTotem(InventoryManager.get().stack(pendingSource));
+    private void retry() {
+        clearPending();
+        if (++attempts <= MAX_ATTEMPTS + 2) refill(true);
+        else attempts = 0;
     }
 
     private void refill(boolean force) {
-        if (!force && (pending != Pending.NONE || isTotem(mc.player.getOffHandStack()))) return;
+        if (pending) return;
+        if (!force && isTotem(mc.player.getOffHandStack())) return;
 
         int source = offhandSource();
         if (source == NONE) return;
 
-        InventoryManager.Swap swap = InventoryManager.get().swapWithOffhand(source);
+        int syncId = mc.player.currentScreenHandler.syncId;
+        InventoryManager inventory = InventoryManager.get();
+        InventoryManager.Swap swap = inventory.swapWithOffhand(source);
         if (swap == InventoryManager.Swap.NONE) return;
 
-        pendingSource = source;
-        pendingUntil = deadline();
+        if (swap == InventoryManager.Swap.CLICK) inventory.resync();
 
-        if (swap == InventoryManager.Swap.CLICK) {
-            pending = Pending.CLICK;
-            resync();
-        } else {
-            pending = Pending.HANDS;
-        }
+        pending = true;
+        pendingSource = swap == InventoryManager.Swap.CLICK ? source : NONE;
+        pendingSyncId = syncId;
+        pendingUntil = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
+        barrier = inventory.barrier();
     }
 
     private int offhandSource() {
@@ -271,12 +303,19 @@ public class AutoTotem extends Module {
             if (i != server && i != reserveSlot && isTotem(inventory.stack(i))) return i;
         }
 
-        return reserveSlot == NONE && isTotem(inventory.stack(server)) ? server : NONE;
+        return isTotem(inventory.stack(server)) ? server : NONE;
     }
 
     private void updateMainhand() {
         InventoryManager inventory = InventoryManager.get();
         int selected = inventory.selectedSlot();
+
+        if (expectedSlot != NONE && selected != expectedSlot) {
+            resumeTicks = resumeDelay.get();
+            reserveSlot = NONE;
+            previousSlot = NONE;
+        }
+        expectedSlot = NONE;
 
         boolean wanted = switch (mainhand.get()) {
             case Off -> false;
@@ -285,26 +324,19 @@ public class AutoTotem extends Module {
         };
 
         if (!wanted) {
-            suspended = false;
             release();
             return;
         }
 
         if (isTotem(inventory.stack(selected))) {
-            suspended = false;
-            if (reserveSlot == NONE) reserveSlot = selected;
+            reserveSlot = selected;
+            expectedSlot = selected;
             return;
         }
 
-        if (reserveSlot != NONE && selected != reserveSlot) {
-            reserveSlot = NONE;
-            previousSlot = NONE;
-            suspended = true;
-        }
-        if (suspended) return;
-
         boolean eating = mc.player.isUsingItem() && mc.player.getActiveHand() == Hand.MAIN_HAND;
-        if (eating && isTotem(mc.player.getOffHandStack())) return;
+        if (eating) resumeTicks = Math.max(resumeTicks, 2);
+        if (resumeTicks > 0 || !isTotem(mc.player.getOffHandStack())) return;
 
         int hotbar = inventory.find(AutoTotem::isTotem, 0, InventoryManager.HOTBAR_END);
         if (hotbar == NONE) {
@@ -313,15 +345,16 @@ public class AutoTotem extends Module {
 
             hotbar = slot.get() - 1;
             if (!inventory.swapWithHotbar(source, hotbar)) return;
-            resync();
         }
 
         if (previousSlot == NONE) previousSlot = selected;
         reserveSlot = hotbar;
+        expectedSlot = hotbar;
         inventory.select(hotbar);
     }
 
     private void release() {
+        resumeTicks = 0;
         if (reserveSlot == NONE) return;
 
         InventoryManager inventory = InventoryManager.get();
@@ -335,6 +368,12 @@ public class AutoTotem extends Module {
         float hp = mc.player.getHealth() + mc.player.getAbsorptionAmount();
         if (hp <= health.get()) return true;
 
+        double enemyRange = combatRange.get() * combatRange.get();
+        for (PlayerEntity player : mc.world.getPlayers()) {
+            if (player != mc.player && player.isAlive() && !Friends.get().isFriend(player) && !ExplosionDamage.isInvulnerable(player)
+                && player.squaredDistanceTo(mc.player) <= enemyRange) return true;
+        }
+
         double range = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
         for (Entity entity : mc.world.getEntities()) {
             if (entity instanceof EndCrystalEntity crystal && crystal.squaredDistanceTo(mc.player) <= range && ExplosionDamage.crystal(mc.player, crystal.getEntityPos()) >= hp) return true;
@@ -343,17 +382,18 @@ public class AutoTotem extends Module {
         return false;
     }
 
-    private void resync() {
-        resyncs++;
-        InventoryManager.get().resync();
-    }
-
-    private long deadline() {
-        return Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
+    private void disableConflicts() {
+        for (Class<? extends Module> conflict : List.of(meteordevelopment.meteorclient.systems.modules.combat.AutoTotem.class, Offhand.class)) {
+            Module module = Modules.get().get(conflict);
+            if (module != null && module.isActive()) {
+                module.toggle();
+                info("Disabled %s, it fights over the offhand.", module.title);
+            }
+        }
     }
 
     private void clearPending() {
-        pending = Pending.NONE;
+        pending = false;
         pendingSource = NONE;
         pendingUntil = 0;
     }

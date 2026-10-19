@@ -24,6 +24,8 @@ public final class InventoryManager {
     public static final int MAIN_END = PlayerInventory.MAIN_SIZE;
     public static final int OFFHAND = PlayerInventory.OFF_HAND_SLOT;
 
+    private static final int BARRIER_DISTANCE = 64;
+
     public enum Swap {
         NONE,
         CLICK,
@@ -99,6 +101,11 @@ public final class InventoryManager {
         if (selected != index) select(index);
         mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.SWAP_ITEM_WITH_OFFHAND, BlockPos.ORIGIN, Direction.DOWN));
         if (selected != index) select(selected);
+
+        PlayerInventory inventory = mc.player.getInventory();
+        ItemStack held = inventory.getStack(index);
+        inventory.setStack(index, inventory.getStack(OFFHAND));
+        inventory.setStack(OFFHAND, held);
         return Swap.HANDS;
     }
 
@@ -129,6 +136,16 @@ public final class InventoryManager {
         action.run();
         swapWithHotbar(index, selected);
         return true;
+    }
+
+    public int barrier() {
+        BlockPos far = mc.player.getBlockPos().up(BARRIER_DISTANCE);
+        int[] sent = {0};
+        ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).coyduck$sendSequencedPacket(mc.world, sequence -> {
+            sent[0] = sequence;
+            return new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.ABORT_DESTROY_BLOCK, far, Direction.DOWN, sequence);
+        });
+        return sent[0];
     }
 
     public void resync() {

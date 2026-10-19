@@ -28,7 +28,6 @@ import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
-import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.item.BlockItem;
@@ -135,8 +134,8 @@ public class Surround extends Module {
 
     private final Setting<Boolean> allowPop = sgProtect.add(new BoolSetting.Builder()
         .name("allow-pop")
-        .description("Breaks a crystal in your surround even when it pops you, as long as your offhand holds a totem. The enemy would break it anyway.")
-        .defaultValue(true)
+        .description("Breaks a crystal in your surround even when it pops you, but only while Auto Totem+ has a confirmed offhand totem and a spare. The enemy would break it anyway.")
+        .defaultValue(false)
         .visible(breakCrystals::get)
         .build()
     );
@@ -339,7 +338,7 @@ public class Surround extends Module {
         float damage = ExplosionDamage.crystal(mc.player, crystal.getEntityPos());
         float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
         if (damage < health && damage <= maxSelfDamage.get()) return true;
-        return allowPop.get() && mc.player.getOffHandStack().contains(DataComponentTypes.DEATH_PROTECTION);
+        return allowPop.get() && AutoTotem.canAffordPop();
     }
 
     private List<BlockPos> targets() {
