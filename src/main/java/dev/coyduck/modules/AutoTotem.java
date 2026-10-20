@@ -28,10 +28,12 @@ import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
+import net.minecraft.network.packet.s2c.play.InventoryS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
 import net.minecraft.network.packet.s2c.play.ScreenHandlerSlotUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.SetPlayerInventoryS2CPacket;
 import net.minecraft.screen.PlayerScreenHandler;
+import net.minecraft.screen.ScreenHandler;
 import net.minecraft.util.Util;
 
 import java.util.List;
@@ -45,6 +47,8 @@ public class AutoTotem extends Module {
 
     private static final int NONE = -1;
     private static final int MAX_ATTEMPTS = 3;
+    private static final int DANGER_HOLD = 40;
+    private static final long VERIFY_INTERVAL = 1_000;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -118,6 +122,10 @@ public class AutoTotem extends Module {
     );
 
     private boolean pending;
+    private boolean verifying;
+    private long nextVerify;
+    private long popExpectedUntil;
+    private int dangerHold;
     private int pendingSource = NONE;
     private int pendingSyncId;
     private int barrier;
@@ -137,10 +145,23 @@ public class AutoTotem extends Module {
         super(Coyduck.CATEGORY, "auto-totem+", "Keeps a totem in your offhand at any ping, under any screen.");
     }
 
-    public static boolean hasConfirmedTotem() {
+    public static boolean canAffordPop() {
         AutoTotem module = Modules.get().get(AutoTotem.class);
         return module != null && module.isActive() && module.canAct() && !module.pending && module.confirmed
-            && isTotem(module.mc.player.getOffHandStack());
+            && !popInFlight() && isTotem(module.mc.player.getOffHandStack()) && module.totems >= 2;
+    }
+
+    public static boolean popInFlight() {
+        AutoTotem module = Modules.get().get(AutoTotem.class);
+        return module != null && Util.getMeasuringTimeMs() < module.popExpectedUntil;
+    }
+
+    public static void notePop() {
+        AutoTotem module = Modules.get().get(AutoTotem.class);
+        if (module == null) return;
+
+        module.popExpectedUntil = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
+        module.confirmed = false;
     }
 
     @Override
@@ -152,6 +173,9 @@ public class AutoTotem extends Module {
         previousSlot = NONE;
         expectedSlot = NONE;
         resumeTicks = 0;
+        dangerHold = 0;
+        nextVerify = 0;
+        popExpectedUntil = 0;
         warned = false;
         disableConflicts();
     }
@@ -175,8 +199,10 @@ public class AutoTotem extends Module {
 
         disableConflicts();
         if (resumeTicks > 0) resumeTicks--;
+        if (dangerHold > 0) dangerHold--;
         if (pending && Util.getMeasuringTimeMs() >= pendingUntil) retry();
         refill(false);
+        if (!pending && !confirmed && isTotem(mc.player.getOffHandStack()) && Util.getMeasuringTimeMs() >= nextVerify) verify();
         updateMainhand();
 
         totems = InventoryManager.get().count(AutoTotem::isTotem);
@@ -197,6 +223,7 @@ public class AutoTotem extends Module {
             case PlayerActionResponseS2CPacket packet when pending && packet.sequence() >= barrier -> onBarrier();
             case ScreenHandlerSlotUpdateS2CPacket packet when packet.getSyncId() == 0 && packet.getSlot() == PlayerScreenHandler.OFFHAND_ID -> onOffhandUpdate();
             case SetPlayerInventoryS2CPacket packet when packet.slot() == InventoryManager.OFFHAND -> onOffhandUpdate();
+            case InventoryS2CPacket packet when packet.syncId() == 0 -> onOffhandUpdate();
             default -> {}
         }
     }
@@ -211,6 +238,9 @@ public class AutoTotem extends Module {
         clearPending();
         attempts = 0;
         confirmed = false;
+        nextVerify = 0;
+        popExpectedUntil = 0;
+        dangerHold = 0;
         reserveSlot = NONE;
         previousSlot = NONE;
         expectedSlot = NONE;
@@ -219,21 +249,33 @@ public class AutoTotem extends Module {
     private void onPop() {
         InventoryManager inventory = InventoryManager.get();
         ItemStack main = inventory.stack(inventory.serverSlot());
+        boolean mainhand = isTotem(main) && !inventory.selectionInFlight();
 
-        if (isTotem(main)) {
-            main.decrement(1);
-        } else {
-            mc.player.getOffHandStack().decrement(1);
-            confirmed = false;
+        if (mainhand) main.decrement(1);
+        else mc.player.getOffHandStack().decrement(1);
 
-            if (closeContainers.get() && mc.player.currentScreenHandler != mc.player.playerScreenHandler) mc.player.closeHandledScreen();
+        confirmed = false;
+        popExpectedUntil = 0;
+        if (closeContainers.get() && mc.player.currentScreenHandler != mc.player.playerScreenHandler) mc.player.closeHandledScreen();
 
-            clearPending();
-            attempts = 0;
-            refill(true);
-        }
+        clearPending();
+        attempts = 0;
+        if (mainhand) verify();
+        else refill(true);
+    }
 
-        updateMainhand();
+    private void verify() {
+        int syncId = mc.player.currentScreenHandler.syncId;
+        InventoryManager inventory = InventoryManager.get();
+        inventory.resync();
+
+        pending = true;
+        verifying = true;
+        pendingSource = NONE;
+        pendingSyncId = syncId;
+        pendingUntil = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
+        nextVerify = Util.getMeasuringTimeMs() + VERIFY_INTERVAL;
+        barrier = inventory.barrier();
     }
 
     private void onOffhandUpdate() {
@@ -244,6 +286,14 @@ public class AutoTotem extends Module {
     }
 
     private void onBarrier() {
+        if (verifying) {
+            boolean screen = mc.player.currentScreenHandler.syncId == pendingSyncId && mc.player.currentScreenHandler == mc.player.playerScreenHandler;
+            clearPending();
+            if (isTotem(mc.player.getOffHandStack())) confirmed = screen;
+            else refill(false);
+            return;
+        }
+
         if (mc.player.currentScreenHandler.syncId != pendingSyncId) {
             clearPending();
             refill(true);
@@ -266,6 +316,11 @@ public class AutoTotem extends Module {
     }
 
     private void retry() {
+        if (verifying) {
+            clearPending();
+            return;
+        }
+
         clearPending();
         if (++attempts <= MAX_ATTEMPTS + 2) refill(true);
         else attempts = 0;
@@ -286,6 +341,7 @@ public class AutoTotem extends Module {
         if (swap == InventoryManager.Swap.CLICK) inventory.resync();
 
         pending = true;
+        verifying = false;
         pendingSource = swap == InventoryManager.Swap.CLICK ? source : NONE;
         pendingSyncId = syncId;
         pendingUntil = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
@@ -294,9 +350,11 @@ public class AutoTotem extends Module {
 
     private int offhandSource() {
         InventoryManager inventory = InventoryManager.get();
+        ScreenHandler handler = mc.player.currentScreenHandler;
 
-        int source = inventory.find(AutoTotem::isTotem, InventoryManager.HOTBAR_END, InventoryManager.MAIN_END);
-        if (source != NONE) return source;
+        for (int i = InventoryManager.HOTBAR_END; i < InventoryManager.MAIN_END; i++) {
+            if (isTotem(inventory.stack(i)) && inventory.handlerSlot(handler, i) != -1) return i;
+        }
 
         int server = inventory.serverSlot();
         for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
@@ -321,7 +379,10 @@ public class AutoTotem extends Module {
 
         boolean wanted = switch (mainhand.get()) {
             case Off -> false;
-            case Smart -> danger();
+            case Smart -> {
+                if (danger()) dangerHold = DANGER_HOLD;
+                yield dangerHold > 0;
+            }
             case Always -> true;
         };
 
@@ -356,6 +417,7 @@ public class AutoTotem extends Module {
 
     private boolean busy(ItemStack held) {
         if (mc.player.isUsingItem() || mc.options.useKey.isPressed()) return true;
+        if (mc.options.attackKey.isPressed() || mc.interactionManager.isBreakingBlock()) return true;
         return held.contains(DataComponentTypes.FOOD) || held.contains(DataComponentTypes.CONSUMABLE);
     }
 
@@ -417,6 +479,7 @@ public class AutoTotem extends Module {
 
     private void clearPending() {
         pending = false;
+        verifying = false;
         pendingSource = NONE;
         pendingUntil = 0;
     }

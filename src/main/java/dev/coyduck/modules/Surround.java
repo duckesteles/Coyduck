@@ -138,7 +138,7 @@ public class Surround extends Module {
 
     private final Setting<Boolean> allowPop = sgProtect.add(new BoolSetting.Builder()
         .name("allow-pop")
-        .description("Also breaks a crystal in your surround that pops you, once Auto Totem+ has confirmed your offhand totem. The enemy would explode it anyway, this way you pick the moment and close the gap.")
+        .description("Also breaks a crystal in your surround that pops you, once Auto Totem+ has confirmed your offhand totem and you still have a spare. The enemy would explode it anyway, this way you pick the moment and close the gap.")
         .defaultValue(true)
         .visible(breakCrystals::get)
         .build()
@@ -287,21 +287,21 @@ public class Surround extends Module {
     private void run() {
         if (!updateAnchor() || budget <= 0) return;
 
+        int slot = blockSlot();
+        if (slot == -1) return;
+
         InteractionManager interaction = InteractionManager.get();
         List<BlockPos> placeable = new ArrayList<>();
 
         MiningManager mining = MiningManager.get();
         for (BlockPos pos : targets()) {
-            if (!interaction.canPlace(pos) || mining.isMining(pos)) continue;
-            if (airplace.get() && interaction.hit(pos, true) == null) continue;
+            if (placeable.size() >= budget) break;
+            if (!interaction.canPlace(pos) || mining.isMining(pos) || !reachable(pos)) continue;
             if (!clear(pos)) continue;
             placeable.add(pos);
         }
 
         if (placeable.isEmpty()) return;
-
-        int slot = blockSlot();
-        if (slot == -1) return;
 
         InventoryManager.get().withItemWhileEating(slot, switchMode.get(), () -> {
             for (BlockPos pos : placeable) {
@@ -309,6 +309,15 @@ public class Surround extends Module {
                 place(pos);
             }
         });
+    }
+
+    private boolean reachable(BlockPos pos) {
+        InteractionManager interaction = InteractionManager.get();
+        if (interaction.hit(pos, airplace.get()) != null) return true;
+        if (airplace.get()) return false;
+
+        BlockPos support = pos.down();
+        return interaction.canPlace(support) && interaction.obstructions(support).isEmpty() && interaction.hit(support, false) != null;
     }
 
     private void place(BlockPos pos) {
@@ -342,26 +351,41 @@ public class Surround extends Module {
         if (entities.isEmpty()) return true;
         if (!breakCrystals.get()) return false;
 
+        boolean pops = false;
         for (Entity entity : entities) {
-            if (!(entity instanceof EndCrystalEntity crystal) || !safe(crystal)) return false;
+            if (!(entity instanceof EndCrystalEntity crystal)) return false;
+
+            Verdict verdict = verdict(crystal);
+            if (verdict == Verdict.Unsafe) return false;
+            if (verdict == Verdict.Pop) pops = true;
         }
 
+        CrystalTracker tracker = CrystalTracker.get();
         for (Entity entity : entities) {
-            if (interaction.recentlyAttacked(entity)) continue;
+            if (tracker.isDead(entity) || interaction.recentlyAttacked(entity)) continue;
             if (!interaction.attack(entity, switchMode.get(), swing.get())) return false;
-            CrystalTracker.get().explodeAt(entity.getEntityPos());
+
+            tracker.explodeAt(entity.getEntityPos());
+            if (pops) AutoTotem.notePop();
         }
 
         return true;
     }
 
-    private boolean safe(EndCrystalEntity crystal) {
+    private enum Verdict {
+        Safe,
+        Pop,
+        Unsafe
+    }
+
+    private Verdict verdict(EndCrystalEntity crystal) {
         float raw = ExplosionDamage.crystalRaw(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), crystal.getEntityPos(), mc.world);
         long arrival = Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2;
         float damage = HurtTracker.get().effectiveOnSelf(raw, arrival);
 
-        if (damage < mc.player.getHealth() + mc.player.getAbsorptionAmount()) return true;
-        return allowPop.get() && AutoTotem.hasConfirmedTotem();
+        float health = AutoTotem.popInFlight() ? 1.0f : mc.player.getHealth() + mc.player.getAbsorptionAmount();
+        if (damage < health) return Verdict.Safe;
+        return allowPop.get() && AutoTotem.canAffordPop() ? Verdict.Pop : Verdict.Unsafe;
     }
 
     private List<BlockPos> targets() {
@@ -427,6 +451,8 @@ public class Surround extends Module {
         boolean ground = mc.player.isOnGround();
 
         if (level < anchorY) {
+            if (hasInput() && columns(anchorY).longStream().noneMatch(anchored::contains)) return leave(level);
+
             anchorY = level;
             anchored = columns(level);
             return true;

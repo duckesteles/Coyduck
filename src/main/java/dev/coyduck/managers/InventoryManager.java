@@ -12,6 +12,7 @@ import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.screen.sync.ItemStackHash;
 import net.minecraft.util.Hand;
+import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 
@@ -27,6 +28,9 @@ public final class InventoryManager {
     public static final int OFFHAND = PlayerInventory.OFF_HAND_SLOT;
 
     private static final int BARRIER_DISTANCE = 64;
+    private static final long SELECT_MARGIN = 50;
+
+    private long lastSelectChange;
 
     public enum Swap {
         NONE,
@@ -85,7 +89,12 @@ public final class InventoryManager {
         return true;
     }
 
+    public boolean selectionInFlight() {
+        return Util.getMeasuringTimeMs() - lastSelectChange < LatencyManager.get().rtt() + SELECT_MARGIN;
+    }
+
     private void selectNow(int slot) {
+        if (slot != serverSlot()) lastSelectChange = Util.getMeasuringTimeMs();
         mc.player.getInventory().setSelectedSlot(slot);
         ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).coyduck$syncSelectedSlot();
     }
