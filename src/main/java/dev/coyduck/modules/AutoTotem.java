@@ -127,6 +127,8 @@ public class AutoTotem extends Module {
     private long popExpectedUntil;
     private int dangerHold;
     private int pendingSource = NONE;
+    private int skipA = NONE;
+    private int skipB = NONE;
     private int pendingSyncId;
     private int barrier;
     private long pendingUntil;
@@ -248,11 +250,18 @@ public class AutoTotem extends Module {
 
     private void onPop() {
         InventoryManager inventory = InventoryManager.get();
-        ItemStack main = inventory.stack(inventory.serverSlot());
-        boolean mainhand = isTotem(main) && !inventory.selectionInFlight();
+        int server = inventory.serverSlot();
+        int from = inventory.changedFrom();
+        ItemStack main = inventory.stack(server);
 
-        if (mainhand) main.decrement(1);
+        boolean mainTotem = isTotem(main);
+        boolean ambiguous = from != NONE && (mainTotem || (from != server && isTotem(inventory.stack(from))));
+
+        if (from == NONE && mainTotem) main.decrement(1);
         else mc.player.getOffHandStack().decrement(1);
+
+        skipA = ambiguous ? server : NONE;
+        skipB = ambiguous ? from : NONE;
 
         confirmed = false;
         popExpectedUntil = 0;
@@ -261,6 +270,8 @@ public class AutoTotem extends Module {
         clearPending();
         attempts = 0;
         refill(true);
+        skipA = NONE;
+        skipB = NONE;
         if (!pending) verify();
     }
 
@@ -357,10 +368,10 @@ public class AutoTotem extends Module {
 
         int server = inventory.serverSlot();
         for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
-            if (i != server && i != reserveSlot && isTotem(inventory.stack(i))) return i;
+            if (i != server && i != reserveSlot && i != skipA && i != skipB && isTotem(inventory.stack(i))) return i;
         }
 
-        return isTotem(inventory.stack(server)) ? server : NONE;
+        return server != skipA && server != skipB && isTotem(inventory.stack(server)) ? server : NONE;
     }
 
     private void updateMainhand() {

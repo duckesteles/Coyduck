@@ -8,7 +8,6 @@
     "ClientPlayerEntityMixin",
     "ClientPlayNetworkHandlerMixin",
     "ClientPlayerInteractionManagerAccessor",
-    "ClientPlayerInteractionManagerMixin",
     "ClientWorldAccessor",
     "EntityMixin",
     "KeyboardInputMixin",

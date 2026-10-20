@@ -4,6 +4,7 @@ import dev.coyduck.managers.ConfigSaver;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
+import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
@@ -36,6 +37,7 @@ public class Coyduck extends MeteorAddon {
 
         MeteorClient.EVENT_BUS.subscribe(ConfigSaver.get());
         MeteorClient.EVENT_BUS.subscribe(LatencyManager.get());
+        MeteorClient.EVENT_BUS.subscribe(InventoryManager.get());
         MeteorClient.EVENT_BUS.subscribe(InteractionManager.get());
         MeteorClient.EVENT_BUS.subscribe(MiningTracker.get());
         MeteorClient.EVENT_BUS.subscribe(CrystalTracker.get());

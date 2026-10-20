@@ -1,12 +1,19 @@
 package dev.coyduck.managers;
 
+import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
 import dev.coyduck.utils.PacketBatch;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
+import meteordevelopment.meteorclient.events.game.GameLeftEvent;
+import meteordevelopment.meteorclient.events.packets.PacketEvent;
+import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
+import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
+import net.minecraft.network.packet.s2c.play.UpdateSelectedSlotS2CPacket;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
@@ -28,7 +35,12 @@ public final class InventoryManager {
     public static final int OFFHAND = PlayerInventory.OFF_HAND_SLOT;
 
     private static final int BARRIER_DISTANCE = 64;
+    private static final long SELECT_MARGIN = 50;
+
     private long lastSelectChange;
+    private int changedFrom = -1;
+    private int sentSlot = -1;
+    private int burst;
 
     public enum Swap {
         NONE,
@@ -74,7 +86,7 @@ public final class InventoryManager {
     }
 
     public int serverSlot() {
-        return ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).coyduck$getLastSelectedSlot();
+        return sentSlot != -1 ? sentSlot : ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).coyduck$getLastSelectedSlot();
     }
 
     public boolean isEating() {
@@ -88,16 +100,24 @@ public final class InventoryManager {
     }
 
     public boolean selectionInFlight() {
-        return Util.getMeasuringTimeMs() - lastSelectChange < LatencyManager.get().timeout();
+        LatencyManager latency = LatencyManager.get();
+        return Util.getMeasuringTimeMs() - lastSelectChange < latency.rtt() + 2L * latency.jitter() + SELECT_MARGIN;
     }
 
-    public void noteSelectChange() {
+    public void noteSelectChange(int from) {
+        if (burst > 0) return;
+        if (!selectionInFlight()) changedFrom = from;
         lastSelectChange = Util.getMeasuringTimeMs();
+    }
+
+    public int changedFrom() {
+        return selectionInFlight() ? changedFrom : -1;
     }
 
     private void selectNow(int slot) {
         mc.player.getInventory().setSelectedSlot(slot);
         ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).coyduck$syncSelectedSlot();
+        if (serverSlot() != slot) mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(slot));
     }
 
     public int handlerSlot(ScreenHandler handler, int index) {
@@ -137,7 +157,7 @@ public final class InventoryManager {
         if (id == -1) return false;
 
         mc.interactionManager.clickSlot(handler.syncId, id, hotbar, SlotActionType.SWAP, mc.player);
-        if (hotbar == serverSlot()) noteSelectChange();
+        if (hotbar == serverSlot()) noteSelectChange(hotbar);
         return true;
     }
 
@@ -153,6 +173,15 @@ public final class InventoryManager {
     }
 
     private boolean withItemNow(int index, SwitchMode mode, Runnable action) {
+        burst++;
+        try {
+            return switchedNow(index, mode, action);
+        } finally {
+            burst--;
+        }
+    }
+
+    private boolean switchedNow(int index, SwitchMode mode, Runnable action) {
         int selected = selectedSlot();
         if (index == selected) {
             action.run();
@@ -170,6 +199,35 @@ public final class InventoryManager {
         action.run();
         swapWithHotbar(index, selected);
         return true;
+    }
+
+    @EventHandler
+    private void onSent(PacketEvent.Sent event) {
+        if (!(event.packet instanceof UpdateSelectedSlotC2SPacket packet)) return;
+
+        int slot = packet.getSelectedSlot();
+        int previous = sentSlot != -1 ? sentSlot : slot;
+        sentSlot = slot;
+        if (slot != previous) noteSelectChange(previous);
+    }
+
+    @EventHandler
+    private void onApply(PacketApplyEvent.Post event) {
+        if (event.packet instanceof UpdateSelectedSlotS2CPacket packet) sentSlot = packet.slot();
+    }
+
+    @EventHandler
+    private void onWorldReset(WorldResetEvent event) {
+        sentSlot = -1;
+        changedFrom = -1;
+        lastSelectChange = 0;
+    }
+
+    @EventHandler
+    private void onGameLeft(GameLeftEvent event) {
+        sentSlot = -1;
+        changedFrom = -1;
+        lastSelectChange = 0;
     }
 
     public int barrier() {

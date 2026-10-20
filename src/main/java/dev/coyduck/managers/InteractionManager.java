@@ -14,12 +14,15 @@ import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.enchantment.Enchantments;
+import dev.coyduck.utils.ExplosionDamage;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -42,6 +45,9 @@ public final class InteractionManager {
 
     private static final double REACH_MARGIN = 0.05;
     private static final int WEAPON_SETTLE = 2;
+    private static final int DROP_RADIUS = 6;
+    private static final float DROP_RESISTANCE = 600.0f;
+    private static final long DROP_WINDOW = 50;
 
     public enum SwingMode {
         Client,
@@ -57,6 +63,7 @@ public final class InteractionManager {
     private Item heldItem;
     private ItemStack heldStack = ItemStack.EMPTY;
     private int heldSince;
+    private long lastDropRisk;
 
     private InteractionManager() {}
 
@@ -166,7 +173,32 @@ public final class InteractionManager {
         }
 
         attacked.put(target.getId(), Util.getMeasuringTimeMs());
+        if (target instanceof EndCrystalEntity && dropRisk(target.getEntityPos())) lastDropRisk = Util.getMeasuringTimeMs();
         return true;
+    }
+
+    public boolean recentDropRisk() {
+        return Util.getMeasuringTimeMs() - lastDropRisk < LatencyManager.get().rtt() + DROP_WINDOW;
+    }
+
+    public boolean dropRisk(Vec3d crystal) {
+        for (PlayerEntity player : mc.world.getPlayers()) {
+            if (player == mc.player || !player.isAlive()) continue;
+            if (ExplosionDamage.upperBound(player, player.getEntityPos(), crystal) >= player.getHealth() + player.getAbsorptionAmount()) return true;
+        }
+
+        BlockPos center = BlockPos.ofFloored(crystal);
+        BlockPos.Mutable pos = new BlockPos.Mutable();
+        for (int dx = -DROP_RADIUS; dx <= DROP_RADIUS; dx++) {
+            for (int dy = -DROP_RADIUS; dy <= DROP_RADIUS; dy++) {
+                for (int dz = -DROP_RADIUS; dz <= DROP_RADIUS; dz++) {
+                    pos.set(center.getX() + dx, center.getY() + dy, center.getZ() + dz);
+                    BlockState state = mc.world.getBlockState(pos);
+                    if (!state.isAir() && state.getFluidState().isEmpty() && state.getBlock().getBlastResistance() < DROP_RESISTANCE) return true;
+                }
+            }
+        }
+        return false;
     }
 
     public boolean canHitWithHand() {
