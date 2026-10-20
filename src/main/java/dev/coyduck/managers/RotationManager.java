@@ -160,7 +160,7 @@ public final class RotationManager {
     }
 
     @EventHandler
-    private void onSend(PacketEvent.Send event) {
+    private void onSent(PacketEvent.Sent event) {
         if (event.packet instanceof PlayerMoveC2SPacket packet && packet.changesLook()) {
             serverYaw = packet.getYaw(serverYaw);
             serverPitch = packet.getPitch(serverPitch);

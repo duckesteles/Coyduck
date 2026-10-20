@@ -9,6 +9,7 @@ import net.minecraft.network.packet.s2c.play.BundleS2CPacket;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -25,13 +26,18 @@ public abstract class PacketApplyBatcherEntryMixin {
 
     @Inject(method = "apply", at = @At("HEAD"), cancellable = true)
     private void coyduck$onApplyHead(CallbackInfo ci) {
-        if (listener.getSide() != NetworkSide.CLIENTBOUND || packet instanceof BundleS2CPacket) return;
+        if (!relevant()) return;
         if (MeteorClient.EVENT_BUS.post(PacketApplyEvent.Pre.get(packet)).isCancelled()) ci.cancel();
     }
 
     @Inject(method = "apply", at = @At("TAIL"))
     private void coyduck$onApplyTail(CallbackInfo ci) {
-        if (listener.getSide() != NetworkSide.CLIENTBOUND || packet instanceof BundleS2CPacket) return;
+        if (!relevant()) return;
         MeteorClient.EVENT_BUS.post(PacketApplyEvent.Post.get(packet));
+    }
+
+    @Unique
+    private boolean relevant() {
+        return listener.getSide() == NetworkSide.CLIENTBOUND && !(packet instanceof BundleS2CPacket) && listener.accepts(packet);
     }
 }

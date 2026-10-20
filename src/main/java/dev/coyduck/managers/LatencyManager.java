@@ -2,6 +2,7 @@ package dev.coyduck.managers;
 
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.mixin.ClientWorldAccessor;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
@@ -70,7 +71,7 @@ public final class LatencyManager {
     }
 
     @EventHandler
-    private void onSend(PacketEvent.Send event) {
+    private void onSent(PacketEvent.Sent event) {
         int sequence = sequenceOf(event.packet);
         if (sequence <= 0) return;
 
@@ -88,10 +89,11 @@ public final class LatencyManager {
 
     @EventHandler
     private void onApply(PacketApplyEvent.Pre event) {
-        if (!(event.packet instanceof PlayerActionResponseS2CPacket packet)) return;
+        if (!(event.packet instanceof PlayerActionResponseS2CPacket packet) || mc.world == null) return;
 
         long now = Util.getMeasuringTimeMs();
         int acked = packet.sequence();
+        if (acked > ((ClientWorldAccessor) mc.world).coyduck$getPendingUpdateManager().getSequence()) return;
 
         synchronized (sequences) {
             if (sequences.containsKey(acked)) action.sample(now - sequences.get(acked));

@@ -3,20 +3,23 @@ package dev.coyduck.managers;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientWorldAccessor;
+import dev.coyduck.utils.BlockRules;
+import dev.coyduck.utils.PacketBatch;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
-import meteordevelopment.meteorclient.utils.world.BlockUtils;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
+import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.HandSwingC2SPacket;
@@ -37,6 +40,7 @@ public final class InteractionManager {
     private static final InteractionManager INSTANCE = new InteractionManager();
 
     private static final double REACH_MARGIN = 0.05;
+    private static final int WEAPON_SETTLE = 2;
 
     public enum SwingMode {
         Client,
@@ -48,6 +52,9 @@ public final class InteractionManager {
 
     private final Long2ObjectOpenHashMap<Pending> pending = new Long2ObjectOpenHashMap<>();
     private final Int2LongOpenHashMap attacked = new Int2LongOpenHashMap();
+    private int ticks;
+    private Item heldItem;
+    private int heldSince;
 
     private InteractionManager() {}
 
@@ -81,7 +88,7 @@ public final class InteractionManager {
         for (Direction direction : Direction.values()) {
             BlockPos neighbor = pos.offset(direction);
             BlockState state = mc.world.getBlockState(neighbor);
-            if (state.isReplaceable() || BlockUtils.isClickable(state.getBlock())) continue;
+            if (state.isReplaceable() || BlockRules.isInteractable(state.getBlock())) continue;
 
             double distance = new Box(neighbor).squaredMagnitude(eye);
             if (distance >= reachSquared || distance >= bestDistance) continue;
@@ -104,17 +111,38 @@ public final class InteractionManager {
         pending.put(pos.asLong(), new Pending(sequence, Util.getMeasuringTimeMs() + LatencyManager.get().timeout()));
     }
 
+    public boolean hasCrystals() {
+        return mc.player.getOffHandStack().isOf(Items.END_CRYSTAL) || crystalSlot() != -1;
+    }
+
     public boolean placeCrystal(BlockPos base, InventoryManager.SwitchMode mode, SwingMode swing, Runnable after) {
-        int slot = InventoryManager.get().find(stack -> stack.isOf(Items.END_CRYSTAL), 0, InventoryManager.MAIN_END);
+        BlockHitResult hit = new BlockHitResult(new Vec3d(base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5), Direction.UP, base, false);
+
+        if (mc.player.getOffHandStack().isOf(Items.END_CRYSTAL)) {
+            boolean[] done = {false};
+            PacketBatch.run(() -> {
+                mc.interactionManager.interactBlock(mc.player, Hand.OFF_HAND, hit);
+                swing(swing, Hand.OFF_HAND);
+                CrystalTracker.get().placed(base);
+                if (after != null) after.run();
+                done[0] = true;
+            });
+            return done[0];
+        }
+
+        int slot = crystalSlot();
         if (slot == -1) return false;
 
-        Vec3d aim = new Vec3d(base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5);
         return InventoryManager.get().withItem(slot, mode, () -> {
-            mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, new BlockHitResult(aim, Direction.UP, base, false));
+            mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
             swing(swing);
             CrystalTracker.get().placed(base);
             if (after != null) after.run();
         });
+    }
+
+    private int crystalSlot() {
+        return InventoryManager.get().find(stack -> stack.isOf(Items.END_CRYSTAL), 0, InventoryManager.MAIN_END);
     }
 
     public boolean attack(Entity target, InventoryManager.SwitchMode mode, SwingMode swing) {
@@ -126,8 +154,13 @@ public final class InteractionManager {
         if (canHitWithHand()) {
             hit.run();
         } else {
-            int weapon = weaponSlot();
-            if (weapon == -1 || !InventoryManager.get().withItem(weapon, mode, hit)) return false;
+            int burst = sharpWeaponSlot();
+            if (burst != -1) {
+                if (!InventoryManager.get().withItem(burst, mode, hit)) return false;
+            } else {
+                holdWeapon();
+                return false;
+            }
         }
 
         attacked.put(target.getId(), Util.getMeasuringTimeMs());
@@ -135,7 +168,38 @@ public final class InteractionManager {
     }
 
     public boolean canHitWithHand() {
-        return attackDamage(mc.player.getMainHandStack()) > 0;
+        if (attackDamage(mc.player.getMainHandStack()) <= 0) return false;
+        return !mc.player.hasStatusEffect(StatusEffects.WEAKNESS) || ticks - heldSince >= WEAPON_SETTLE;
+    }
+
+    private void holdWeapon() {
+        InventoryManager inventory = InventoryManager.get();
+        int best = -1;
+        double bestDamage = 0;
+
+        for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
+            double damage = attackDamage(inventory.stack(i));
+            if (damage > bestDamage) {
+                bestDamage = damage;
+                best = i;
+            }
+        }
+
+        if (best != -1 && best != inventory.selectedSlot()) inventory.select(best);
+    }
+
+    private int sharpWeaponSlot() {
+        for (int i = 0; i < InventoryManager.MAIN_END; i++) {
+            if (sharpness(InventoryManager.get().stack(i)) > 0) return i;
+        }
+        return -1;
+    }
+
+    private static int sharpness(ItemStack stack) {
+        for (var entry : stack.getEnchantments().getEnchantmentEntries()) {
+            if (entry.getKey().matchesKey(Enchantments.SHARPNESS)) return entry.getIntValue();
+        }
+        return 0;
     }
 
     public boolean recentlyAttacked(Entity entity) {
@@ -144,26 +208,15 @@ public final class InteractionManager {
     }
 
     public void swing(SwingMode mode) {
-        switch (mode) {
-            case Client -> mc.player.swingHand(Hand.MAIN_HAND);
-            case Packet -> mc.getNetworkHandler().sendPacket(new HandSwingC2SPacket(Hand.MAIN_HAND));
-            case None -> {}
-        }
+        swing(mode, Hand.MAIN_HAND);
     }
 
-    private int weaponSlot() {
-        int best = -1;
-        double bestDamage = 0;
-
-        for (int i = 0; i < InventoryManager.MAIN_END; i++) {
-            double damage = attackDamage(InventoryManager.get().stack(i));
-            if (damage > bestDamage) {
-                bestDamage = damage;
-                best = i;
-            }
+    public void swing(SwingMode mode, Hand hand) {
+        switch (mode) {
+            case Client -> mc.player.swingHand(hand);
+            case Packet -> mc.getNetworkHandler().sendPacket(new HandSwingC2SPacket(hand));
+            case None -> {}
         }
-
-        return best;
     }
 
     private double attackDamage(ItemStack stack) {
@@ -183,14 +236,24 @@ public final class InteractionManager {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onApply(PacketApplyEvent.Post event) {
-        if (event.packet instanceof PlayerActionResponseS2CPacket packet) {
+        if (event.packet instanceof PlayerActionResponseS2CPacket packet && mc.world != null) {
             int acked = packet.sequence();
+            if (acked > ((ClientWorldAccessor) mc.world).coyduck$getPendingUpdateManager().getSequence()) return;
             pending.values().removeIf(entry -> entry.sequence <= acked);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onTick(TickEvent.Pre event) {
+        ticks++;
+        if (mc.player != null) {
+            Item item = mc.player.getMainHandStack().getItem();
+            if (item != heldItem) {
+                heldItem = item;
+                heldSince = ticks;
+            }
+        }
+
         long now = Util.getMeasuringTimeMs();
         pending.values().removeIf(entry -> entry.expiry <= now);
 
