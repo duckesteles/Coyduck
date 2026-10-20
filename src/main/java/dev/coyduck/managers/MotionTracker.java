@@ -10,6 +10,7 @@ import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.Util;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayDeque;
@@ -26,7 +27,12 @@ public final class MotionTracker {
     private static final double TELEPORT = 4.0 * 4.0;
     private static final double GLIDING_TELEPORT = 10.0 * 10.0;
 
+    private static final int SELF_SAMPLES = 40;
+
+    public record Sample(long time, Vec3d position, Box box) {}
+
     private final Int2ObjectOpenHashMap<ArrayDeque<Vec3d>> history = new Int2ObjectOpenHashMap<>();
+    private final ArrayDeque<Sample> self = new ArrayDeque<>();
 
     private MotionTracker() {}
 
@@ -66,9 +72,23 @@ public final class MotionTracker {
         return box;
     }
 
+    public Sample selfAt(long time) {
+        Sample best = null;
+        for (Sample sample : self) {
+            if (sample.time > time) break;
+            best = sample;
+        }
+        return best;
+    }
+
     @EventHandler
     private void onTick(TickEvent.Post event) {
         if (mc.world == null) return;
+
+        if (mc.player != null) {
+            self.addLast(new Sample(Util.getMeasuringTimeMs(), mc.player.getEntityPos(), mc.player.getBoundingBox()));
+            while (self.size() > SELF_SAMPLES) self.removeFirst();
+        }
 
         IntSet seen = new IntOpenHashSet();
         for (PlayerEntity player : mc.world.getPlayers()) {
@@ -98,5 +118,6 @@ public final class MotionTracker {
 
     private void reset() {
         history.clear();
+        self.clear();
     }
 }

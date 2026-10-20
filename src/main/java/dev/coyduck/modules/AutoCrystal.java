@@ -461,10 +461,17 @@ public class AutoCrystal extends Module {
     private void onEntityAdded(EntityAddedEvent event) {
         if (!(event.entity instanceof EndCrystalEntity crystal)) return;
 
-        if (predictedAt != 0 && Util.getMeasuringTimeMs() - predictedAt > LatencyManager.get().timeout()) predictedAt = 0;
+        if (predictedAt != 0 && Util.getMeasuringTimeMs() - predictedAt > LatencyManager.get().timeout()) {
+            if (predictedTarget != null) HurtTracker.get().forgetSpeculative(predictedTarget);
+            predictedAt = 0;
+        }
         if (predictedAt != 0 && crystal.getBlockPos().down().asLong() == predictedBase) {
-            if (predictedIds.contains(crystal.getId())) CrystalTracker.get().kill(crystal, LatencyManager.get().timeout());
-            else if (predictedTarget != null) HurtTracker.get().forgetExpected(predictedTarget, predictedAt);
+            if (predictedIds.contains(crystal.getId())) {
+                CrystalTracker.get().kill(crystal, LatencyManager.get().timeout());
+                if (predictedTarget != null) HurtTracker.get().confirmSpeculative(predictedTarget);
+            } else if (predictedTarget != null) {
+                HurtTracker.get().forgetSpeculative(predictedTarget);
+            }
             predictedAt = 0;
         }
 
@@ -816,7 +823,8 @@ public class AutoCrystal extends Module {
         }
 
         predictedIds.clear();
-        int count = InteractionManager.get().dropRisk(crystalCenter(base)) ? 1 : idPredictCount.get();
+        boolean risky = InteractionManager.get().dropRisk(crystalCenter(base));
+        int count = risky ? 1 : idPredictCount.get();
         for (int i = 1; i <= count; i++) {
             int id = highest + i;
             if (mc.world.getEntityById(id) != null) continue;
@@ -828,10 +836,11 @@ public class AutoCrystal extends Module {
         }
 
         if (predictedIds.isEmpty()) return;
+        if (risky) InteractionManager.get().noteDropRisk();
         predictedAt = Util.getMeasuringTimeMs();
         predictedBase = base.asLong();
         predictedTarget = choice.target.player;
-        HurtTracker.get().expect(choice.target.player, choice.raw);
+        HurtTracker.get().expectSpeculative(choice.target.player, choice.raw);
     }
 
     private boolean predictSafe() {

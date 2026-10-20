@@ -127,8 +127,7 @@ public class AutoTotem extends Module {
     private long popExpectedUntil;
     private int dangerHold;
     private int pendingSource = NONE;
-    private int skipA = NONE;
-    private int skipB = NONE;
+    private int skipMask;
     private int pendingSyncId;
     private int barrier;
     private long pendingUntil;
@@ -251,17 +250,15 @@ public class AutoTotem extends Module {
     private void onPop() {
         InventoryManager inventory = InventoryManager.get();
         int server = inventory.serverSlot();
-        int from = inventory.changedFrom();
+        int mask = inventory.heldMask();
         ItemStack main = inventory.stack(server);
 
-        boolean mainTotem = isTotem(main);
-        boolean ambiguous = from != NONE && (mainTotem || (from != server && isTotem(inventory.stack(from))));
+        boolean ambiguous = mask != 0 && (isTotem(main) || maskHoldsTotem(mask));
 
-        if (from == NONE && mainTotem) main.decrement(1);
+        if (mask == 0 && isTotem(main)) main.decrement(1);
         else mc.player.getOffHandStack().decrement(1);
 
-        skipA = ambiguous ? server : NONE;
-        skipB = ambiguous ? from : NONE;
+        skipMask = ambiguous ? mask | (1 << server) : 0;
 
         confirmed = false;
         popExpectedUntil = 0;
@@ -270,9 +267,15 @@ public class AutoTotem extends Module {
         clearPending();
         attempts = 0;
         refill(true);
-        skipA = NONE;
-        skipB = NONE;
+        skipMask = 0;
         if (!pending) verify();
+    }
+
+    private boolean maskHoldsTotem(int mask) {
+        for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
+            if ((mask & (1 << i)) != 0 && isTotem(InventoryManager.get().stack(i))) return true;
+        }
+        return false;
     }
 
     private void verify() {
@@ -368,10 +371,10 @@ public class AutoTotem extends Module {
 
         int server = inventory.serverSlot();
         for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
-            if (i != server && i != reserveSlot && i != skipA && i != skipB && isTotem(inventory.stack(i))) return i;
+            if (i != server && i != reserveSlot && (skipMask & (1 << i)) == 0 && isTotem(inventory.stack(i))) return i;
         }
 
-        return server != skipA && server != skipB && isTotem(inventory.stack(server)) ? server : NONE;
+        return (skipMask & (1 << server)) == 0 && isTotem(inventory.stack(server)) ? server : NONE;
     }
 
     private void updateMainhand() {

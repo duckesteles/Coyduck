@@ -38,7 +38,7 @@ public final class InventoryManager {
     private static final long SELECT_MARGIN = 50;
 
     private long lastSelectChange;
-    private int changedFrom = -1;
+    private int heldMask;
     private int sentSlot = -1;
     private int burst;
 
@@ -104,14 +104,19 @@ public final class InventoryManager {
         return Util.getMeasuringTimeMs() - lastSelectChange < latency.rtt() + 2L * latency.jitter() + SELECT_MARGIN;
     }
 
-    public void noteSelectChange(int from) {
+    public void noteSelectChange(int from, int to) {
         if (burst > 0) return;
-        if (!selectionInFlight()) changedFrom = from;
+        if (!selectionInFlight()) heldMask = 0;
+        heldMask |= bit(from) | bit(to);
         lastSelectChange = Util.getMeasuringTimeMs();
     }
 
-    public int changedFrom() {
-        return selectionInFlight() ? changedFrom : -1;
+    public int heldMask() {
+        return selectionInFlight() ? heldMask : 0;
+    }
+
+    private static int bit(int slot) {
+        return PlayerInventory.isValidHotbarIndex(slot) ? 1 << slot : 0;
     }
 
     private void selectNow(int slot) {
@@ -157,7 +162,7 @@ public final class InventoryManager {
         if (id == -1) return false;
 
         mc.interactionManager.clickSlot(handler.syncId, id, hotbar, SlotActionType.SWAP, mc.player);
-        if (hotbar == serverSlot()) noteSelectChange(hotbar);
+        if (hotbar == serverSlot()) noteSelectChange(hotbar, hotbar);
         return true;
     }
 
@@ -173,11 +178,13 @@ public final class InventoryManager {
     }
 
     private boolean withItemNow(int index, SwitchMode mode, Runnable action) {
+        int before = serverSlot();
         burst++;
         try {
             return switchedNow(index, mode, action);
         } finally {
             burst--;
+            if (burst == 0 && serverSlot() != before) noteSelectChange(before, serverSlot());
         }
     }
 
@@ -208,7 +215,7 @@ public final class InventoryManager {
         int slot = packet.getSelectedSlot();
         int previous = sentSlot != -1 ? sentSlot : slot;
         sentSlot = slot;
-        if (slot != previous) noteSelectChange(previous);
+        if (slot != previous) noteSelectChange(previous, slot);
     }
 
     @EventHandler
@@ -219,14 +226,14 @@ public final class InventoryManager {
     @EventHandler
     private void onWorldReset(WorldResetEvent event) {
         sentSlot = -1;
-        changedFrom = -1;
+        heldMask = 0;
         lastSelectChange = 0;
     }
 
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
         sentSlot = -1;
-        changedFrom = -1;
+        heldMask = 0;
         lastSelectChange = 0;
     }
 
