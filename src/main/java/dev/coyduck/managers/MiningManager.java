@@ -4,6 +4,7 @@ import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
+import dev.coyduck.utils.Targets;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
@@ -23,6 +24,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
+import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
@@ -39,17 +41,26 @@ public final class MiningManager {
     private static final double REACH_MARGIN = 0.05;
 
     private static final float BACKGROUND_THRESHOLD = 1.0f;
-    private static final int HOLD_TICKS = 2;
+    private static final int SETTLE_TICKS = 2;
     private static final int MAX_HOLDS = 4;
+    private static final int PRIMARY_HOLD_SLACK = 10;
     private static final float HOLD_MIN_HEALTH = 10;
 
     private BlockPos background;
     private int backgroundStart;
-    private int holdTicks;
-    private int holdSource = -1;
-    private int holdHotbar = -1;
+    private boolean backgroundActive;
     private int holdAttempts;
     private long nextHold;
+    private long blockedSince;
+
+    private boolean holding;
+    private boolean primaryHold;
+    private int holdEnd;
+    private int holdSource = -1;
+    private int holdHotbar = -1;
+
+    private ItemStack mainStack = ItemStack.EMPTY;
+    private int mainSince;
 
     private BlockPos pos;
     private Direction side;
@@ -63,6 +74,8 @@ public final class MiningManager {
     private int startTick;
     private long lastStop;
     private int lastStopTick = -1;
+    private int lastSequence;
+    private int stopSequence = -1;
     private boolean brokenSinceStop;
     private boolean broken;
     private boolean sending;
@@ -104,12 +117,14 @@ public final class MiningManager {
 
         if (same) return true;
         if (pos != null && !broken) send(PlayerActionC2SPacket.Action.ABORT_DESTROY_BLOCK);
+        if (primaryHold) endHold();
 
         pos = target.toImmutable();
         side = facing(pos);
         startTick = ticks;
         lastStop = 0;
         lastStopTick = -1;
+        stopSequence = -1;
         brokenSinceStop = false;
         broken = false;
 
@@ -119,11 +134,15 @@ public final class MiningManager {
     }
 
     public BlockPos background() {
-        return background;
+        return backgroundActive ? background : null;
+    }
+
+    public boolean canMineTwo() {
+        return background == null;
     }
 
     public boolean isHolding() {
-        return holdTicks > 0;
+        return holding;
     }
 
     public boolean mineTwo(Object owner, int priority, BlockPos first, BlockPos second, boolean autoStop, InventoryManager.SwitchMode switchMode, InteractionManager.SwingMode swing) {
@@ -132,10 +151,7 @@ public final class MiningManager {
         if (broken || mc.world.getBlockState(second).isReplaceable()) return mine(owner, priority, first, autoStop, switchMode, swing);
 
         send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK, pos, side, false);
-        background = pos;
-        backgroundStart = startTick;
-        holdAttempts = 0;
-        nextHold = 0;
+        setBackground(pos, startTick);
 
         pos = null;
         broken = false;
@@ -150,12 +166,17 @@ public final class MiningManager {
         reset();
     }
 
+    public void releaseAll(Object owner) {
+        release(owner);
+        if (pos == null) backgroundActive = false;
+    }
+
     public float progress() {
         if (pos == null || mc.world == null) return 0;
 
         BlockState state = mc.world.getBlockState(pos);
         if (state.isReplaceable()) return broken ? 1 : 0;
-        return Math.min(bestDelta(state) * elapsed() / SERVER_THRESHOLD, 1);
+        return Math.min(fullDelta(state, pos) * elapsed() / SERVER_THRESHOLD, 1);
     }
 
     public int remainingTicks() {
@@ -166,11 +187,12 @@ public final class MiningManager {
     public int remainingTicks(BlockState state) {
         if (pos == null || mc.world == null || state.isReplaceable()) return Integer.MAX_VALUE;
 
-        float delta = bestDelta(state);
+        float delta = fullDelta(state, pos);
         if (delta <= 0) return Integer.MAX_VALUE;
 
-        float margin = (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
-        return Math.max(0, (int) Math.ceil(SERVER_THRESHOLD / delta - elapsed() + margin));
+        int remaining = (int) Math.ceil(SERVER_THRESHOLD / delta - elapsed() + margin());
+        if (stopDelta(state, pos) < delta) remaining = Math.max(remaining, settleTicks() + 1);
+        return Math.max(0, remaining);
     }
 
     public boolean isReady() {
@@ -183,16 +205,17 @@ public final class MiningManager {
 
     private boolean isReady(BlockState state) {
         if (state.isReplaceable()) return false;
-
-        float margin = (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
-        return bestDelta(state) * (elapsed() - margin) >= SERVER_THRESHOLD;
+        return stopDelta(state, pos) * (elapsed() - margin()) >= SERVER_THRESHOLD;
     }
 
     private boolean stop(Object owner, BlockState state) {
         if (!owns(owner) || !isReady(state) || lastStopTick == ticks) return false;
 
-        int tool = bestTool(state);
-        Runnable action = () -> send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
+        int tool = bestTool(state, pos);
+        Runnable action = () -> {
+            send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
+            stopSequence = lastSequence;
+        };
 
         if (tool == -1) action.run();
         else if (!InventoryManager.get().withItem(tool, switchMode, action)) return false;
@@ -201,20 +224,25 @@ public final class MiningManager {
         lastStop = Util.getMeasuringTimeMs();
         lastStopTick = ticks;
         brokenSinceStop = false;
+        if (primaryHold) endHold();
 
         MeteorClient.EVENT_BUS.post(MineStopEvent.get(pos));
         return true;
     }
 
     public float delta(BlockState state, BlockPos at, ItemStack tool) {
+        return delta(state, at, tool, true);
+    }
+
+    private float delta(BlockState state, BlockPos at, ItemStack tool, boolean efficiency) {
         float hardness = state.getHardness(mc.world, at);
         if (hardness < 0) return 0;
         if (hardness == 0) return Float.MAX_VALUE;
 
         float speed = tool.getMiningSpeedMultiplier(state);
-        if (speed > 1) {
-            int efficiency = enchantmentLevel(tool);
-            if (efficiency > 0) speed += efficiency * efficiency + 1;
+        if (speed > 1 && efficiency) {
+            int level = enchantmentLevel(tool);
+            if (level > 0) speed += level * level + 1;
         }
 
         if (StatusEffectUtil.hasHaste(mc.player)) speed *= 1 + (StatusEffectUtil.getHasteAmplifier(mc.player) + 1) * 0.2f;
@@ -256,6 +284,25 @@ public final class MiningManager {
         return best;
     }
 
+    private float fullDelta(BlockState state, BlockPos at) {
+        int tool = bestTool(state, at);
+        return delta(state, at, tool == -1 ? mc.player.getMainHandStack() : InventoryManager.get().stack(tool));
+    }
+
+    private float stopDelta(BlockState state, BlockPos at) {
+        int tool = bestTool(state, at);
+        if (tool == -1) return delta(state, at, mc.player.getMainHandStack(), mainSettled());
+        return delta(state, at, InventoryManager.get().stack(tool), false);
+    }
+
+    private boolean mainSettled() {
+        return ticks - mainSince >= settleTicks();
+    }
+
+    private int settleTicks() {
+        return SETTLE_TICKS + (int) Math.ceil(LatencyManager.get().jitter() / 50.0);
+    }
+
     public boolean inRange(BlockPos target) {
         double reach = mc.player.getBlockInteractionRange() + 1.0 - REACH_MARGIN;
         return new Box(target).squaredMagnitude(mc.player.getEyePos()) < reach * reach;
@@ -266,6 +313,12 @@ public final class MiningManager {
         ticks++;
         if (mc.player == null || mc.world == null) return;
 
+        ItemStack main = mc.player.getMainHandStack();
+        if (!ItemStack.areItemsAndComponentsEqual(main, mainStack)) {
+            mainStack = main.copy();
+            mainSince = ticks;
+        }
+
         tickBackground();
         if (pos == null) return;
 
@@ -274,7 +327,18 @@ public final class MiningManager {
             return;
         }
 
-        if (autoStop && (brokenSinceStop || Util.getMeasuringTimeMs() - lastStop > LatencyManager.get().timeout())) stop(owner);
+        if (autoStop && (brokenSinceStop || Util.getMeasuringTimeMs() - lastStop > LatencyManager.get().timeout()) && !stop(owner)) preHold();
+    }
+
+    private void preHold() {
+        BlockState state = mc.world.getBlockState(pos);
+        if (state.isReplaceable() || primaryHold || isReady(state)) return;
+        if (bestTool(state, pos) == -1 && mainSettled()) return;
+        if (fullDelta(state, pos) * (elapsed() + settleTicks() + 1 - margin()) < SERVER_THRESHOLD) return;
+        if (!holding && (!canHold() || !beginHold(state, pos))) return;
+
+        primaryHold = true;
+        holdEnd = ticks + 2 * settleTicks() + PRIMARY_HOLD_SLACK;
     }
 
     @EventHandler(priority = EventPriority.HIGH)
@@ -288,8 +352,15 @@ public final class MiningManager {
                 if (at.equals(pos)) update(state);
                 else if (at.equals(background) && state.isReplaceable()) clearBackground();
             });
+            case PlayerActionResponseS2CPacket packet when stopSequence != -1 && packet.sequence() >= stopSequence -> checkStop();
             default -> {}
         }
+    }
+
+    private void checkStop() {
+        stopSequence = -1;
+        if (pos == null || brokenSinceStop || mc.world.getBlockState(pos).isReplaceable()) return;
+        if (background == null) setBackground(pos, startTick);
     }
 
     @EventHandler
@@ -301,14 +372,26 @@ public final class MiningManager {
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
         reset();
+        forgetBackground();
     }
 
     @EventHandler
     private void onWorldReset(WorldResetEvent event) {
         reset();
+        forgetBackground();
+    }
+
+    private void setBackground(BlockPos at, int start) {
+        background = at.toImmutable();
+        backgroundStart = start;
+        backgroundActive = true;
+        holdAttempts = 0;
+        nextHold = 0;
+        blockedSince = 0;
     }
 
     private void tickBackground() {
+        if (holding && ticks >= holdEnd) endHold();
         if (background == null) return;
 
         BlockState state = mc.world.getBlockState(background);
@@ -317,60 +400,81 @@ public final class MiningManager {
             return;
         }
 
-        if (holdTicks > 0) {
-            if (--holdTicks == 0) unhold();
+        if (!backgroundActive || holding) return;
+        if (Targets.ownRing().contains(background)) {
+            backgroundActive = false;
             return;
         }
 
         if (Util.getMeasuringTimeMs() < nextHold || !backgroundReady(state)) return;
-        if (InventoryManager.get().isEating() || mc.player.getHealth() + mc.player.getAbsorptionAmount() <= HOLD_MIN_HEALTH) return;
-        if (mc.player.getMainHandStack().contains(DataComponentTypes.DEATH_PROTECTION)) return;
-
-        if (++holdAttempts > MAX_HOLDS) {
-            clearBackground();
+        if (!canHold() || mc.player.getHealth() + mc.player.getAbsorptionAmount() <= HOLD_MIN_HEALTH) {
+            long now = Util.getMeasuringTimeMs();
+            if (blockedSince == 0) blockedSince = now;
+            else if (now - blockedSince > LatencyManager.get().timeout()) backgroundActive = false;
             return;
         }
-        hold(state);
+        blockedSince = 0;
+
+        if (++holdAttempts > MAX_HOLDS) {
+            backgroundActive = false;
+            return;
+        }
+
+        if (beginHold(state, background)) {
+            primaryHold = false;
+            holdEnd = ticks + settleTicks() + 1;
+        }
+        nextHold = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
     }
 
     private boolean backgroundReady(BlockState state) {
-        int tool = bestTool(state, background);
-        float delta = delta(state, background, tool == -1 ? mc.player.getMainHandStack() : InventoryManager.get().stack(tool));
-        float margin = (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
         float rate = Math.min(TickRate.INSTANCE.getTickRate() / 20.0f, 1.0f);
-        return delta * ((ticks - backgroundStart) * rate - margin) >= BACKGROUND_THRESHOLD;
+        return fullDelta(state, background) * ((ticks - backgroundStart) * rate - margin()) >= BACKGROUND_THRESHOLD;
     }
 
-    private void hold(BlockState state) {
-        int tool = bestTool(state, background);
+    private boolean canHold() {
+        if (InventoryManager.get().isEating()) return false;
+        return !mc.player.getMainHandStack().contains(DataComponentTypes.DEATH_PROTECTION);
+    }
+
+    private boolean beginHold(BlockState state, BlockPos at) {
+        int tool = bestTool(state, at);
         if (tool != -1) {
             int hotbar = InventoryManager.get().selectedSlot();
-            if (!InventoryManager.get().swapWithHotbar(tool, hotbar)) return;
+            if (!InventoryManager.get().swapWithHotbar(tool, hotbar)) return false;
             holdSource = tool;
             holdHotbar = hotbar;
         }
 
-        holdTicks = HOLD_TICKS;
-        nextHold = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
+        holding = true;
+        return true;
     }
 
-    private void unhold() {
-        if (holdSource != -1) InventoryManager.get().swapWithHotbar(holdSource, holdHotbar);
+    private void endHold() {
+        if (holdSource != -1 && mc.player != null) InventoryManager.get().swapWithHotbar(holdSource, holdHotbar);
         holdSource = -1;
         holdHotbar = -1;
-        holdTicks = 0;
+        holding = false;
+        primaryHold = false;
     }
 
     private void clearBackground() {
-        unhold();
+        if (holding && !primaryHold) endHold();
+        forgetBackground();
+    }
+
+    private void forgetBackground() {
         background = null;
+        backgroundActive = false;
         holdAttempts = 0;
+        blockedSince = 0;
     }
 
     private void update(BlockState state) {
         if (state.isReplaceable()) {
             broken = true;
             brokenSinceStop = true;
+            if (primaryHold) endHold();
         } else if (autoStop && brokenSinceStop) {
             stop(owner, state);
         }
@@ -384,6 +488,7 @@ public final class MiningManager {
         sending = true;
         try {
             ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).coyduck$sendSequencedPacket(mc.world, sequence -> {
+                lastSequence = sequence;
                 if (predict) {
                     mc.world.setBlockState(target, mc.world.getFluidState(target).getBlockState(), Block.NOTIFY_ALL_AND_REDRAW);
                 }
@@ -394,21 +499,21 @@ public final class MiningManager {
         }
     }
 
-    private float bestDelta(BlockState state) {
-        int tool = bestTool(state);
-        return delta(state, pos, tool == -1 ? mc.player.getMainHandStack() : InventoryManager.get().stack(tool));
-    }
-
     private float elapsed() {
         float rate = Math.min(TickRate.INSTANCE.getTickRate() / 20.0f, 1.0f);
         return (ticks - startTick) * rate;
     }
 
+    private static float margin() {
+        return (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
+    }
+
     private void reset() {
-        clearBackground();
+        if (holding) endHold();
         pos = null;
         owner = null;
         priority = 0;
+        stopSequence = -1;
         broken = false;
         brokenSinceStop = false;
     }

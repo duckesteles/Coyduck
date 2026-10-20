@@ -177,7 +177,7 @@ public class AutoCity extends Module {
 
     @Override
     public void onDeactivate() {
-        MiningManager.get().release(this);
+        MiningManager.get().releaseAll(this);
         target = null;
         current = null;
     }
@@ -254,7 +254,7 @@ public class AutoCity extends Module {
 
         if (currentSupport != null && !prepareSupport(currentSupport)) return;
 
-        if (doubleMine.get() && currentSupport == null && mining.background() == null && !mining.isMining(current)) {
+        if (doubleMine.get() && currentSupport == null && mining.canMineTwo() && !mining.isMining(current)) {
             for (Choice choice : choices) {
                 if (choice.pos.equals(current) || choice.support != null) continue;
                 mining.mineTwo(this, PRIORITY, current, choice.pos, true, switchMode.get(), swing.get());
@@ -269,7 +269,8 @@ public class AutoCity extends Module {
         if (best.pos.equals(current)) return false;
 
         MiningManager mining = MiningManager.get();
-        if (!mining.owns(this) || !mining.isMining(current)) return true;
+        boolean active = mining.isMining(current) || (currentSupport != null && mining.isMining(currentSupport));
+        if (!mining.owns(this) || !active) return true;
         if (mining.wasBroken()) return best.score > currentScore + SWITCH_GAIN;
         return mining.progress() < SWITCH_PROGRESS && best.score > currentScore + SWITCH_GAIN;
     }
@@ -339,7 +340,7 @@ public class AutoCity extends Module {
         if (Targets.isBase(state)) return true;
 
         MiningManager mining = MiningManager.get();
-        if (!state.isReplaceable()) {
+        if (!state.isReplaceable() || (mining.isMining(support) && !mining.wasBroken())) {
             mining.mine(this, PRIORITY, support, true, switchMode.get(), swing.get());
             return false;
         }
