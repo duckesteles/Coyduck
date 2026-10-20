@@ -322,7 +322,7 @@ public final class MiningManager {
         }
 
         if (Util.getMeasuringTimeMs() < nextHold || !backgroundReady(state)) return;
-        if (InventoryManager.get().isEating() || mc.player.getHealth() + mc.player.getAbsorptionAmount() <= HOLD_MIN_HEALTH) return;
+        if (InventoryManager.get().wantsToEat() || mc.player.getHealth() + mc.player.getAbsorptionAmount() <= HOLD_MIN_HEALTH) return;
 
         if (++holdAttempts > MAX_HOLDS) {
             clearBackground();

@@ -8,6 +8,7 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket;
@@ -94,6 +95,12 @@ public final class InventoryManager {
 
     public boolean isEating() {
         return mc.player.isUsingItem() && mc.player.getActiveHand() == Hand.MAIN_HAND;
+    }
+
+    public boolean wantsToEat() {
+        if (isEating() || mc.options.useKey.isPressed()) return true;
+        ItemStack main = mc.player.getMainHandStack();
+        return main.contains(DataComponentTypes.FOOD) || main.contains(DataComponentTypes.CONSUMABLE);
     }
 
     public boolean select(int slot) {

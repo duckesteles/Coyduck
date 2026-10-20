@@ -271,7 +271,7 @@ public final class InteractionManager {
     }
 
     private void holdWeapon() {
-        if (MiningManager.get().isHolding() || mc.interactionManager.isBreakingBlock()) return;
+        if (MiningManager.get().isHolding() || mc.interactionManager.isBreakingBlock() || InventoryManager.get().wantsToEat()) return;
         if (mc.player.getMainHandStack().contains(DataComponentTypes.DEATH_PROTECTION)) return;
 
         InventoryManager inventory = InventoryManager.get();
