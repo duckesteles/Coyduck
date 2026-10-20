@@ -19,6 +19,7 @@ import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Items;
@@ -29,6 +30,8 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 
+import java.util.ArrayList;
+import java.util.List;
 public class AutoWeb extends Module {
     public enum Mode {
         Smart,
@@ -168,14 +171,22 @@ public class AutoWeb extends Module {
 
         Box self = selfBox();
         InteractionManager interaction = InteractionManager.get();
+        List<BlockPos> planned = new ArrayList<>();
+
+        for (long key : cells) {
+            if (planned.size() >= budget) break;
+
+            BlockPos pos = BlockPos.fromLong(key);
+            if (!interaction.canPlace(pos) || mc.world.getBlockState(pos).isOf(Blocks.COBWEB)) continue;
+            if (self.intersects(new Box(pos)) || interaction.hit(pos, airplace.get()) == null) continue;
+            planned.add(pos);
+        }
+
+        if (planned.isEmpty()) return;
 
         InventoryManager.get().withItem(slot, switchMode.get(), () -> {
-            for (long key : cells) {
+            for (BlockPos pos : planned) {
                 if (budget <= 0 || !mc.player.getMainHandStack().isOf(Items.COBWEB)) break;
-
-                BlockPos pos = BlockPos.fromLong(key);
-                if (!interaction.canPlace(pos) || mc.world.getBlockState(pos).isOf(Blocks.COBWEB)) continue;
-                if (self.intersects(new Box(pos))) continue;
 
                 BlockHitResult hit = interaction.hit(pos, airplace.get());
                 if (hit == null) continue;
@@ -186,13 +197,21 @@ public class AutoWeb extends Module {
         });
     }
 
-    private static LongSet cells(Box box) {
+    private LongSet cells(Box box) {
         LongSet cells = new LongOpenHashSet();
-        int y = MathHelper.floor(box.minY);
+        int bottom = MathHelper.floor(box.minY);
+        int top = MathHelper.floor(box.maxY - 1.0E-4);
 
         for (int x = MathHelper.floor(box.minX); x <= MathHelper.floor(box.maxX - 1.0E-4); x++) {
             for (int z = MathHelper.floor(box.minZ); z <= MathHelper.floor(box.maxZ - 1.0E-4); z++) {
-                cells.add(BlockPos.asLong(x, y, z));
+                for (int y = bottom; y <= top; y++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+                    BlockState state = mc.world.getBlockState(pos);
+                    if (state.isReplaceable() || state.isOf(Blocks.COBWEB)) {
+                        cells.add(pos.asLong());
+                        break;
+                    }
+                }
             }
         }
 

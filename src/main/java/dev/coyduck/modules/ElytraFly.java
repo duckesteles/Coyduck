@@ -81,13 +81,13 @@ public class ElytraFly extends Module {
     private void onTick(TickEvent.Pre event) {
         if (mc.player == null) return;
 
-        if (inFluid()) {
-            if (wasGliding) fluidFlight = true;
-            return;
-        }
         if (mc.player.isOnGround()) {
             fluidFlight = false;
             wasGliding = false;
+            return;
+        }
+        if (inFluid()) {
+            if (wasGliding) fluidFlight = true;
             return;
         }
 
@@ -104,8 +104,10 @@ public class ElytraFly extends Module {
     private void onMove(PlayerMoveEvent event) {
         if (event.type != MovementType.SELF || mc.player == null || !hasElytra()) return;
 
-        boolean fluid = fluids.get() && inFluid();
-        if (!fluid && !mc.player.isGliding()) return;
+        if (mc.player.isOnGround()) return;
+
+        boolean fluid = inFluid();
+        if (fluid ? !fluids.get() : !mc.player.isGliding()) return;
         if (fluid) {
             if (!mc.player.isOnGround()) fluidFlight = true;
             mc.player.setSprinting(false);
@@ -134,7 +136,7 @@ public class ElytraFly extends Module {
     }
 
     private boolean canTakeoff() {
-        return hasElytra() && !mc.player.hasVehicle() && !mc.player.getAbilities().flying;
+        return hasElytra() && !mc.player.hasVehicle() && !mc.player.getAbilities().flying && !mc.player.isClimbing();
     }
 
     private boolean hasElytra() {

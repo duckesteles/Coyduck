@@ -231,7 +231,8 @@ public class AutoTrap extends Module {
         if (onlyStill.get() && !Targets.isHoled(columns) && !Targets.isStill(target, STILL_SPEED)) return;
 
         List<BlockPos> targets = positions(box, columns);
-        if (targets.isEmpty()) return;
+        InteractionManager interaction = InteractionManager.get();
+        if (targets.stream().noneMatch(pos -> interaction.hit(pos, airplace.get()) != null)) return;
 
         int slot = blockSlot();
         if (slot == -1) return;
@@ -288,7 +289,15 @@ public class AutoTrap extends Module {
     private boolean escape(BlockPos cell, int open) {
         if (!mc.world.getBlockState(cell).isReplaceable()) return false;
         if (open > 1) return true;
-        return !Targets.isBase(mc.world.getBlockState(cell.down()));
+
+        BlockPos base = cell.down();
+        if (!Targets.isBase(mc.world.getBlockState(base))) return true;
+
+        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
+        if (autoCrystal == null || !autoCrystal.fillsGaps() || !mc.world.getBlockState(cell).isAir()) return true;
+
+        double range = autoCrystal.placeRange();
+        return new Box(base).squaredMagnitude(mc.player.getEyePos()) > range * range;
     }
 
     private void add(List<BlockPos> positions, BlockPos pos) {

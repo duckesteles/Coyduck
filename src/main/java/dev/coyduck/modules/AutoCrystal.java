@@ -391,6 +391,10 @@ public class AutoCrystal extends Module {
         return placeRange.get();
     }
 
+    public boolean fillsGaps() {
+        return isActive() && antiSurround.get() && InteractionManager.get().hasCrystals();
+    }
+
     @Override
     public String getInfoString() {
         return focus == null ? null : focus.getName().getString();

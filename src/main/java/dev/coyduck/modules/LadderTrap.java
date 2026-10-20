@@ -6,6 +6,7 @@ import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
+import dev.coyduck.utils.BlockRules;
 import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -18,6 +19,7 @@ import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.LadderBlock;
+import net.minecraft.block.ScaffoldingBlock;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
@@ -129,7 +131,7 @@ public class LadderTrap extends Module {
     }
 
     private void run() {
-        target = Targets.find(targetRange.get(), target);
+        target = Targets.find(targetRange.get());
         if (target == null) return;
 
         Box box = Targets.box(target);
@@ -187,7 +189,8 @@ public class LadderTrap extends Module {
         if (slot == -1) return;
 
         BlockPos floor = cell.down();
-        if (mc.world.getBlockState(floor).getCollisionShape(mc.world, floor).isEmpty()) return;
+        if (BlockRules.isInteractable(mc.world.getBlockState(floor).getBlock())) return;
+        if (ScaffoldingBlock.calculateDistance(mc.world, cell) >= ScaffoldingBlock.MAX_DISTANCE) return;
         if (new Box(floor).squaredMagnitude(mc.player.getEyePos()) >= reach() * reach()) return;
 
         BlockHitResult hit = new BlockHitResult(Vec3d.ofCenter(floor).add(0, 0.5, 0), Direction.UP, floor, false);
@@ -196,7 +199,7 @@ public class LadderTrap extends Module {
 
     private boolean usableWall(BlockPos wall, Direction side) {
         BlockState state = mc.world.getBlockState(wall);
-        if (!state.isSideSolidFullSquare(mc.world, wall, side)) return false;
+        if (!state.isSideSolidFullSquare(mc.world, wall, side) || BlockRules.isInteractable(state.getBlock())) return false;
         return !MiningManager.get().isMining(wall) && MiningTracker.get().mining(wall) == null && !MiningTracker.get().wasBroken(wall, BROKEN_TIME);
     }
 
