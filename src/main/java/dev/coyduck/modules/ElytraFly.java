@@ -107,6 +107,7 @@ public class ElytraFly extends Module {
             if (wasGliding && !fluidFlight) {
                 fluidFlight = true;
                 fluidSince = ticks;
+                wasGliding = false;
             }
             if (fluidFlight && ticks - fluidSince > FLUID_GRACE) fluidFlight = false;
             return;

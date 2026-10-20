@@ -267,7 +267,8 @@ public class AutoTrap extends Module {
         int height = Math.max(1, MathHelper.ceil(box.getLengthY() - 1.0E-3));
 
         if (top.get()) {
-            int topY = MathHelper.floor(box.maxY - 1.0E-4) + 1;
+            int level = BlockPos.fromLong(columns.iterator().nextLong()).getY();
+            int topY = target.isOnGround() ? MathHelper.floor(box.maxY - 1.0E-4) + 1 : level + height;
             for (long key : columns) {
                 BlockPos column = BlockPos.fromLong(key);
                 add(positions, new BlockPos(column.getX(), topY, column.getZ()));
@@ -296,6 +297,9 @@ public class AutoTrap extends Module {
 
         BlockPos base = cell.down();
         if (!Targets.isBase(mc.world.getBlockState(base))) return true;
+
+        CrystalTracker tracker = CrystalTracker.get();
+        if (tracker.isPlacing(base) || !mc.world.getEntitiesByClass(EndCrystalEntity.class, new Box(cell), tracker::isAlive).isEmpty()) return false;
 
         AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
         return autoCrystal == null || target == null || !autoCrystal.wouldFillGap(cell, target);

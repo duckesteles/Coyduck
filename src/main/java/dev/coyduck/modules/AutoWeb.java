@@ -28,9 +28,7 @@ import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.shape.VoxelShape;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -214,8 +212,7 @@ public class AutoWeb extends Module {
                         break;
                     }
 
-                    VoxelShape shape = state.getCollisionShape(mc.world, pos);
-                    if (!shape.isEmpty() && pos.getY() + shape.getMax(Direction.Axis.Y) > box.minY + 1.0E-4) break;
+                    if (Targets.isBurrowedIn(box, pos)) break;
                 }
             }
         }
