@@ -5,6 +5,7 @@ import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
+import dev.coyduck.managers.MiningManager;
 import dev.coyduck.utils.ExplosionDamage;
 import meteordevelopment.meteorclient.events.entity.EntityAddedEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -306,6 +307,8 @@ public class AutoTotem extends Module {
     }
 
     private void updateMainhand() {
+        if (MiningManager.get().isHolding()) return;
+
         InventoryManager inventory = InventoryManager.get();
         int selected = inventory.selectedSlot();
 

@@ -121,6 +121,10 @@ public final class MiningManager {
         return background;
     }
 
+    public boolean isHolding() {
+        return holdTicks > 0;
+    }
+
     public boolean mineTwo(Object owner, int priority, BlockPos first, BlockPos second, boolean autoStop, InventoryManager.SwitchMode switchMode, InteractionManager.SwingMode swing) {
         if (background != null || first.equals(second)) return mine(owner, priority, first, autoStop, switchMode, swing);
         if (!mine(owner, priority, second, autoStop, switchMode, swing)) return false;
@@ -318,12 +322,12 @@ public final class MiningManager {
         }
 
         if (Util.getMeasuringTimeMs() < nextHold || !backgroundReady(state)) return;
+        if (InventoryManager.get().isEating() || mc.player.getHealth() + mc.player.getAbsorptionAmount() <= HOLD_MIN_HEALTH) return;
+
         if (++holdAttempts > MAX_HOLDS) {
             clearBackground();
             return;
         }
-
-        if (InventoryManager.get().isEating() || mc.player.getHealth() + mc.player.getAbsorptionAmount() <= HOLD_MIN_HEALTH) return;
         hold(state);
     }
 
