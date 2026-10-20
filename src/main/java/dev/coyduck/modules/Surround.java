@@ -325,7 +325,8 @@ public class Surround extends Module {
 
     private boolean liveCrystalIn(BlockPos pos) {
         for (Entity entity : InteractionManager.get().obstructions(pos)) {
-            if (entity instanceof EndCrystalEntity && !CrystalTracker.get().isDead(entity)) return true;
+            if (entity instanceof EndCrystalEntity && entity.getBlockPos().equals(pos) && !CrystalTracker.get().isDead(entity)
+                && !InteractionManager.get().recentlyAttacked(entity)) return true;
         }
         return false;
     }

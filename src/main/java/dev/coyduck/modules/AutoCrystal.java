@@ -394,6 +394,11 @@ public class AutoCrystal extends Module {
         renderPos = null;
     }
 
+    @Override
+    public void onDeactivate() {
+        if (predictedAt != 0) endPrediction();
+    }
+
     public PlayerEntity target() {
         return isActive() ? focus : null;
     }
@@ -430,8 +435,14 @@ public class AutoCrystal extends Module {
         gapBudget = GAP_PLACES;
         breakBudget = breaksPerTick.get();
         clearCache();
+        if (predictedAt != 0 && Util.getMeasuringTimeMs() - predictedAt > LatencyManager.get().timeout()) endPrediction();
         pass();
         updateFocus();
+    }
+
+    private void endPrediction() {
+        if (predictedTarget != null) HurtTracker.get().forgetSpeculative(predictedTarget);
+        predictedAt = 0;
     }
 
     @EventHandler
@@ -461,18 +472,15 @@ public class AutoCrystal extends Module {
     private void onEntityAdded(EntityAddedEvent event) {
         if (!(event.entity instanceof EndCrystalEntity crystal)) return;
 
-        if (predictedAt != 0 && Util.getMeasuringTimeMs() - predictedAt > LatencyManager.get().timeout()) {
-            if (predictedTarget != null) HurtTracker.get().forgetSpeculative(predictedTarget);
-            predictedAt = 0;
-        }
+        if (predictedAt != 0 && Util.getMeasuringTimeMs() - predictedAt > LatencyManager.get().timeout()) endPrediction();
         if (predictedAt != 0 && crystal.getBlockPos().down().asLong() == predictedBase) {
             if (predictedIds.contains(crystal.getId())) {
                 CrystalTracker.get().kill(crystal, LatencyManager.get().timeout());
                 if (predictedTarget != null) HurtTracker.get().confirmSpeculative(predictedTarget);
-            } else if (predictedTarget != null) {
-                HurtTracker.get().forgetSpeculative(predictedTarget);
+                predictedAt = 0;
+            } else {
+                endPrediction();
             }
-            predictedAt = 0;
         }
 
         if (near(crystal.getEntityPos())) pass();
@@ -824,6 +832,7 @@ public class AutoCrystal extends Module {
 
         if (InteractionManager.get().dropRisk(crystalCenter(base))) return;
 
+        if (predictedAt != 0) endPrediction();
         predictedIds.clear();
         for (int i = 1; i <= idPredictCount.get(); i++) {
             int id = highest + i;
