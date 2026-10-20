@@ -267,7 +267,11 @@ public class AutoTrap extends Module {
         int height = Math.max(1, MathHelper.ceil(box.getLengthY() - 1.0E-3));
 
         if (top.get()) {
-            for (long key : columns) add(positions, BlockPos.fromLong(key).up(height));
+            int topY = MathHelper.floor(box.maxY - 1.0E-4) + 1;
+            for (long key : columns) {
+                BlockPos column = BlockPos.fromLong(key);
+                add(positions, new BlockPos(column.getX(), topY, column.getZ()));
+            }
         }
 
         if (face.get() == Face.Off || height < 2) return positions;
