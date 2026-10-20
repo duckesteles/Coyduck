@@ -222,7 +222,7 @@ public class AutoCity extends Module {
         MiningManager mining = MiningManager.get();
         target = Targets.find(targetRange.get(), current != null ? target : null);
 
-        if (target == null || (needCrystals.get() && !hasCrystals())) {
+        if (target == null || (needCrystals.get() && !InteractionManager.get().hasCrystals())) {
             mining.release(this);
             current = null;
             return;
@@ -291,10 +291,12 @@ public class AutoCity extends Module {
         MiningManager mining = MiningManager.get();
         BlockPos background = mining.background();
 
+        List<BlockPos> own = Targets.ownRing();
+
         if (burrow.get()) {
             for (long key : columns) {
                 BlockPos pos = BlockPos.fromLong(key);
-                if (pos.equals(background) || !Targets.isMinable(pos) || !mining.inRange(pos) || !Targets.isBurrowedIn(box, pos)) continue;
+                if (pos.equals(background) || !Targets.isMinable(pos) || !mining.inRange(pos) || own.contains(pos) || !Targets.isBurrowedIn(box, pos)) continue;
                 if (mc.world.getBlockState(pos).isOf(Blocks.BEDROCK)) continue;
 
                 choices.add(new Choice(pos, BURROW_SCORE + mining.delta(mc.world.getBlockState(pos), pos, mc.player.getMainHandStack()), null));
@@ -303,7 +305,6 @@ public class AutoCity extends Module {
 
         Vec3d feet = Targets.feet(box);
         List<BlockPos> ring = Targets.ring(columns, 0);
-        List<BlockPos> own = Targets.ownRing();
 
         for (BlockPos pos : ring) {
             if (pos.equals(background) || !Targets.isMinable(pos) || !mining.inRange(pos) || own.contains(pos)) continue;
@@ -376,9 +377,5 @@ public class AutoCity extends Module {
         }
 
         return best;
-    }
-
-    private static boolean hasCrystals() {
-        return InventoryManager.get().find(stack -> stack.isOf(Items.END_CRYSTAL), 0, InventoryManager.MAIN_END) != -1;
     }
 }

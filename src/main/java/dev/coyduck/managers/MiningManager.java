@@ -13,6 +13,7 @@ import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.effect.StatusEffectInstance;
@@ -323,6 +324,7 @@ public final class MiningManager {
 
         if (Util.getMeasuringTimeMs() < nextHold || !backgroundReady(state)) return;
         if (InventoryManager.get().isEating() || mc.player.getHealth() + mc.player.getAbsorptionAmount() <= HOLD_MIN_HEALTH) return;
+        if (mc.player.getMainHandStack().contains(DataComponentTypes.DEATH_PROTECTION)) return;
 
         if (++holdAttempts > MAX_HOLDS) {
             clearBackground();
