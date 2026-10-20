@@ -33,6 +33,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class AutoCity extends Module {
@@ -84,6 +85,13 @@ public class AutoCity extends Module {
         .defaultValue(8)
         .range(0, 36)
         .sliderRange(0, 36)
+        .build()
+    );
+
+    private final Setting<Boolean> doubleMine = sgGeneral.add(new BoolSetting.Builder()
+        .name("double-mine")
+        .description("Mines the second best block in the background while mining the best one, so two gaps open in about the time of one. Briefly holds the pickaxe for the background break.")
+        .defaultValue(true)
         .build()
     );
 
@@ -225,7 +233,8 @@ public class AutoCity extends Module {
 
         if (current != null && !stillValid(current, columns)) current = null;
 
-        Choice best = choose(box, columns);
+        List<Choice> choices = choose(box, columns);
+        Choice best = choices.isEmpty() ? null : choices.getFirst();
         if (best != null && (current == null || shouldSwitch(best))) {
             current = best.pos;
             currentScore = best.score;
@@ -244,6 +253,14 @@ public class AutoCity extends Module {
         }
 
         if (currentSupport != null && !prepareSupport(currentSupport)) return;
+
+        if (doubleMine.get() && currentSupport == null && mining.background() == null && !mining.isMining(current)) {
+            for (Choice choice : choices) {
+                if (choice.pos.equals(current) || choice.support != null) continue;
+                mining.mineTwo(this, PRIORITY, current, choice.pos, true, switchMode.get(), swing.get());
+                return;
+            }
+        }
 
         mining.mine(this, PRIORITY, current, true, switchMode.get(), swing.get());
     }
@@ -269,20 +286,19 @@ public class AutoCity extends Module {
 
     private record Choice(BlockPos pos, float score, BlockPos support) {}
 
-    private Choice choose(Box box, LongSet columns) {
-        Choice best = null;
+    private List<Choice> choose(Box box, LongSet columns) {
+        List<Choice> choices = new ArrayList<>();
         MiningManager mining = MiningManager.get();
+        BlockPos background = mining.background();
 
         if (burrow.get()) {
             for (long key : columns) {
                 BlockPos pos = BlockPos.fromLong(key);
-                if (!Targets.isMinable(pos) || !mining.inRange(pos) || !Targets.isBurrowedIn(box, pos)) continue;
+                if (pos.equals(background) || !Targets.isMinable(pos) || !mining.inRange(pos) || !Targets.isBurrowedIn(box, pos)) continue;
                 if (mc.world.getBlockState(pos).isOf(Blocks.BEDROCK)) continue;
 
-                Choice choice = new Choice(pos, BURROW_SCORE + mining.delta(mc.world.getBlockState(pos), pos, mc.player.getMainHandStack()), null);
-                if (best == null || choice.score > best.score) best = choice;
+                choices.add(new Choice(pos, BURROW_SCORE + mining.delta(mc.world.getBlockState(pos), pos, mc.player.getMainHandStack()), null));
             }
-            if (best != null) return best;
         }
 
         Vec3d feet = Targets.feet(box);
@@ -290,7 +306,7 @@ public class AutoCity extends Module {
         List<BlockPos> own = Targets.ownRing();
 
         for (BlockPos pos : ring) {
-            if (!Targets.isMinable(pos) || !mining.inRange(pos) || own.contains(pos)) continue;
+            if (pos.equals(background) || !Targets.isMinable(pos) || !mining.inRange(pos) || own.contains(pos)) continue;
 
             BlockPos support = null;
             float damage = gapDamage(pos, box, feet, null);
@@ -300,10 +316,11 @@ public class AutoCity extends Module {
             }
             if (damage < minDamage.get()) continue;
 
-            if (best == null || damage > best.score) best = new Choice(pos, damage, support);
+            choices.add(new Choice(pos, damage, support));
         }
 
-        return best;
+        choices.sort((a, b) -> Float.compare(b.score, a.score));
+        return choices;
     }
 
     private boolean supportable(BlockPos support, List<BlockPos> own) {
