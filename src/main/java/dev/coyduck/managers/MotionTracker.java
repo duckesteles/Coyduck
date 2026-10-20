@@ -23,7 +23,8 @@ public final class MotionTracker {
     private static final int SAMPLES = 4;
     private static final double GRAVITY = 0.08;
     private static final double DRAG = 0.98;
-    private static final double TELEPORT = 10.0 * 10.0;
+    private static final double TELEPORT = 4.0 * 4.0;
+    private static final double GLIDING_TELEPORT = 10.0 * 10.0;
 
     private final Int2ObjectOpenHashMap<ArrayDeque<Vec3d>> history = new Int2ObjectOpenHashMap<>();
 
@@ -76,7 +77,8 @@ public final class MotionTracker {
             seen.add(player.getId());
             ArrayDeque<Vec3d> samples = history.computeIfAbsent(player.getId(), id -> new ArrayDeque<>());
             Vec3d position = position(player);
-            if (!samples.isEmpty() && samples.peekLast().squaredDistanceTo(position) > TELEPORT) samples.clear();
+            double limit = player.isGliding() ? GLIDING_TELEPORT : TELEPORT;
+            if (!samples.isEmpty() && samples.peekLast().squaredDistanceTo(position) > limit) samples.clear();
             samples.addLast(position);
             while (samples.size() > SAMPLES + 1) samples.removeFirst();
         }

@@ -114,7 +114,7 @@ public final class CrystalTracker {
         if (mc.world == null) return;
 
         switch (event.packet) {
-            case ExplosionS2CPacket packet when packet.radius() >= MIN_RADIUS -> explode(packet.center(), packet.radius() * 2.0);
+            case ExplosionS2CPacket packet when packet.radius() >= MIN_RADIUS && !ExplosionDamage.isWind(packet) -> explode(packet.center(), packet.radius() * 2.0);
             case EntitiesDestroyS2CPacket packet -> {
                 for (int id : packet.getEntityIds()) {
                     dead.remove(id);

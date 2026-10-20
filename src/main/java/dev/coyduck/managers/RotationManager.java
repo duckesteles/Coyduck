@@ -66,6 +66,10 @@ public final class RotationManager {
         return box.raycast(eye, end).isPresent();
     }
 
+    public float serverYaw() {
+        return known ? serverYaw : mc.player.getYaw();
+    }
+
     public float packetYaw(float original) {
         return active ? yaw : original;
     }

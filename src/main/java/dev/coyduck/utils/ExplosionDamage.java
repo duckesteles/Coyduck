@@ -1,6 +1,7 @@
 package dev.coyduck.utils;
 
 import dev.coyduck.managers.LatencyManager;
+import dev.coyduck.managers.RotationManager;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.component.DataComponentTypes;
@@ -17,6 +18,9 @@ import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
+import net.minecraft.particle.ParticleType;
+import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.Box;
@@ -33,6 +37,11 @@ public final class ExplosionDamage {
     public static final double CRYSTAL_RANGE = CRYSTAL_POWER * 2.0;
 
     private ExplosionDamage() {}
+
+    public static boolean isWind(ExplosionS2CPacket packet) {
+        ParticleType<?> type = packet.explosionParticle().getType();
+        return type == ParticleTypes.GUST_EMITTER_SMALL || type == ParticleTypes.GUST_EMITTER_LARGE;
+    }
 
     public static float crystal(LivingEntity target, Vec3d crystal) {
         return explosion(target, target.getEntityPos(), target.getBoundingBox(), crystal, CRYSTAL_POWER, mc.world);
@@ -79,7 +88,8 @@ public final class ExplosionDamage {
         DamageSource source = target.getEntityWorld().getDamageSources().explosion(null, null);
         if (component.bypassedBy().map(source::isIn).orElse(false)) return damage;
 
-        Vec3d look = Vec3d.fromPolar(0.0f, target.getHeadYaw());
+        float yaw = target == mc.player ? RotationManager.get().serverYaw() : target.getHeadYaw();
+        Vec3d look = Vec3d.fromPolar(0.0f, yaw);
         Vec3d offset = center.subtract(position);
         double angle = Math.acos(new Vec3d(offset.x, 0.0, offset.z).normalize().dotProduct(look));
         return damage - component.getDamageReductionAmount(source, damage, angle);

@@ -15,6 +15,7 @@ import meteordevelopment.orbit.EventPriority;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.s2c.play.EntityDamageS2CPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.registry.tag.DamageTypeTags;
@@ -22,7 +23,9 @@ import net.minecraft.util.Util;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Map;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
@@ -62,9 +65,14 @@ public final class HurtTracker {
 
     private record Window(long start, float raw) {}
 
+    private record Raise(int id, Object holder, float previous, long time) {}
+
+    private static final int RECEIVED_LIMIT = 256;
+
     private final Int2ObjectOpenHashMap<Hurt> hurts = new Int2ObjectOpenHashMap<>();
     private final Int2ObjectOpenHashMap<Expected> expected = new Int2ObjectOpenHashMap<>();
-    private final ConcurrentHashMap<Integer, Long> received = new ConcurrentHashMap<>();
+    private final Map<Packet<?>, Long> received = Collections.synchronizedMap(new IdentityHashMap<>());
+    private Raise lastRaise;
 
     private HurtTracker() {}
 
@@ -79,13 +87,19 @@ public final class HurtTracker {
 
         Expected pending = freshExpected(id, now);
         if (pending != null && arrival >= expectedStart(pending) && arrival < expectedStart(pending) + window() + MARGIN) {
-            pending.amount = Math.max(pending.amount, raw);
+            if (raw > pending.amount) {
+                lastRaise = new Raise(id, pending, pending.amount, now);
+                pending.amount = raw;
+            }
             return;
         }
 
         Hurt hurt = hurts.get(id);
         if (hurt != null && arrival >= hurt.start && arrival < hurt.start + window() + MARGIN) {
-            if (!Float.isNaN(hurt.raw)) hurt.raw = Math.max(hurt.raw, raw);
+            if (!Float.isNaN(hurt.raw) && raw > hurt.raw) {
+                lastRaise = new Raise(id, hurt, hurt.raw, now);
+                hurt.raw = raw;
+            }
             return;
         }
 
@@ -93,8 +107,19 @@ public final class HurtTracker {
     }
 
     public void forgetExpected(LivingEntity entity, long since) {
-        Expected pending = expected.get(entity.getId());
-        if (pending != null && pending.time >= since) expected.remove(entity.getId());
+        int id = entity.getId();
+        Expected pending = expected.get(id);
+        if (pending != null && pending.time >= since) expected.remove(id);
+
+        Raise raise = lastRaise;
+        if (raise == null || raise.id != id || raise.time < since) return;
+
+        switch (raise.holder) {
+            case Expected holder -> holder.amount = raise.previous;
+            case Hurt holder -> holder.raw = raise.previous;
+            default -> {}
+        }
+        lastRaise = null;
     }
 
     public float effective(LivingEntity entity, float raw, long arrival) {
@@ -155,7 +180,17 @@ public final class HurtTracker {
 
     @EventHandler
     private void onReceive(PacketEvent.Receive event) {
-        if (event.packet instanceof EntityDamageS2CPacket packet) received.put(packet.entityId(), Util.getMeasuringTimeMs());
+        if (!(event.packet instanceof EntityDamageS2CPacket) && !(event.packet instanceof ExplosionS2CPacket)) return;
+
+        synchronized (received) {
+            if (received.size() >= RECEIVED_LIMIT) received.clear();
+            received.put(event.packet, Util.getMeasuringTimeMs());
+        }
+    }
+
+    private long receivedAt(Packet<?> packet, long now) {
+        Long time = received.remove(packet);
+        return time != null && time <= now ? time : now;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -169,8 +204,7 @@ public final class HurtTracker {
 
     private void onDamage(EntityDamageS2CPacket packet) {
         long now = Util.getMeasuringTimeMs();
-        Long arrived = received.remove(packet.entityId());
-        long time = arrived != null && arrived <= now ? arrived : now;
+        long time = receivedAt(packet, now);
 
         Expected cause = expected.remove(packet.entityId());
         float amount = cause != null && now - cause.time <= LatencyManager.get().timeout() ? cause.amount : Float.NaN;
@@ -184,9 +218,9 @@ public final class HurtTracker {
     }
 
     private void onExplosion(ExplosionS2CPacket packet) {
-        if (mc.world == null) return;
+        long now = receivedAt(packet, Util.getMeasuringTimeMs());
+        if (mc.world == null || ExplosionDamage.isWind(packet)) return;
 
-        long now = Util.getMeasuringTimeMs();
         long happened = now - LatencyManager.get().rtt() / 2;
 
         for (Int2ObjectMap.Entry<Hurt> entry : hurts.int2ObjectEntrySet()) {
@@ -195,7 +229,7 @@ public final class HurtTracker {
             if (happened < hurt.start || happened >= hurt.start + window() + MARGIN) continue;
             if (!(mc.world.getEntityById(entry.getIntKey()) instanceof LivingEntity living)) continue;
 
-            float raw = ExplosionDamage.rawUnshielded(living, position(living), box(living), packet.center(), packet.radius(), mc.world);
+            float raw = ExplosionDamage.raw(living, position(living), box(living), packet.center(), packet.radius(), mc.world);
             if (raw <= 0) continue;
 
             if (!Float.isNaN(hurt.raw)) hurt.raw = Math.max(hurt.raw, raw);
@@ -240,6 +274,7 @@ public final class HurtTracker {
         hurts.clear();
         expected.clear();
         received.clear();
+        lastRaise = null;
     }
 
     private static long tick() {
