@@ -292,17 +292,23 @@ public class Surround extends Module {
 
         InteractionManager interaction = InteractionManager.get();
         List<BlockPos> placeable = new ArrayList<>();
+        LongSet retried = new LongOpenHashSet();
 
         MiningManager mining = MiningManager.get();
         int cost = 0;
         for (BlockPos pos : targets()) {
             if (cost >= budget) break;
-            if (!interaction.canPlace(pos) || mining.isMining(pos)) continue;
+            boolean retry = interaction.isPending(pos) && liveCrystalIn(pos);
+            if ((!retry && !interaction.canPlace(pos)) || mining.isMining(pos)) continue;
 
             int needed = cost(pos);
             if (needed == 0 || cost + needed > budget) continue;
             if (!clear(pos)) continue;
 
+            if (retry) {
+                interaction.forget(pos);
+                retried.add(pos.asLong());
+            }
             placeable.add(pos);
             cost += needed;
         }
@@ -312,9 +318,16 @@ public class Surround extends Module {
         InventoryManager.get().withItemWhileEating(slot, switchMode.get(), () -> {
             for (BlockPos pos : placeable) {
                 if (budget <= 0 || !isBlock(mc.player.getMainHandStack())) break;
-                place(pos);
+                place(pos, retried.contains(pos.asLong()));
             }
         });
+    }
+
+    private boolean liveCrystalIn(BlockPos pos) {
+        for (Entity entity : InteractionManager.get().obstructions(pos)) {
+            if (entity instanceof EndCrystalEntity && !CrystalTracker.get().isDead(entity)) return true;
+        }
+        return false;
     }
 
     private int cost(BlockPos pos) {
@@ -326,9 +339,9 @@ public class Surround extends Module {
         return interaction.canPlace(support) && interaction.obstructions(support).isEmpty() && interaction.hit(support, false) != null ? 2 : 0;
     }
 
-    private void place(BlockPos pos) {
+    private void place(BlockPos pos, boolean force) {
         InteractionManager interaction = InteractionManager.get();
-        if (!interaction.canPlace(pos)) return;
+        if (!force && !interaction.canPlace(pos)) return;
 
         BlockHitResult hit = interaction.hit(pos, airplace.get());
         if (hit == null && !airplace.get()) {

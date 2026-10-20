@@ -82,6 +82,10 @@ public final class InteractionManager {
         return entry != null && entry.expiry > Util.getMeasuringTimeMs();
     }
 
+    public void forget(BlockPos pos) {
+        pending.remove(pos.asLong());
+    }
+
     public boolean canPlace(BlockPos pos) {
         if (isPending(pos)) return false;
         if (mc.world.isOutOfHeightLimit(pos) || !mc.world.getWorldBorder().contains(pos)) return false;
