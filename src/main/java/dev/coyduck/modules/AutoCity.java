@@ -109,13 +109,6 @@ public class AutoCity extends Module {
         .build()
     );
 
-    private final Setting<Boolean> totemSwap = sgGeneral.add(new BoolSetting.Builder()
-        .name("swap-totem")
-        .description("Lets the pickaxe replace a main hand totem for a few ticks before the final break, so Efficiency counts on the server. Your offhand totem still protects you.")
-        .defaultValue(true)
-        .build()
-    );
-
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
         .description("How the pickaxe is put in your hand for the final break.")
@@ -184,7 +177,7 @@ public class AutoCity extends Module {
 
     @Override
     public void onDeactivate() {
-        MiningManager.get().releaseAll(this);
+        MiningManager.get().release(this);
         target = null;
         current = null;
     }
@@ -227,10 +220,9 @@ public class AutoCity extends Module {
         if (mc.player == null || mc.world == null || !mc.player.isAlive()) return;
 
         MiningManager mining = MiningManager.get();
-        mining.allowTotemSwap(totemSwap.get());
         target = Targets.find(targetRange.get(), current != null ? target : null);
 
-        if (target == null || (needCrystals.get() && !InteractionManager.get().hasCrystals())) {
+        if (target == null || (needCrystals.get() && !hasCrystals())) {
             mining.release(this);
             current = null;
             return;
@@ -262,7 +254,7 @@ public class AutoCity extends Module {
 
         if (currentSupport != null && !prepareSupport(currentSupport)) return;
 
-        if (doubleMine.get() && currentSupport == null && mining.canMineTwo() && !mining.isMining(current)) {
+        if (doubleMine.get() && currentSupport == null && mining.background() == null && !mining.isMining(current)) {
             for (Choice choice : choices) {
                 if (choice.pos.equals(current) || choice.support != null) continue;
                 mining.mineTwo(this, PRIORITY, current, choice.pos, true, switchMode.get(), swing.get());
@@ -277,8 +269,7 @@ public class AutoCity extends Module {
         if (best.pos.equals(current)) return false;
 
         MiningManager mining = MiningManager.get();
-        boolean active = mining.isMining(current) || (currentSupport != null && mining.isMining(currentSupport));
-        if (!mining.owns(this) || !active) return true;
+        if (!mining.owns(this) || !mining.isMining(current)) return true;
         if (mining.wasBroken()) return best.score > currentScore + SWITCH_GAIN;
         return mining.progress() < SWITCH_PROGRESS && best.score > currentScore + SWITCH_GAIN;
     }
@@ -300,12 +291,10 @@ public class AutoCity extends Module {
         MiningManager mining = MiningManager.get();
         BlockPos background = mining.background();
 
-        List<BlockPos> own = Targets.ownRing();
-
         if (burrow.get()) {
             for (long key : columns) {
                 BlockPos pos = BlockPos.fromLong(key);
-                if (pos.equals(background) || !Targets.isMinable(pos) || !mining.inRange(pos) || own.contains(pos) || !Targets.isBurrowedIn(box, pos)) continue;
+                if (pos.equals(background) || !Targets.isMinable(pos) || !mining.inRange(pos) || !Targets.isBurrowedIn(box, pos)) continue;
                 if (mc.world.getBlockState(pos).isOf(Blocks.BEDROCK)) continue;
 
                 choices.add(new Choice(pos, BURROW_SCORE + mining.delta(mc.world.getBlockState(pos), pos, mc.player.getMainHandStack()), null));
@@ -314,6 +303,7 @@ public class AutoCity extends Module {
 
         Vec3d feet = Targets.feet(box);
         List<BlockPos> ring = Targets.ring(columns, 0);
+        List<BlockPos> own = Targets.ownRing();
 
         for (BlockPos pos : ring) {
             if (pos.equals(background) || !Targets.isMinable(pos) || !mining.inRange(pos) || own.contains(pos)) continue;
@@ -348,7 +338,7 @@ public class AutoCity extends Module {
         if (Targets.isBase(state)) return true;
 
         MiningManager mining = MiningManager.get();
-        if (!state.isReplaceable() || (mining.isMining(support) && !mining.wasBroken())) {
+        if (!state.isReplaceable()) {
             mining.mine(this, PRIORITY, support, true, switchMode.get(), swing.get());
             return false;
         }
@@ -386,5 +376,9 @@ public class AutoCity extends Module {
         }
 
         return best;
+    }
+
+    private static boolean hasCrystals() {
+        return InventoryManager.get().find(stack -> stack.isOf(Items.END_CRYSTAL), 0, InventoryManager.MAIN_END) != -1;
     }
 }
