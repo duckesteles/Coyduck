@@ -2,6 +2,8 @@ package dev.coyduck.utils;
 
 import net.minecraft.block.ShapeContext;
 import net.minecraft.client.network.PlayerListEntry;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.BlocksAttacksComponent;
 import net.minecraft.component.type.ItemEnchantmentsComponent;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.Enchantments;
@@ -9,9 +11,11 @@ import net.minecraft.entity.DamageUtil;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.ItemStack;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.Box;
@@ -54,7 +58,26 @@ public final class ExplosionDamage {
 
         double impact = (1.0 - distance) * exposure(center, box, view, ShapeContext.of(target));
         float damage = (float) ((impact * impact + impact) / 2.0 * 7.0 * radius + 1.0);
-        return target instanceof PlayerEntity ? scale(damage, target.getEntityWorld().getDifficulty()) : damage;
+        if (target instanceof PlayerEntity) damage = scale(damage, target.getEntityWorld().getDifficulty());
+        return shield(target, position, center, damage);
+    }
+
+    public static float shield(LivingEntity target, Vec3d position, Vec3d center, float damage) {
+        if (damage <= 0) return 0;
+
+        ItemStack blocking = target.getBlockingItem();
+        if (blocking == null) return damage;
+
+        BlocksAttacksComponent component = blocking.get(DataComponentTypes.BLOCKS_ATTACKS);
+        if (component == null) return damage;
+
+        DamageSource source = target.getEntityWorld().getDamageSources().explosion(null, null);
+        if (component.bypassedBy().map(source::isIn).orElse(false)) return damage;
+
+        Vec3d look = Vec3d.fromPolar(0.0f, target.getHeadYaw());
+        Vec3d offset = center.subtract(position);
+        double angle = Math.acos(new Vec3d(offset.x, 0.0, offset.z).normalize().dotProduct(look));
+        return damage - component.getDamageReductionAmount(source, damage, angle);
     }
 
     public static float upperBound(LivingEntity target, Vec3d position, Vec3d crystal) {
@@ -64,12 +87,9 @@ public final class ExplosionDamage {
         if (distance > 1.0) return 0;
 
         double impact = 1.0 - distance;
-        return reduce(target, (float) ((impact * impact + impact) / 2.0 * 7.0 * CRYSTAL_RANGE + 1.0));
-    }
-
-    public static float reduce(LivingEntity target, float damage) {
+        float damage = (float) ((impact * impact + impact) / 2.0 * 7.0 * CRYSTAL_RANGE + 1.0);
         if (target instanceof PlayerEntity) damage = scale(damage, target.getEntityWorld().getDifficulty());
-        return mitigate(target, damage);
+        return mitigate(target, shield(target, position, crystal, damage));
     }
 
     public static float mitigate(LivingEntity target, float damage) {

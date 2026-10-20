@@ -11,6 +11,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.predicate.entity.EntityPredicates;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -164,7 +165,7 @@ public final class Targets {
         BlockPos above = base.up();
         Box box = new Box(above.getX(), above.getY(), above.getZ(), above.getX() + 1, above.getY() + 2, above.getZ() + 1);
         CrystalTracker tracker = CrystalTracker.get();
-        return mc.world.getOtherEntities(null, box, entity -> !(entity instanceof EndCrystalEntity) || tracker.isAlive(entity)).isEmpty();
+        return mc.world.getOtherEntities(null, box, entity -> EntityPredicates.EXCEPT_SPECTATOR.test(entity) && (!(entity instanceof EndCrystalEntity) || tracker.isAlive(entity))).isEmpty();
     }
 
     public static Vec3d crystalCenter(BlockPos base) {

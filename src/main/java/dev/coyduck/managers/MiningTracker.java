@@ -2,6 +2,7 @@ package dev.coyduck.managers;
 
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
+import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
@@ -21,6 +22,7 @@ public final class MiningTracker {
     private static final MiningTracker INSTANCE = new MiningTracker();
 
     private static final long LIFETIME = 5_000;
+    private static final long ABANDONED = 2_000;
 
     public record Mining(int breaker, int stage, long time) {}
 
@@ -73,6 +75,10 @@ public final class MiningTracker {
     private void onTick(TickEvent.Pre event) {
         long now = Util.getMeasuringTimeMs();
         mining.values().removeIf(entry -> now - entry.time > LIFETIME);
+
+        Int2LongOpenHashMap latest = new Int2LongOpenHashMap();
+        for (Mining entry : mining.values()) latest.put(entry.breaker, Math.max(latest.getOrDefault(entry.breaker, Long.MIN_VALUE), entry.time));
+        mining.values().removeIf(entry -> latest.get(entry.breaker) - entry.time > ABANDONED);
         broken.long2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > LIFETIME);
     }
 

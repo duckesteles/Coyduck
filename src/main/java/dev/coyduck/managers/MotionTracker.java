@@ -23,6 +23,7 @@ public final class MotionTracker {
     private static final int SAMPLES = 4;
     private static final double GRAVITY = 0.08;
     private static final double DRAG = 0.98;
+    private static final double TELEPORT = 4.0 * 4.0;
 
     private final Int2ObjectOpenHashMap<ArrayDeque<Vec3d>> history = new Int2ObjectOpenHashMap<>();
 
@@ -33,7 +34,7 @@ public final class MotionTracker {
     }
 
     public Vec3d position(PlayerEntity player) {
-        if (player == mc.player) return player.getEntityPos();
+        if (player == mc.player || player.hasVehicle()) return player.getEntityPos();
 
         Vec3d tracked = player.getTrackedPosition().getPos();
         return tracked.equals(Vec3d.ZERO) ? player.getEntityPos() : tracked;
@@ -74,7 +75,9 @@ public final class MotionTracker {
 
             seen.add(player.getId());
             ArrayDeque<Vec3d> samples = history.computeIfAbsent(player.getId(), id -> new ArrayDeque<>());
-            samples.addLast(position(player));
+            Vec3d position = position(player);
+            if (!samples.isEmpty() && samples.peekLast().squaredDistanceTo(position) > TELEPORT) samples.clear();
+            samples.addLast(position);
             while (samples.size() > SAMPLES + 1) samples.removeFirst();
         }
 
