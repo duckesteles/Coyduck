@@ -12,6 +12,7 @@ import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket;
 import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.network.packet.s2c.play.UpdateSelectedSlotS2CPacket;
 import net.minecraft.screen.ScreenHandler;
@@ -23,6 +24,7 @@ import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 
+import java.util.Arrays;
 import java.util.function.Predicate;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
@@ -37,8 +39,10 @@ public final class InventoryManager {
     private static final int BARRIER_DISTANCE = 64;
     private static final long SELECT_MARGIN = 50;
 
-    private long lastSelectChange;
-    private int heldMask;
+    private final long[] heldAt = new long[HOTBAR_END];
+    private int burst;
+    private int burstMask;
+    private boolean burstAttacked;
     private int sentSlot = -1;
 
     public enum Swap {
@@ -98,19 +102,28 @@ public final class InventoryManager {
         return true;
     }
 
-    public boolean selectionInFlight() {
-        LatencyManager latency = LatencyManager.get();
-        return Util.getMeasuringTimeMs() - lastSelectChange < latency.rtt() + 2L * latency.jitter() + SELECT_MARGIN;
+    public void noteSelectChange(int from, int to) {
+        if (burst > 0) burstMask |= bit(from) | bit(to);
+        else stamp(bit(from) | bit(to));
     }
 
-    public void noteSelectChange(int from, int to) {
-        if (!selectionInFlight()) heldMask = 0;
-        heldMask |= bit(from) | bit(to);
-        lastSelectChange = Util.getMeasuringTimeMs();
+    private void stamp(int mask) {
+        long now = Util.getMeasuringTimeMs();
+        for (int i = 0; i < HOTBAR_END; i++) {
+            if ((mask & (1 << i)) != 0) heldAt[i] = now;
+        }
     }
 
     public int heldMask() {
-        return selectionInFlight() ? heldMask : 0;
+        LatencyManager latency = LatencyManager.get();
+        long window = latency.rtt() + 2L * latency.jitter() + SELECT_MARGIN;
+        long now = Util.getMeasuringTimeMs();
+
+        int mask = 0;
+        for (int i = 0; i < HOTBAR_END; i++) {
+            if (heldAt[i] != 0 && now - heldAt[i] < window) mask |= 1 << i;
+        }
+        return mask;
     }
 
     private static int bit(int slot) {
@@ -176,7 +189,19 @@ public final class InventoryManager {
     }
 
     private boolean withItemNow(int index, SwitchMode mode, Runnable action) {
-        return switchedNow(index, mode, action);
+        int before = serverSlot();
+        burst++;
+        try {
+            return switchedNow(index, mode, action);
+        } finally {
+            if (--burst == 0) {
+                int after = serverSlot();
+                if (burstAttacked) stamp(burstMask | bit(before) | bit(after));
+                else if (after != before) stamp(bit(before) | bit(after));
+                burstMask = 0;
+                burstAttacked = false;
+            }
+        }
     }
 
     private boolean switchedNow(int index, SwitchMode mode, Runnable action) {
@@ -201,6 +226,7 @@ public final class InventoryManager {
 
     @EventHandler
     private void onSent(PacketEvent.Sent event) {
+        if (event.packet instanceof PlayerInteractEntityC2SPacket && burst > 0) burstAttacked = true;
         if (!(event.packet instanceof UpdateSelectedSlotC2SPacket packet)) return;
 
         int slot = packet.getSelectedSlot();
@@ -217,15 +243,13 @@ public final class InventoryManager {
     @EventHandler
     private void onWorldReset(WorldResetEvent event) {
         sentSlot = -1;
-        heldMask = 0;
-        lastSelectChange = 0;
+        Arrays.fill(heldAt, 0);
     }
 
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
         sentSlot = -1;
-        heldMask = 0;
-        lastSelectChange = 0;
+        Arrays.fill(heldAt, 0);
     }
 
     public int barrier() {
