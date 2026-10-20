@@ -7,11 +7,13 @@ import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
+import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.utils.world.TickRate;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.packet.s2c.play.EntityDamageS2CPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
@@ -20,13 +22,16 @@ import net.minecraft.util.Util;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 public final class HurtTracker {
     private static final HurtTracker INSTANCE = new HurtTracker();
 
     private static final int IMMUNITY_TICKS = 10;
-    private static final long TICK = 50;
+    private static final long SELF_WINDOW = 500;
+    private static final float PEARL_DAMAGE = 5.0f;
     private static final long MARGIN = 50;
     private static final long LIFETIME = 3_000;
     private static final long LATE_EXPLOSION = 100;
@@ -59,6 +64,7 @@ public final class HurtTracker {
 
     private final Int2ObjectOpenHashMap<Hurt> hurts = new Int2ObjectOpenHashMap<>();
     private final Int2ObjectOpenHashMap<Expected> expected = new Int2ObjectOpenHashMap<>();
+    private final ConcurrentHashMap<Integer, Long> received = new ConcurrentHashMap<>();
 
     private HurtTracker() {}
 
@@ -72,13 +78,13 @@ public final class HurtTracker {
         int id = entity.getId();
 
         Expected pending = freshExpected(id, now);
-        if (pending != null && arrival >= expectedStart(pending) && arrival < expectedStart(pending) + window()) {
+        if (pending != null && arrival >= expectedStart(pending) && arrival < expectedStart(pending) + window() + MARGIN) {
             pending.amount = Math.max(pending.amount, raw);
             return;
         }
 
         Hurt hurt = hurts.get(id);
-        if (hurt != null && arrival >= hurt.start && arrival < hurt.start + window()) {
+        if (hurt != null && arrival >= hurt.start && arrival < hurt.start + window() + MARGIN) {
             if (!Float.isNaN(hurt.raw)) hurt.raw = Math.max(hurt.raw, raw);
             return;
         }
@@ -111,10 +117,9 @@ public final class HurtTracker {
         Window current = window(entity, arrival);
         if (current == null) return full;
 
-        long end = current.start + window();
         boolean immune = self
-            ? arrival < end - TICK - MARGIN - LatencyManager.get().jitter()
-            : arrival < end + MARGIN;
+            ? arrival < current.start + SELF_WINDOW - tick() - MARGIN - LatencyManager.get().jitter()
+            : arrival < current.start + window() + MARGIN;
         if (!immune) return full;
 
         if (Float.isNaN(current.raw)) return self ? full : 0;
@@ -148,6 +153,11 @@ public final class HurtTracker {
         return pending.time + LatencyManager.get().rtt() / 2;
     }
 
+    @EventHandler
+    private void onReceive(PacketEvent.Receive event) {
+        if (event.packet instanceof EntityDamageS2CPacket packet) received.put(packet.entityId(), Util.getMeasuringTimeMs());
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onApply(PacketApplyEvent.Post event) {
         switch (event.packet) {
@@ -159,28 +169,37 @@ public final class HurtTracker {
 
     private void onDamage(EntityDamageS2CPacket packet) {
         long now = Util.getMeasuringTimeMs();
+        Long arrived = received.remove(packet.entityId());
+        long time = arrived != null && arrived <= now ? arrived : now;
 
         Expected cause = expected.remove(packet.entityId());
         float amount = cause != null && now - cause.time <= LatencyManager.get().timeout() ? cause.amount : Float.NaN;
 
         float computed = crystalSource(packet);
         if (!Float.isNaN(computed)) amount = Float.isNaN(amount) ? computed : Math.max(amount, computed);
+        if (Float.isNaN(amount) && packet.sourceType().matchesKey(DamageTypes.ENDER_PEARL)) amount = PEARL_DAMAGE;
 
         boolean explosion = packet.sourceType().isIn(DamageTypeTags.IS_EXPLOSION);
-        hurts.put(packet.entityId(), new Hurt(now - LatencyManager.get().rtt() / 2, now, explosion, amount));
+        hurts.put(packet.entityId(), new Hurt(time - LatencyManager.get().rtt() / 2, time, explosion, amount));
     }
 
     private void onExplosion(ExplosionS2CPacket packet) {
         if (mc.world == null) return;
 
         long now = Util.getMeasuringTimeMs();
+        long happened = now - LatencyManager.get().rtt() / 2;
+
         for (Int2ObjectMap.Entry<Hurt> entry : hurts.int2ObjectEntrySet()) {
             Hurt hurt = entry.getValue();
-            if (!hurt.explosion || !Float.isNaN(hurt.raw) || now - hurt.received > LATE_EXPLOSION) continue;
+            if (mc.player != null && entry.getIntKey() == mc.player.getId()) continue;
+            if (happened < hurt.start || happened >= hurt.start + window() + MARGIN) continue;
             if (!(mc.world.getEntityById(entry.getIntKey()) instanceof LivingEntity living)) continue;
 
-            float raw = ExplosionDamage.raw(living, position(living), box(living), packet.center(), packet.radius(), mc.world);
-            if (raw > 0) hurt.raw = raw;
+            float raw = ExplosionDamage.rawUnshielded(living, position(living), box(living), packet.center(), packet.radius(), mc.world);
+            if (raw <= 0) continue;
+
+            if (!Float.isNaN(hurt.raw)) hurt.raw = Math.max(hurt.raw, raw);
+            else if (hurt.explosion && now - hurt.received <= LATE_EXPLOSION) hurt.raw = raw;
         }
     }
 
@@ -189,7 +208,7 @@ public final class HurtTracker {
 
         Vec3d crystal = CrystalTracker.get().removedPosition(packet.sourceDirectId());
         if (crystal == null) return Float.NaN;
-        return ExplosionDamage.crystalRaw(living, position(living), box(living), crystal, mc.world);
+        return ExplosionDamage.rawUnshielded(living, position(living), box(living), crystal, ExplosionDamage.CRYSTAL_POWER, mc.world);
     }
 
     private static Vec3d position(LivingEntity entity) {
@@ -220,6 +239,13 @@ public final class HurtTracker {
     private void reset() {
         hurts.clear();
         expected.clear();
+        received.clear();
+    }
+
+    private static long tick() {
+        float rate = TickRate.INSTANCE.getTickRate();
+        if (!(rate > 0)) rate = 20.0f;
+        return (long) (1000 / Math.min(rate, 20.0f));
     }
 
     private static long window() {

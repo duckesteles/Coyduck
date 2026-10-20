@@ -23,7 +23,7 @@ public final class MotionTracker {
     private static final int SAMPLES = 4;
     private static final double GRAVITY = 0.08;
     private static final double DRAG = 0.98;
-    private static final double TELEPORT = 4.0 * 4.0;
+    private static final double TELEPORT = 10.0 * 10.0;
 
     private final Int2ObjectOpenHashMap<ArrayDeque<Vec3d>> history = new Int2ObjectOpenHashMap<>();
 

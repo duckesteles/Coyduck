@@ -706,6 +706,10 @@ public class AutoCrystal extends Module {
 
             lastBreak = Util.getMeasuringTimeMs();
             tracker.explodeAt(center);
+            for (Target target : targets) {
+                float hit = ExplosionDamage.crystalRaw(target.player, target.feet, target.box, center, mc.world);
+                if (hit > 0) HurtTracker.get().expect(target.player, hit);
+            }
             breakBudget--;
             broke = true;
         }

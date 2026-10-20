@@ -1,5 +1,6 @@
 package dev.coyduck.utils;
 
+import dev.coyduck.managers.LatencyManager;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.component.DataComponentTypes;
@@ -50,6 +51,10 @@ public final class ExplosionDamage {
     }
 
     public static float raw(LivingEntity target, Vec3d position, Box box, Vec3d center, float power, BlockView view) {
+        return shield(target, position, center, rawUnshielded(target, position, box, center, power, view));
+    }
+
+    public static float rawUnshielded(LivingEntity target, Vec3d position, Box box, Vec3d center, float power, BlockView view) {
         if (isInvulnerable(target)) return 0;
 
         float radius = power * 2.0f;
@@ -58,8 +63,7 @@ public final class ExplosionDamage {
 
         double impact = (1.0 - distance) * exposure(center, box, view, ShapeContext.of(target));
         float damage = (float) ((impact * impact + impact) / 2.0 * 7.0 * radius + 1.0);
-        if (target instanceof PlayerEntity) damage = scale(damage, target.getEntityWorld().getDifficulty());
-        return shield(target, position, center, damage);
+        return target instanceof PlayerEntity ? scale(damage, target.getEntityWorld().getDifficulty()) : damage;
     }
 
     public static float shield(LivingEntity target, Vec3d position, Vec3d center, float damage) {
@@ -70,6 +74,7 @@ public final class ExplosionDamage {
 
         BlocksAttacksComponent component = blocking.get(DataComponentTypes.BLOCKS_ATTACKS);
         if (component == null) return damage;
+        if (target == mc.player && target.getItemUseTime() < component.getBlockDelayTicks() + MathHelper.ceil(LatencyManager.get().rtt() / 2.0 / 50.0)) return damage;
 
         DamageSource source = target.getEntityWorld().getDamageSources().explosion(null, null);
         if (component.bypassedBy().map(source::isIn).orElse(false)) return damage;

@@ -23,6 +23,8 @@ public final class MiningTracker {
 
     private static final long LIFETIME = 5_000;
     private static final long ABANDONED = 2_000;
+    private static final int MAX_STAGE = 9;
+    private static final int ABORTED = 255;
 
     public record Mining(int breaker, int stage, long time) {}
 
@@ -67,8 +69,8 @@ public final class MiningTracker {
         long key = packet.getPos().asLong();
         int stage = packet.getProgress();
 
-        if (stage < 0 || stage > 9) mining.remove(key);
-        else mining.put(key, new Mining(packet.getEntityId(), stage, Util.getMeasuringTimeMs()));
+        if (stage < 0 || stage >= ABORTED) mining.remove(key);
+        else mining.put(key, new Mining(packet.getEntityId(), Math.min(stage, MAX_STAGE), Util.getMeasuringTimeMs()));
     }
 
     @EventHandler
