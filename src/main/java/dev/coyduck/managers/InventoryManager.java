@@ -28,8 +28,6 @@ public final class InventoryManager {
     public static final int OFFHAND = PlayerInventory.OFF_HAND_SLOT;
 
     private static final int BARRIER_DISTANCE = 64;
-    private static final long SELECT_MARGIN = 50;
-
     private long lastSelectChange;
 
     public enum Swap {
@@ -90,11 +88,14 @@ public final class InventoryManager {
     }
 
     public boolean selectionInFlight() {
-        return Util.getMeasuringTimeMs() - lastSelectChange < LatencyManager.get().rtt() + SELECT_MARGIN;
+        return Util.getMeasuringTimeMs() - lastSelectChange < LatencyManager.get().timeout();
+    }
+
+    public void noteSelectChange() {
+        lastSelectChange = Util.getMeasuringTimeMs();
     }
 
     private void selectNow(int slot) {
-        if (slot != serverSlot()) lastSelectChange = Util.getMeasuringTimeMs();
         mc.player.getInventory().setSelectedSlot(slot);
         ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).coyduck$syncSelectedSlot();
     }
@@ -136,7 +137,7 @@ public final class InventoryManager {
         if (id == -1) return false;
 
         mc.interactionManager.clickSlot(handler.syncId, id, hotbar, SlotActionType.SWAP, mc.player);
-        if (hotbar == serverSlot()) lastSelectChange = Util.getMeasuringTimeMs();
+        if (hotbar == serverSlot()) noteSelectChange();
         return true;
     }
 

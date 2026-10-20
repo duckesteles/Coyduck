@@ -294,11 +294,17 @@ public class Surround extends Module {
         List<BlockPos> placeable = new ArrayList<>();
 
         MiningManager mining = MiningManager.get();
+        int cost = 0;
         for (BlockPos pos : targets()) {
-            if (placeable.size() >= budget) break;
-            if (!interaction.canPlace(pos) || mining.isMining(pos) || !reachable(pos)) continue;
+            if (cost >= budget) break;
+            if (!interaction.canPlace(pos) || mining.isMining(pos)) continue;
+
+            int needed = cost(pos);
+            if (needed == 0 || cost + needed > budget) continue;
             if (!clear(pos)) continue;
+
             placeable.add(pos);
+            cost += needed;
         }
 
         if (placeable.isEmpty()) return;
@@ -311,13 +317,13 @@ public class Surround extends Module {
         });
     }
 
-    private boolean reachable(BlockPos pos) {
+    private int cost(BlockPos pos) {
         InteractionManager interaction = InteractionManager.get();
-        if (interaction.hit(pos, airplace.get()) != null) return true;
-        if (airplace.get()) return false;
+        if (interaction.hit(pos, airplace.get()) != null) return 1;
+        if (airplace.get()) return 0;
 
         BlockPos support = pos.down();
-        return interaction.canPlace(support) && interaction.obstructions(support).isEmpty() && interaction.hit(support, false) != null;
+        return interaction.canPlace(support) && interaction.obstructions(support).isEmpty() && interaction.hit(support, false) != null ? 2 : 0;
     }
 
     private void place(BlockPos pos) {
@@ -351,24 +357,23 @@ public class Surround extends Module {
         if (entities.isEmpty()) return true;
         if (!breakCrystals.get()) return false;
 
-        boolean pops = false;
+        EndCrystalEntity safest = null;
+        Verdict safestVerdict = Verdict.Unsafe;
         for (Entity entity : entities) {
             if (!(entity instanceof EndCrystalEntity crystal)) return false;
+            if (interaction.recentlyAttacked(crystal)) return true;
 
             Verdict verdict = verdict(crystal);
-            if (verdict == Verdict.Unsafe) return false;
-            if (verdict == Verdict.Pop) pops = true;
+            if (verdict.ordinal() < safestVerdict.ordinal()) {
+                safest = crystal;
+                safestVerdict = verdict;
+            }
         }
 
-        CrystalTracker tracker = CrystalTracker.get();
-        for (Entity entity : entities) {
-            if (tracker.isDead(entity) || interaction.recentlyAttacked(entity)) continue;
-            if (!interaction.attack(entity, switchMode.get(), swing.get())) return false;
+        if (safest == null || !interaction.attack(safest, switchMode.get(), swing.get())) return false;
 
-            tracker.explodeAt(entity.getEntityPos());
-            if (pops) AutoTotem.notePop();
-        }
-
+        CrystalTracker.get().explodeAt(safest.getEntityPos());
+        if (safestVerdict == Verdict.Pop) AutoTotem.notePop();
         return true;
     }
 

@@ -260,8 +260,8 @@ public class AutoTotem extends Module {
 
         clearPending();
         attempts = 0;
-        if (mainhand) verify();
-        else refill(true);
+        refill(true);
+        if (!pending) verify();
     }
 
     private void verify() {
@@ -301,12 +301,11 @@ public class AutoTotem extends Module {
         }
 
         boolean playerScreen = mc.player.currentScreenHandler == mc.player.playerScreenHandler;
-        boolean moved = pendingSource == NONE || !isTotem(InventoryManager.get().stack(pendingSource));
         boolean holding = isTotem(mc.player.getOffHandStack());
 
         clearPending();
 
-        if (holding && (moved || !playerScreen)) {
+        if (holding) {
             attempts = 0;
             confirmed = playerScreen;
             return;
