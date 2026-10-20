@@ -4,6 +4,7 @@ import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
+import dev.coyduck.modules.AutoTotem;
 import dev.coyduck.utils.Targets;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
@@ -20,6 +21,7 @@ import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffectUtil;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
@@ -44,6 +46,8 @@ public final class MiningManager {
     private static final int SETTLE_TICKS = 2;
     private static final int MAX_HOLDS = 4;
     private static final int PRIMARY_HOLD_SLACK = 10;
+    private static final int PRIMARY_COOLDOWN = 20;
+    private static final long BACKGROUND_FORGET = 10_000;
     private static final float HOLD_MIN_HEALTH = 10;
 
     private BlockPos background;
@@ -52,6 +56,9 @@ public final class MiningManager {
     private int holdAttempts;
     private long nextHold;
     private long blockedSince;
+    private long backgroundSince;
+    private boolean totemSwap;
+    private int primaryCooldown;
 
     private boolean holding;
     private boolean primaryHold;
@@ -59,7 +66,8 @@ public final class MiningManager {
     private int holdSource = -1;
     private int holdHotbar = -1;
 
-    private ItemStack mainStack = ItemStack.EMPTY;
+    private Item mainItem;
+    private int mainEfficiency;
     private int mainSince;
 
     private BlockPos pos;
@@ -145,13 +153,17 @@ public final class MiningManager {
         return holding;
     }
 
+    public void allowTotemSwap(boolean allow) {
+        totemSwap = allow;
+    }
+
     public boolean mineTwo(Object owner, int priority, BlockPos first, BlockPos second, boolean autoStop, InventoryManager.SwitchMode switchMode, InteractionManager.SwingMode swing) {
         if (background != null || first.equals(second)) return mine(owner, priority, first, autoStop, switchMode, swing);
         if (!mine(owner, priority, second, autoStop, switchMode, swing)) return false;
         if (broken || mc.world.getBlockState(second).isReplaceable()) return mine(owner, priority, first, autoStop, switchMode, swing);
 
         send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK, pos, side, false);
-        setBackground(pos, startTick);
+        setBackground(pos, startTick, true);
 
         pos = null;
         broken = false;
@@ -314,8 +326,10 @@ public final class MiningManager {
         if (mc.player == null || mc.world == null) return;
 
         ItemStack main = mc.player.getMainHandStack();
-        if (!ItemStack.areItemsAndComponentsEqual(main, mainStack)) {
-            mainStack = main.copy();
+        int efficiency = enchantmentLevel(main);
+        if (main.getItem() != mainItem || efficiency != mainEfficiency) {
+            mainItem = main.getItem();
+            mainEfficiency = efficiency;
             mainSince = ticks;
         }
 
@@ -332,10 +346,13 @@ public final class MiningManager {
 
     private void preHold() {
         BlockState state = mc.world.getBlockState(pos);
-        if (state.isReplaceable() || primaryHold || isReady(state)) return;
-        if (bestTool(state, pos) == -1 && mainSettled()) return;
-        if (fullDelta(state, pos) * (elapsed() + settleTicks() + 1 - margin()) < SERVER_THRESHOLD) return;
-        if (!holding && (!canHold() || !beginHold(state, pos))) return;
+        if (state.isReplaceable() || primaryHold || ticks < primaryCooldown || isReady(state)) return;
+
+        float full = fullDelta(state, pos);
+        if (stopDelta(state, pos) >= full) return;
+        if (full * (elapsed() + settleTicks() + 1 - margin()) < SERVER_THRESHOLD) return;
+        if (background != null && Targets.ownRing().contains(background)) return;
+        if (!holding && (!canPrimaryHold() || !beginHold(state, pos))) return;
 
         primaryHold = true;
         holdEnd = ticks + 2 * settleTicks() + PRIMARY_HOLD_SLACK;
@@ -347,10 +364,10 @@ public final class MiningManager {
 
         switch (event.packet) {
             case BlockUpdateS2CPacket packet when packet.getPos().equals(pos) -> update(packet.getState());
-            case BlockUpdateS2CPacket packet when packet.getPos().equals(background) && packet.getState().isReplaceable() -> clearBackground();
+            case BlockUpdateS2CPacket packet when packet.getPos().equals(background) && packet.getState().isAir() -> clearBackground();
             case ChunkDeltaUpdateS2CPacket packet -> packet.visitUpdates((at, state) -> {
                 if (at.equals(pos)) update(state);
-                else if (at.equals(background) && state.isReplaceable()) clearBackground();
+                else if (at.equals(background) && state.isAir()) clearBackground();
             });
             case PlayerActionResponseS2CPacket packet when stopSequence != -1 && packet.sequence() >= stopSequence -> checkStop();
             default -> {}
@@ -360,7 +377,7 @@ public final class MiningManager {
     private void checkStop() {
         stopSequence = -1;
         if (pos == null || brokenSinceStop || mc.world.getBlockState(pos).isReplaceable()) return;
-        if (background == null) setBackground(pos, startTick);
+        if (background == null) setBackground(pos, startTick, false);
     }
 
     @EventHandler
@@ -381,25 +398,34 @@ public final class MiningManager {
         forgetBackground();
     }
 
-    private void setBackground(BlockPos at, int start) {
+    private void setBackground(BlockPos at, int start, boolean active) {
         background = at.toImmutable();
         backgroundStart = start;
-        backgroundActive = true;
+        backgroundActive = active;
+        backgroundSince = Util.getMeasuringTimeMs();
         holdAttempts = 0;
         nextHold = 0;
         blockedSince = 0;
     }
 
     private void tickBackground() {
-        if (holding && ticks >= holdEnd) endHold();
+        if (holding && ticks >= holdEnd) {
+            if (primaryHold) primaryCooldown = ticks + PRIMARY_COOLDOWN;
+            endHold();
+        }
         if (background == null) return;
 
         BlockState state = mc.world.getBlockState(background);
-        if (state.isReplaceable()) {
+        boolean predicted = background.equals(pos) && stopSequence != -1;
+        if (state.isAir() && !predicted) {
             clearBackground();
             return;
         }
 
+        if (!backgroundActive && Util.getMeasuringTimeMs() - backgroundSince > BACKGROUND_FORGET) {
+            forgetBackground();
+            return;
+        }
         if (!backgroundActive || holding) return;
         if (Targets.ownRing().contains(background)) {
             backgroundActive = false;
@@ -435,6 +461,13 @@ public final class MiningManager {
     private boolean canHold() {
         if (InventoryManager.get().isEating()) return false;
         return !mc.player.getMainHandStack().contains(DataComponentTypes.DEATH_PROTECTION);
+    }
+
+    private boolean canPrimaryHold() {
+        if (canHold()) return true;
+        if (!totemSwap || InventoryManager.get().isEating()) return false;
+        if (!mc.player.getOffHandStack().contains(DataComponentTypes.DEATH_PROTECTION) || AutoTotem.popInFlight()) return false;
+        return mc.player.getHealth() + mc.player.getAbsorptionAmount() > HOLD_MIN_HEALTH;
     }
 
     private boolean beginHold(BlockState state, BlockPos at) {
@@ -510,6 +543,7 @@ public final class MiningManager {
 
     private void reset() {
         if (holding) endHold();
+        totemSwap = false;
         pos = null;
         owner = null;
         priority = 0;

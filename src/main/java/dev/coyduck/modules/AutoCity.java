@@ -109,6 +109,13 @@ public class AutoCity extends Module {
         .build()
     );
 
+    private final Setting<Boolean> totemSwap = sgGeneral.add(new BoolSetting.Builder()
+        .name("swap-totem")
+        .description("Lets the pickaxe replace a main hand totem for a few ticks before the final break, so Efficiency counts on the server. Your offhand totem still protects you.")
+        .defaultValue(true)
+        .build()
+    );
+
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
         .description("How the pickaxe is put in your hand for the final break.")
@@ -220,6 +227,7 @@ public class AutoCity extends Module {
         if (mc.player == null || mc.world == null || !mc.player.isAlive()) return;
 
         MiningManager mining = MiningManager.get();
+        mining.allowTotemSwap(totemSwap.get());
         target = Targets.find(targetRange.get(), current != null ? target : null);
 
         if (target == null || (needCrystals.get() && !InteractionManager.get().hasCrystals())) {
