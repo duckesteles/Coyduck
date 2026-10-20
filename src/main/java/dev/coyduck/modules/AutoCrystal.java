@@ -249,7 +249,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> idPredict = sgTiming.add(new BoolSetting.Builder()
         .name("id-predict")
-        .description("Attacks the entity ID a new crystal will most likely get, right after placing it, so it breaks in the same server tick at any ping. Attacking an ID that turns out to be a dropped item kicks you.")
+        .description("Attacks the entity ID a new crystal will most likely get, right after placing it, so it breaks in the same server tick at any ping.")
         .defaultValue(false)
         .build()
     );
@@ -260,6 +260,14 @@ public class AutoCrystal extends Module {
         .defaultValue(1)
         .range(1, 3)
         .sliderRange(1, 3)
+        .visible(idPredict::get)
+        .build()
+    );
+
+    private final Setting<Boolean> kickGuard = sgTiming.add(new BoolSetting.Builder()
+        .name("kick-guard")
+        .description("Skips predicting when the ID could belong to a dropped item, arrow or xp orb. Only needed on servers that kick for attacking those.")
+        .defaultValue(false)
         .visible(idPredict::get)
         .build()
     );
@@ -830,7 +838,7 @@ public class AutoCrystal extends Module {
             if (effective < choice.target.minDamage && effective < choice.target.health) return;
         }
 
-        if (InteractionManager.get().dropRisk(crystalCenter(base))) return;
+        if (kickGuard.get() && InteractionManager.get().dropRisk(crystalCenter(base))) return;
 
         if (predictedAt != 0) endPrediction();
         predictedIds.clear();
@@ -853,12 +861,14 @@ public class AutoCrystal extends Module {
     }
 
     private boolean predictSafe() {
-        if (InteractionManager.get().recentDropRisk()) return false;
+        if (kickGuard.get()) {
+            if (InteractionManager.get().recentDropRisk()) return false;
 
-        Box area = mc.player.getBoundingBox().expand(PREDICT_CLEAR_RANGE);
-        boolean kickRisk = !mc.world.getOtherEntities(mc.player, area, entity -> entity instanceof ItemEntity
-            || entity instanceof ExperienceOrbEntity || entity instanceof PersistentProjectileEntity).isEmpty();
-        if (kickRisk) return false;
+            Box area = mc.player.getBoundingBox().expand(PREDICT_CLEAR_RANGE);
+            boolean kickRisk = !mc.world.getOtherEntities(mc.player, area, entity -> entity instanceof ItemEntity
+                || entity instanceof ExperienceOrbEntity || entity instanceof PersistentProjectileEntity).isEmpty();
+            if (kickRisk) return false;
+        }
 
         double friendRange = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
         for (PlayerEntity player : mc.world.getPlayers()) {
