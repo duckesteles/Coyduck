@@ -845,6 +845,7 @@ public class AutoCrystal extends Module {
         }
 
         if (predictedIds.isEmpty()) return;
+        InteractionManager.get().noteOwnBreak(crystalCenter(base));
         predictedAt = Util.getMeasuringTimeMs();
         predictedBase = base.asLong();
         predictedTarget = choice.target.player;

@@ -246,7 +246,7 @@ public final class HurtTracker {
         boolean fresh = cause != null && now - cause.time <= LatencyManager.get().timeout();
         float amount = fresh ? cause.amount : Float.NaN;
 
-        amount = max(amount, crystalSource(packet));
+        amount = max(amount, crystalSource(packet, time));
         if (Float.isNaN(amount)) amount = fixedAmount(packet);
 
         boolean explosion = packet.sourceType().isIn(DamageTypeTags.IS_EXPLOSION);
@@ -287,7 +287,7 @@ public final class HurtTracker {
         }
     }
 
-    private float crystalSource(EntityDamageS2CPacket packet) {
+    private float crystalSource(EntityDamageS2CPacket packet, long time) {
         if (mc.world == null || !(mc.world.getEntityById(packet.entityId()) instanceof LivingEntity living)) return Float.NaN;
 
         Vec3d crystal = CrystalTracker.get().removedPosition(packet.sourceDirectId());
@@ -296,7 +296,7 @@ public final class HurtTracker {
         float raw = ExplosionDamage.rawUnshielded(living, position(living), box(living), crystal, ExplosionDamage.CRYSTAL_POWER, mc.world);
         if (living != mc.player) return raw;
 
-        MotionTracker.Sample past = MotionTracker.get().selfAt(Util.getMeasuringTimeMs() - LatencyManager.get().rtt());
+        MotionTracker.Sample past = MotionTracker.get().selfAt(time - LatencyManager.get().rtt());
         if (past == null) return raw;
         return Math.min(raw, ExplosionDamage.rawUnshielded(living, past.position(), past.box(), crystal, ExplosionDamage.CRYSTAL_POWER, mc.world));
     }

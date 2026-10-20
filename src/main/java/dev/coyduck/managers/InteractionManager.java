@@ -13,6 +13,7 @@ import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
+import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.enchantment.Enchantments;
 import dev.coyduck.utils.ExplosionDamage;
@@ -41,6 +42,7 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 
+import java.util.ArrayDeque;
 import java.util.List;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
@@ -51,7 +53,8 @@ public final class InteractionManager {
     private static final double REACH_MARGIN = 0.05;
     private static final int WEAPON_SETTLE = 2;
     private static final int DROP_RADIUS = 11;
-    private static final double EXPLOSION_NOTICE = 16.0;
+    private static final double EXPLOSION_NOTICE = 20.0;
+    private static final double OWN_TOLERANCE = 0.01;
     private static final float DROP_RESISTANCE = 600.0f;
     private static final long DROP_WINDOW = 50;
 
@@ -63,6 +66,8 @@ public final class InteractionManager {
 
     private record Pending(int sequence, long expiry) {}
 
+    private record OwnBreak(Vec3d position, long time) {}
+
     private final Long2ObjectOpenHashMap<Pending> pending = new Long2ObjectOpenHashMap<>();
     private final Int2LongOpenHashMap attacked = new Int2LongOpenHashMap();
     private int ticks;
@@ -70,6 +75,7 @@ public final class InteractionManager {
     private ItemStack heldStack = ItemStack.EMPTY;
     private int heldSince;
     private volatile long lastDropRisk;
+    private final ArrayDeque<OwnBreak> ownBreaks = new ArrayDeque<>();
 
     private InteractionManager() {}
 
@@ -183,8 +189,29 @@ public final class InteractionManager {
         }
 
         attacked.put(target.getId(), Util.getMeasuringTimeMs());
-        if (target instanceof EndCrystalEntity && dropRisk(target.getEntityPos())) lastDropRisk = Util.getMeasuringTimeMs();
+        if (target instanceof EndCrystalEntity) {
+            noteOwnBreak(target.getEntityPos());
+            if (dropRisk(target.getEntityPos())) lastDropRisk = Util.getMeasuringTimeMs();
+        }
         return true;
+    }
+
+    public void noteOwnBreak(Vec3d crystal) {
+        long now = Util.getMeasuringTimeMs();
+        synchronized (ownBreaks) {
+            ownBreaks.removeIf(own -> now - own.time > LatencyManager.get().timeout());
+            ownBreaks.addLast(new OwnBreak(crystal, now));
+        }
+    }
+
+    private boolean isOwnBreak(Vec3d center) {
+        long now = Util.getMeasuringTimeMs();
+        synchronized (ownBreaks) {
+            for (OwnBreak own : ownBreaks) {
+                if (now - own.time <= LatencyManager.get().timeout() && own.position.squaredDistanceTo(center) < OWN_TOLERANCE) return true;
+            }
+        }
+        return false;
     }
 
     public boolean recentDropRisk() {
@@ -194,14 +221,17 @@ public final class InteractionManager {
 
     @EventHandler
     private void onReceive(PacketEvent.Receive event) {
-        if (!(event.packet instanceof ExplosionS2CPacket packet) || ExplosionDamage.isWind(packet) || mc.player == null) return;
-        if (packet.center().squaredDistanceTo(mc.player.getEntityPos()) <= EXPLOSION_NOTICE * EXPLOSION_NOTICE) lastDropRisk = Util.getMeasuringTimeMs();
+        ClientPlayerEntity player = mc.player;
+        if (!(event.packet instanceof ExplosionS2CPacket packet) || ExplosionDamage.isWind(packet) || player == null) return;
+        if (packet.center().squaredDistanceTo(player.getEntityPos()) > EXPLOSION_NOTICE * EXPLOSION_NOTICE || isOwnBreak(packet.center())) return;
+        lastDropRisk = Util.getMeasuringTimeMs();
     }
 
     public boolean dropRisk(Vec3d crystal) {
         double range = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
         for (Entity entity : mc.world.getEntities()) {
             if (entity == mc.player || entity.squaredDistanceTo(crystal) > range) continue;
+            if (entity instanceof ArmorStandEntity stand && stand.isMarker()) continue;
             if (entity instanceof AbstractDecorationEntity || entity instanceof ArmorStandEntity || entity instanceof VehicleEntity) return true;
             if (entity instanceof LivingEntity living && living.isAlive()
                 && ExplosionDamage.upperBound(living, living.getEntityPos(), crystal) >= living.getHealth() + living.getAbsorptionAmount()) return true;

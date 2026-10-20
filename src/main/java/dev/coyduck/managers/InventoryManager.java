@@ -40,7 +40,6 @@ public final class InventoryManager {
     private long lastSelectChange;
     private int heldMask;
     private int sentSlot = -1;
-    private int burst;
 
     public enum Swap {
         NONE,
@@ -105,7 +104,6 @@ public final class InventoryManager {
     }
 
     public void noteSelectChange(int from, int to) {
-        if (burst > 0) return;
         if (!selectionInFlight()) heldMask = 0;
         heldMask |= bit(from) | bit(to);
         lastSelectChange = Util.getMeasuringTimeMs();
@@ -178,14 +176,7 @@ public final class InventoryManager {
     }
 
     private boolean withItemNow(int index, SwitchMode mode, Runnable action) {
-        int before = serverSlot();
-        burst++;
-        try {
-            return switchedNow(index, mode, action);
-        } finally {
-            burst--;
-            if (burst == 0 && serverSlot() != before) noteSelectChange(before, serverSlot());
-        }
+        return switchedNow(index, mode, action);
     }
 
     private boolean switchedNow(int index, SwitchMode mode, Runnable action) {
