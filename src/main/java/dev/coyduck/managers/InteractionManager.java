@@ -75,6 +75,7 @@ public final class InteractionManager {
     private ItemStack heldStack = ItemStack.EMPTY;
     private int heldSince;
     private volatile long lastDropRisk;
+    private boolean trackDrops;
     private final ArrayDeque<OwnBreak> ownBreaks = new ArrayDeque<>();
 
     private InteractionManager() {}
@@ -191,9 +192,13 @@ public final class InteractionManager {
         attacked.put(target.getId(), Util.getMeasuringTimeMs());
         if (target instanceof EndCrystalEntity) {
             noteOwnBreak(target.getEntityPos());
-            if (dropRisk(target.getEntityPos())) lastDropRisk = Util.getMeasuringTimeMs();
+            if (trackDrops && dropRisk(target.getEntityPos())) lastDropRisk = Util.getMeasuringTimeMs();
         }
         return true;
+    }
+
+    public void trackDrops(boolean track) {
+        trackDrops = track;
     }
 
     public void noteOwnBreak(Vec3d crystal) {

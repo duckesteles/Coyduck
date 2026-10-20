@@ -404,6 +404,7 @@ public class AutoCrystal extends Module {
 
     @Override
     public void onDeactivate() {
+        InteractionManager.get().trackDrops(false);
         if (predictedAt != 0) endPrediction();
     }
 
@@ -443,6 +444,7 @@ public class AutoCrystal extends Module {
         gapBudget = GAP_PLACES;
         breakBudget = breaksPerTick.get();
         clearCache();
+        InteractionManager.get().trackDrops(idPredict.get() && kickGuard.get());
         if (predictedAt != 0 && Util.getMeasuringTimeMs() - predictedAt > LatencyManager.get().timeout()) endPrediction();
         pass();
         updateFocus();
