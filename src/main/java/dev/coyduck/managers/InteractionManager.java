@@ -12,6 +12,7 @@ import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
@@ -54,6 +55,7 @@ public final class InteractionManager {
     private final Int2LongOpenHashMap attacked = new Int2LongOpenHashMap();
     private int ticks;
     private Item heldItem;
+    private ItemStack heldStack = ItemStack.EMPTY;
     private int heldSince;
 
     private InteractionManager() {}
@@ -168,11 +170,14 @@ public final class InteractionManager {
     }
 
     public boolean canHitWithHand() {
-        if (attackDamage(mc.player.getMainHandStack()) <= 0) return false;
-        return !mc.player.hasStatusEffect(StatusEffects.WEAKNESS) || ticks - heldSince >= WEAPON_SETTLE;
+        if (!mc.player.hasStatusEffect(StatusEffects.WEAKNESS)) return attackDamage(mc.player.getMainHandStack()) > 0;
+        return ticks - heldSince >= WEAPON_SETTLE && attackDamage(heldStack) > 0;
     }
 
     private void holdWeapon() {
+        if (MiningManager.get().isHolding() || mc.interactionManager.isBreakingBlock()) return;
+        if (mc.player.getMainHandStack().contains(DataComponentTypes.DEATH_PROTECTION)) return;
+
         InventoryManager inventory = InventoryManager.get();
         int best = -1;
         double bestDamage = 0;
@@ -247,11 +252,12 @@ public final class InteractionManager {
     private void onTick(TickEvent.Pre event) {
         ticks++;
         if (mc.player != null) {
-            Item item = mc.player.getMainHandStack().getItem();
-            if (item != heldItem) {
-                heldItem = item;
+            ItemStack main = mc.player.getMainHandStack();
+            if (main.getItem() != heldItem) {
+                heldItem = main.getItem();
                 heldSince = ticks;
             }
+            heldStack = main.copy();
         }
 
         long now = Util.getMeasuringTimeMs();

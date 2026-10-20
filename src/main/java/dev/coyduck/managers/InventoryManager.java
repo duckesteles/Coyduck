@@ -136,6 +136,7 @@ public final class InventoryManager {
         if (id == -1) return false;
 
         mc.interactionManager.clickSlot(handler.syncId, id, hotbar, SlotActionType.SWAP, mc.player);
+        if (hotbar == serverSlot()) lastSelectChange = Util.getMeasuringTimeMs();
         return true;
     }
 
