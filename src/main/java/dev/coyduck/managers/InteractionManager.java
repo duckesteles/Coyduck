@@ -9,6 +9,7 @@ import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
+import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
@@ -24,11 +25,13 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.decoration.AbstractDecorationEntity;
 import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.entity.decoration.EndCrystalEntity;
+import net.minecraft.entity.vehicle.VehicleEntity;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.HandSwingC2SPacket;
+import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Util;
@@ -47,7 +50,8 @@ public final class InteractionManager {
 
     private static final double REACH_MARGIN = 0.05;
     private static final int WEAPON_SETTLE = 2;
-    private static final int DROP_RADIUS = 10;
+    private static final int DROP_RADIUS = 11;
+    private static final double EXPLOSION_NOTICE = 16.0;
     private static final float DROP_RESISTANCE = 600.0f;
     private static final long DROP_WINDOW = 50;
 
@@ -65,7 +69,7 @@ public final class InteractionManager {
     private Item heldItem;
     private ItemStack heldStack = ItemStack.EMPTY;
     private int heldSince;
-    private long lastDropRisk;
+    private volatile long lastDropRisk;
 
     private InteractionManager() {}
 
@@ -184,15 +188,17 @@ public final class InteractionManager {
         return Util.getMeasuringTimeMs() - lastDropRisk < latency.rtt() + 2L * latency.jitter() + DROP_WINDOW;
     }
 
-    public void noteDropRisk() {
-        lastDropRisk = Util.getMeasuringTimeMs();
+    @EventHandler
+    private void onReceive(PacketEvent.Receive event) {
+        if (!(event.packet instanceof ExplosionS2CPacket packet) || ExplosionDamage.isWind(packet) || mc.player == null) return;
+        if (packet.center().squaredDistanceTo(mc.player.getEntityPos()) <= EXPLOSION_NOTICE * EXPLOSION_NOTICE) lastDropRisk = Util.getMeasuringTimeMs();
     }
 
     public boolean dropRisk(Vec3d crystal) {
         double range = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
         for (Entity entity : mc.world.getEntities()) {
             if (entity == mc.player || entity.squaredDistanceTo(crystal) > range) continue;
-            if (entity instanceof AbstractDecorationEntity || entity instanceof ArmorStandEntity) return true;
+            if (entity instanceof AbstractDecorationEntity || entity instanceof ArmorStandEntity || entity instanceof VehicleEntity) return true;
             if (entity instanceof LivingEntity living && living.isAlive()
                 && ExplosionDamage.upperBound(living, living.getEntityPos(), crystal) >= living.getHealth() + living.getAbsorptionAmount()) return true;
         }
@@ -246,7 +252,8 @@ public final class InteractionManager {
 
     private int sharpWeaponSlot() {
         for (int i = 0; i < InventoryManager.MAIN_END; i++) {
-            if (sharpness(InventoryManager.get().stack(i)) > 0) return i;
+            ItemStack stack = InventoryManager.get().stack(i);
+            if (sharpness(stack) > 0 && !stack.contains(DataComponentTypes.MINIMUM_ATTACK_CHARGE)) return i;
         }
         return -1;
     }
@@ -276,6 +283,8 @@ public final class InteractionManager {
     }
 
     private double attackDamage(ItemStack stack) {
+        if (stack.contains(DataComponentTypes.MINIMUM_ATTACK_CHARGE)) return 0;
+
         double[] damage = {1.0};
         stack.applyAttributeModifiers(EquipmentSlot.MAINHAND, (attribute, modifier) -> {
             if (attribute.equals(EntityAttributes.ATTACK_DAMAGE) && modifier.operation() == EntityAttributeModifier.Operation.ADD_VALUE) damage[0] += modifier.value();

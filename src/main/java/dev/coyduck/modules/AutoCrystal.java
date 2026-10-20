@@ -822,10 +822,10 @@ public class AutoCrystal extends Module {
             if (effective < choice.target.minDamage && effective < choice.target.health) return;
         }
 
+        if (InteractionManager.get().dropRisk(crystalCenter(base))) return;
+
         predictedIds.clear();
-        boolean risky = InteractionManager.get().dropRisk(crystalCenter(base));
-        int count = risky ? 1 : idPredictCount.get();
-        for (int i = 1; i <= count; i++) {
+        for (int i = 1; i <= idPredictCount.get(); i++) {
             int id = highest + i;
             if (mc.world.getEntityById(id) != null) continue;
 
@@ -836,7 +836,6 @@ public class AutoCrystal extends Module {
         }
 
         if (predictedIds.isEmpty()) return;
-        if (risky) InteractionManager.get().noteDropRisk();
         predictedAt = Util.getMeasuringTimeMs();
         predictedBase = base.asLong();
         predictedTarget = choice.target.player;
