@@ -174,6 +174,14 @@ public final class InteractionManager {
         return ticks - heldSince >= WEAPON_SETTLE && attackDamage(heldStack) > 0;
     }
 
+    public boolean canAttack() {
+        return canHitWithHand() || sharpWeaponSlot() != -1;
+    }
+
+    public void prepareAttack() {
+        if (!canAttack()) holdWeapon();
+    }
+
     private void holdWeapon() {
         if (MiningManager.get().isHolding() || mc.interactionManager.isBreakingBlock()) return;
         if (mc.player.getMainHandStack().contains(DataComponentTypes.DEATH_PROTECTION)) return;

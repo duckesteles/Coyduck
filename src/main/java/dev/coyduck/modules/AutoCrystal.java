@@ -16,6 +16,7 @@ import dev.coyduck.utils.BlockOverlay;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.ints.Int2FloatOpenHashMap;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -69,7 +70,11 @@ import java.util.List;
 
 public class AutoCrystal extends Module {
     private static final int PLACE_PRIORITY = 100;
+    private static final int GAP_PRIORITY = 105;
+    private static final int DEFEND_PRIORITY = 106;
     private static final int BREAK_PRIORITY = 110;
+    private static final int PREDICT_DROP = 3;
+    private static final long BREAK_DROP_WINDOW = 50;
     private static final float LETHAL_BONUS = 100.0f;
     private static final float DEFENSE_THREAT = 4.0f;
     private static final float DEFENSE_FREE = 0.5f;
@@ -170,7 +175,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> pauseEating = sgGeneral.add(new BoolSetting.Builder()
         .name("pause-eating")
-        .description("Pauses placing while you eat. Switching already waits until you finish eating, so this only changes anything with crystals in your offhand.")
+        .description("Pauses placing while you eat. Eating from the main hand already blocks item switches, so this matters when you eat from the offhand or keep crystals in the offhand.")
         .defaultValue(false)
         .build()
     );
@@ -360,6 +365,12 @@ public class AutoCrystal extends Module {
     private List<BlockPos> ownCells = List.of();
     private BlockPos renderPos;
     private long renderTime;
+    private long cacheSignature;
+    private long lastBreak;
+    private final IntOpenHashSet predictedIds = new IntOpenHashSet();
+    private long predictedBase;
+    private long predictedAt;
+    private PlayerEntity predictedTarget;
 
     public AutoCrystal() {
         super(Coyduck.CATEGORY, "auto-crystal", "Places and breaks crystals at any ping.");
@@ -391,8 +402,21 @@ public class AutoCrystal extends Module {
         return placeRange.get();
     }
 
-    public boolean fillsGaps() {
-        return isActive() && antiSurround.get() && InteractionManager.get().hasCrystals();
+    public boolean wouldFillGap(BlockPos gap, PlayerEntity player) {
+        if (!isActive() || !antiSurround.get() || !canAct() || !InteractionManager.get().hasCrystals()) return false;
+        if (pauseMining.get() && mc.interactionManager.isBreakingBlock()) return false;
+        if (pauseEating.get() && mc.player.isUsingItem()) return false;
+
+        long signature = signature();
+        if (signature != cacheSignature) {
+            clearCache();
+            cacheSignature = signature;
+        }
+
+        Target target = makeTarget(player, predictTicks());
+        Surround surround = Modules.get().get(Surround.class);
+        ownCells = surround != null && surround.isActive() ? Targets.ownRing() : List.of();
+        return canFillGap(gap, target, mc.player.getHealth() + mc.player.getAbsorptionAmount());
     }
 
     @Override
@@ -418,6 +442,8 @@ public class AutoCrystal extends Module {
     private void updateFocus() {
         if (focus != null && (!focus.isAlive() || focus.isRemoved() || focus.squaredDistanceTo(mc.player) > targetRange.get() * targetRange.get())) focus = null;
 
+        if (lastTarget != null && !Targets.valid(lastTarget, targetRange.get())) lastTarget = null;
+
         if (focus == null) {
             focus = lastTarget;
             challengeTicks = 0;
@@ -433,7 +459,14 @@ public class AutoCrystal extends Module {
 
     @EventHandler
     private void onEntityAdded(EntityAddedEvent event) {
-        if (event.entity instanceof EndCrystalEntity) pass();
+        if (!(event.entity instanceof EndCrystalEntity crystal)) return;
+
+        if (predictedAt != 0 && crystal.getBlockPos().down().asLong() == predictedBase) {
+            if (!predictedIds.contains(crystal.getId()) && predictedTarget != null) HurtTracker.get().forgetExpected(predictedTarget, predictedAt);
+            predictedAt = 0;
+        }
+
+        if (near(crystal.getEntityPos())) pass();
     }
 
     @EventHandler
@@ -508,7 +541,11 @@ public class AutoCrystal extends Module {
 
         running = true;
         try {
-            clearCache();
+            long signature = signature();
+            if (signature != cacheSignature) {
+                clearCache();
+                cacheSignature = signature;
+            }
             run();
         } finally {
             running = false;
@@ -553,25 +590,16 @@ public class AutoCrystal extends Module {
     }
 
     private void fillGaps(List<Target> targets, float health) {
-        CrystalTracker tracker = CrystalTracker.get();
-
         for (Target target : targets) {
             for (long key : target.gaps) {
                 if (gapBudget <= 0) return;
 
                 BlockPos gap = BlockPos.fromLong(key);
+                if (!canFillGap(gap, target, health)) continue;
+
                 BlockPos base = gap.down();
-                if (!mc.world.getBlockState(gap).isAir() || !isBase(mc.world.getBlockState(base))) continue;
-                if (tracker.isPlacing(base) || blocked(base) || !inPlaceRange(base) || !breakable(base) || overlapsOwnCells(base)) continue;
-
                 Vec3d center = crystalCenter(base);
-                float self = ExplosionDamage.crystal(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), center, mc.world);
-                if (self >= health || self > maxSelfDamage.get() || hurtsFriend(center, mc.world)) continue;
-
-                float raw = ExplosionDamage.crystalRaw(target.player, target.feet, target.box, center, mc.world);
-                float damage = ExplosionDamage.mitigate(target.player, raw);
-                if (damage < facePlaceDamage.get()) continue;
-                if (!rotationReady(new Box(base), center, placeRange.get() + 1, PLACE_PRIORITY)) return;
+                if (!rotationReady(new Box(base), center, placeRange.get() + 1, GAP_PRIORITY)) return;
 
                 if (!InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), null)) return;
                 gapBudget--;
@@ -580,6 +608,19 @@ public class AutoCrystal extends Module {
                 renderTime = Util.getMeasuringTimeMs();
             }
         }
+    }
+
+    private boolean canFillGap(BlockPos gap, Target target, float health) {
+        BlockPos base = gap.down();
+        if (!mc.world.getBlockState(gap).isAir() || !isBase(mc.world.getBlockState(base))) return false;
+        if (CrystalTracker.get().isPlacing(base) || blocked(base) || !inPlaceRange(base) || !breakable(base) || overlapsOwnCells(base)) return false;
+
+        Vec3d center = crystalCenter(base);
+        float self = selfDamage(center, mc.world);
+        if (self >= health || self > maxSelfDamage.get() || hurtsFriend(center, mc.world)) return false;
+
+        float raw = ExplosionDamage.crystalRaw(target.player, target.feet, target.box, center, mc.world);
+        return ExplosionDamage.mitigate(target.player, raw) >= facePlaceDamage.get();
     }
 
     private boolean breakCrystals(List<Target> targets, float health) {
@@ -618,8 +659,14 @@ public class AutoCrystal extends Module {
             }
 
             if (best == null) break;
+            if (!InteractionManager.get().canAttack()) {
+                InteractionManager.get().prepareAttack();
+                break;
+            }
             if (!rotationReady(best.getBoundingBox(), best.getBoundingBox().getCenter(), breakRange.get(), BREAK_PRIORITY)) break;
             if (!InteractionManager.get().attack(best, switchMode.get(), swing.get())) break;
+
+            lastBreak = Util.getMeasuringTimeMs();
 
             tracker.explodeAt(best.getEntityPos());
             HurtTracker.get().expect(bestChoice.target.player, bestChoice.raw);
@@ -651,17 +698,31 @@ public class AutoCrystal extends Module {
 
             float cost = HurtTracker.get().effectiveOnSelf(raw, arrival);
             if (cost > DEFENSE_FREE || hurtsFriend(center, mc.world)) continue;
-            if (evaluate(targets, center, health, 0, mc.world) != null) continue;
+            if (evaluate(targets, center, health, 0, mc.world) != null || destroysReady(targets, center, health)) continue;
 
-            if (!rotationReady(crystal.getBoundingBox(), crystal.getBoundingBox().getCenter(), breakRange.get(), BREAK_PRIORITY)) return broke;
+            if (!InteractionManager.get().canAttack()) return broke;
+            if (!rotationReady(crystal.getBoundingBox(), crystal.getBoundingBox().getCenter(), breakRange.get(), DEFEND_PRIORITY)) return broke;
             if (!InteractionManager.get().attack(crystal, switchMode.get(), swing.get())) return broke;
 
+            lastBreak = Util.getMeasuringTimeMs();
             tracker.explodeAt(center);
             breakBudget--;
             broke = true;
         }
 
         return broke;
+    }
+
+    private boolean destroysReady(List<Target> targets, Vec3d center, float health) {
+        CrystalTracker tracker = CrystalTracker.get();
+        double range = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
+
+        for (Entity entity : mc.world.getEntities()) {
+            if (!(entity instanceof EndCrystalEntity other) || !tracker.isAlive(other) || other.getEntityPos().equals(center)) continue;
+            if (other.getEntityPos().squaredDistanceTo(center) > range) continue;
+            if (evaluate(targets, other.getEntityPos(), health, 0, mc.world) != null) return true;
+        }
+        return false;
     }
 
     private void placeCrystal(BlockPos base, Choice choice) {
@@ -738,7 +799,7 @@ public class AutoCrystal extends Module {
             if (effective < choice.target.minDamage && effective < choice.target.health) return;
         }
 
-        boolean sent = false;
+        predictedIds.clear();
         for (int i = 1; i <= idPredictCount.get(); i++) {
             int id = highest + i;
             if (mc.world.getEntityById(id) != null) continue;
@@ -746,10 +807,19 @@ public class AutoCrystal extends Module {
             EndCrystalEntity fake = new EndCrystalEntity(mc.world, 0, 0, 0);
             fake.setId(id);
             mc.getNetworkHandler().sendPacket(PlayerInteractEntityC2SPacket.attack(fake, mc.player.isSneaking()));
+            predictedIds.add(id);
         }
+
+        if (predictedIds.isEmpty()) return;
+        predictedAt = Util.getMeasuringTimeMs();
+        predictedBase = base.asLong();
+        predictedTarget = choice.target.player;
+        HurtTracker.get().expect(choice.target.player, choice.raw);
     }
 
     private boolean predictSafe() {
+        if (Util.getMeasuringTimeMs() - lastBreak < LatencyManager.get().rtt() + BREAK_DROP_WINDOW) return false;
+
         Box area = mc.player.getBoundingBox().expand(PREDICT_CLEAR_RANGE);
         boolean kickRisk = !mc.world.getOtherEntities(mc.player, area, entity -> entity instanceof ItemEntity
             || entity instanceof ExperienceOrbEntity || entity instanceof PersistentProjectileEntity).isEmpty();
@@ -767,10 +837,10 @@ public class AutoCrystal extends Module {
         double reach = SERVER_BREAK_RANGE * SERVER_BREAK_RANGE;
 
         for (int dx = -radius; dx <= radius; dx++) {
-            for (int dy = -radius; dy <= radius; dy++) {
+            for (int dy = -radius - PREDICT_DROP; dy <= radius; dy++) {
                 for (int dz = -radius; dz <= radius; dz++) {
                     BlockPos base = center.add(dx, dy, dz);
-                    if (!isBase(mc.world.getBlockState(base)) || !mc.world.isAir(base.up())) continue;
+                    if (!Targets.canHoldCrystal(mc.world, base)) continue;
                     if (crystalBox(base).squaredMagnitude(eye) > reach) continue;
 
                     float self = selfDamage(crystalCenter(base), mc.world);
@@ -863,21 +933,46 @@ public class AutoCrystal extends Module {
     private List<Target> targets() {
         List<Target> targets = new ArrayList<>();
         double range = targetRange.get() * targetRange.get();
-        int ticks = predict.get() ? Math.min(MathHelper.ceil(LatencyManager.get().rtt() / 50.0), MAX_PREDICT_TICKS) : 0;
+        int ticks = predictTicks();
 
         for (PlayerEntity player : mc.world.getPlayers()) {
             if (player == mc.player || !player.isAlive() || Friends.get().isFriend(player)) continue;
             if (ExplosionDamage.isInvulnerable(player) || player.squaredDistanceTo(mc.player) > range) continue;
-
-            Box box = MotionTracker.get().predict(player, ticks);
-            Vec3d feet = new Vec3d((box.minX + box.maxX) / 2, box.minY, (box.minZ + box.maxZ) / 2);
-            float health = player.getHealth() + player.getAbsorptionAmount();
-            LongSet gaps = new LongOpenHashSet();
-            for (BlockPos cell : Targets.ring(Targets.columns(Targets.box(player)), 0)) gaps.add(cell.asLong());
-            targets.add(new Target(player, box, feet, health, minDamage(player, health), gaps));
+            targets.add(makeTarget(player, ticks));
         }
 
         return targets;
+    }
+
+    private int predictTicks() {
+        return predict.get() ? Math.min(MathHelper.ceil(LatencyManager.get().rtt() / 50.0), MAX_PREDICT_TICKS) : 0;
+    }
+
+    private Target makeTarget(PlayerEntity player, int ticks) {
+        Box box = MotionTracker.get().predict(player, ticks);
+        Vec3d feet = new Vec3d((box.minX + box.maxX) / 2, box.minY, (box.minZ + box.maxZ) / 2);
+        float health = player.getHealth() + player.getAbsorptionAmount();
+        LongSet gaps = new LongOpenHashSet();
+        for (BlockPos cell : Targets.ring(Targets.columns(Targets.box(player)), 0)) gaps.add(cell.asLong());
+        return new Target(player, box, feet, health, minDamage(player, health), gaps);
+    }
+
+    private long signature() {
+        long hash = position(mc.player.getEntityPos());
+        double range = targetRange.get() * targetRange.get();
+
+        for (PlayerEntity player : mc.world.getPlayers()) {
+            if (player == mc.player || player.squaredDistanceTo(mc.player) > range) continue;
+            hash = hash * 31 + player.getId();
+            hash = hash * 31 + position(MotionTracker.get().position(player));
+        }
+        return hash;
+    }
+
+    private static long position(Vec3d pos) {
+        long hash = Double.doubleToLongBits(pos.x);
+        hash = hash * 31 + Double.doubleToLongBits(pos.y);
+        return hash * 31 + Double.doubleToLongBits(pos.z);
     }
 
     private float minDamage(PlayerEntity player, float health) {

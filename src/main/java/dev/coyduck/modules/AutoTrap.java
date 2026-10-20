@@ -298,10 +298,7 @@ public class AutoTrap extends Module {
         if (!Targets.isBase(mc.world.getBlockState(base))) return true;
 
         AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
-        if (autoCrystal == null || !autoCrystal.fillsGaps() || !mc.world.getBlockState(cell).isAir()) return true;
-
-        double range = autoCrystal.placeRange();
-        return new Box(base).squaredMagnitude(mc.player.getEyePos()) > range * range;
+        return autoCrystal == null || target == null || !autoCrystal.wouldFillGap(cell, target);
     }
 
     private void add(List<BlockPos> positions, BlockPos pos) {

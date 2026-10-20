@@ -86,6 +86,11 @@ public final class HurtTracker {
         expected.put(id, new Expected(now, raw));
     }
 
+    public void forgetExpected(LivingEntity entity, long since) {
+        Expected pending = expected.get(entity.getId());
+        if (pending != null && pending.time >= since) expected.remove(entity.getId());
+    }
+
     public float effective(LivingEntity entity, float raw, long arrival) {
         return damage(entity, raw, arrival, false);
     }
