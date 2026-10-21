@@ -12,6 +12,8 @@ import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.ExperienceOrbEntity;
+import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.network.packet.s2c.play.EntitiesDestroyS2CPacket;
 import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
@@ -29,6 +31,7 @@ public final class CrystalTracker {
     private static final long OWN_LIFETIME = 10_000;
     private static final float MIN_RADIUS = 2.0f;
     private static final long REMOVED_LIFETIME = 2_000;
+    private static final double DROP_KILL_RANGE = 6.0;
 
     private final Long2LongOpenHashMap placing = new Long2LongOpenHashMap();
     private final Int2LongOpenHashMap own = new Int2LongOpenHashMap();
@@ -87,11 +90,24 @@ public final class CrystalTracker {
 
     public void explodeAt(Vec3d center) {
         double range = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
+        double dropRange = DROP_KILL_RANGE * DROP_KILL_RANGE;
         long duration = LatencyManager.get().timeout();
 
         for (Entity entity : mc.world.getEntities()) {
-            if (entity instanceof EndCrystalEntity && entity.getEntityPos().squaredDistanceTo(center) <= range) kill(entity, duration);
+            double distance = entity.getEntityPos().squaredDistanceTo(center);
+            if (entity instanceof EndCrystalEntity && distance <= range) kill(entity, duration);
+            else if ((entity instanceof ItemEntity || entity instanceof ExperienceOrbEntity) && distance <= dropRange) kill(entity, duration);
         }
+    }
+
+    public boolean placingNear(Vec3d center, double radius) {
+        long now = Util.getMeasuringTimeMs();
+        for (var entry : placing.long2LongEntrySet()) {
+            if (now >= entry.getLongValue()) continue;
+            BlockPos base = BlockPos.fromLong(entry.getLongKey());
+            if (new Vec3d(base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5).squaredDistanceTo(center) <= radius * radius) return true;
+        }
+        return false;
     }
 
     public Vec3d removedPosition(int id) {

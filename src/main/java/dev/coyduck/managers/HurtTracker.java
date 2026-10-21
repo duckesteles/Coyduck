@@ -180,7 +180,7 @@ public final class HurtTracker {
 
         boolean immune = self
             ? arrival < current.start + SELF_WINDOW - tick() - MARGIN - LatencyManager.get().jitter()
-            : arrival < current.start + window() + MARGIN;
+            : arrival < current.start + window() + Math.max(2L * LatencyManager.get().jitter(), MARGIN / 2);
         if (!immune) return full;
 
         if (Float.isNaN(current.raw)) return self || !current.explosion ? full : 0;

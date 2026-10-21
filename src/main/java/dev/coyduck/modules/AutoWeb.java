@@ -165,7 +165,9 @@ public class AutoWeb extends Module {
             int ticks = Math.min(MathHelper.ceil(LatencyManager.get().rtt() / 50.0) + 1, MAX_PREDICT_TICKS);
             LongSet current = new LongOpenHashSet(cells);
             for (long key : cells(MotionTracker.get().predict(target, ticks))) {
-                if (current.contains(key) || !Targets.canHoldCrystal(mc.world, BlockPos.fromLong(key).down())) cells.add(key);
+                BlockPos cell = BlockPos.fromLong(key);
+                boolean crystalSpot = Targets.isBase(mc.world.getBlockState(cell.down())) && mc.world.getBlockState(cell).isAir();
+                if (current.contains(key) || !crystalSpot) cells.add(key);
             }
         }
 
