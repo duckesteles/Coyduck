@@ -27,6 +27,7 @@ import net.minecraft.entity.EntityStatuses;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
 import net.minecraft.network.packet.s2c.play.InventoryS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
@@ -34,6 +35,7 @@ import net.minecraft.network.packet.s2c.play.ScreenHandlerSlotUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.SetPlayerInventoryS2CPacket;
 import net.minecraft.screen.PlayerScreenHandler;
 import net.minecraft.screen.ScreenHandler;
+import net.minecraft.util.Hand;
 import net.minecraft.util.Util;
 
 import java.util.List;
@@ -107,6 +109,13 @@ public class AutoTotem extends Module {
         .build()
     );
 
+    private final Setting<Boolean> totemGap = sgGeneral.add(new BoolSetting.Builder()
+        .name("totem-gap")
+        .description("Right clicking with a totem in your main hand eats a golden apple, then puts the totem back once you let go.")
+        .defaultValue(true)
+        .build()
+    );
+
     private final Setting<Boolean> closeContainers = sgGeneral.add(new BoolSetting.Builder()
         .name("close-containers")
         .description("Closes an open container when you pop. The server never reports the offhand while a container is open, so the refill could not be confirmed.")
@@ -138,6 +147,8 @@ public class AutoTotem extends Module {
     private int previousSlot = NONE;
     private int expectedSlot = NONE;
     private int resumeTicks;
+    private int gapReturn = NONE;
+    private int gapSource = NONE;
 
     private int totems;
     private boolean warned;
@@ -204,7 +215,7 @@ public class AutoTotem extends Module {
         if (pending && Util.getMeasuringTimeMs() >= pendingUntil) retry();
         refill(false);
         if (!pending && !confirmed && isTotem(mc.player.getOffHandStack()) && Util.getMeasuringTimeMs() >= nextVerify) verify();
-        updateMainhand();
+        if (!tickGap()) updateMainhand();
 
         totems = InventoryManager.get().count(AutoTotem::isTotem);
         if (pending) return;
@@ -375,6 +386,44 @@ public class AutoTotem extends Module {
         }
 
         return (skipMask & (1 << server)) == 0 && isTotem(inventory.stack(server)) ? server : NONE;
+    }
+
+    private boolean tickGap() {
+        InventoryManager inventory = InventoryManager.get();
+
+        if (gapReturn != NONE) {
+            if (mc.player.isUsingItem() || mc.options.useKey.isPressed()) return true;
+
+            if (gapSource != NONE) inventory.swapWithHotbar(gapSource, gapReturn);
+            else inventory.select(gapReturn);
+            gapReturn = NONE;
+            gapSource = NONE;
+            return false;
+        }
+
+        if (!totemGap.get() || !mc.options.useKey.isPressed() || mc.player.isUsingItem() || mc.currentScreen != null) return false;
+
+        int selected = inventory.selectedSlot();
+        if (!isTotem(inventory.stack(selected))) return false;
+
+        int hotbar = findGap(0, InventoryManager.HOTBAR_END);
+        if (hotbar != NONE) {
+            if (!inventory.select(hotbar)) return false;
+        } else {
+            int source = findGap(InventoryManager.HOTBAR_END, InventoryManager.MAIN_END);
+            if (source == NONE || !inventory.swapWithHotbar(source, selected)) return false;
+            gapSource = source;
+        }
+
+        gapReturn = selected;
+        mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND);
+        return true;
+    }
+
+    private static int findGap(int from, int to) {
+        InventoryManager inventory = InventoryManager.get();
+        int slot = inventory.find(stack -> stack.isOf(Items.ENCHANTED_GOLDEN_APPLE), from, to);
+        return slot != NONE ? slot : inventory.find(stack -> stack.isOf(Items.GOLDEN_APPLE), from, to);
     }
 
     private void updateMainhand() {

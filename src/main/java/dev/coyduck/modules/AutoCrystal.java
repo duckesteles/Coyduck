@@ -178,7 +178,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> pauseEating = sgGeneral.add(new BoolSetting.Builder()
         .name("pause-eating")
-        .description("Pauses placing while you eat. When off, crystals are swapped into your hand and back in the same packet batch, which keeps the eating going.")
+        .description("Pauses placing while you eat, even from the offhand. While you eat from the main hand nothing is ever switched into it, since that cancels the eating.")
         .defaultValue(false)
         .build()
     );
@@ -704,7 +704,7 @@ public class AutoCrystal extends Module {
         if (best == null) return false;
 
         if (!rotationReady(new Box(best), crystalCenter(best), placeRange.get() + 1, PLACE_PRIORITY)) return false;
-        if (!InteractionManager.get().placeCrystal(best, switchMode.get(), swing.get(), null, !pauseEating.get())) return false;
+        if (!InteractionManager.get().placeCrystal(best, switchMode.get(), swing.get(), null)) return false;
 
         clearing.put(best.asLong(), Util.getMeasuringTimeMs() + 2L * LatencyManager.get().timeout());
         placeBudget--;
@@ -769,7 +769,7 @@ public class AutoCrystal extends Module {
                 Vec3d center = crystalCenter(base);
                 if (!rotationReady(new Box(base), center, placeRange.get() + 1, GAP_PRIORITY)) return;
 
-                if (!InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), null, !pauseEating.get())) return;
+                if (!InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), null)) return;
                 gapBudget--;
                 status = "gap";
                 lastTarget = target.player;
@@ -907,7 +907,7 @@ public class AutoCrystal extends Module {
         }
 
         Runnable after = idPredict.get() ? () -> predictAttack(base, choice) : null;
-        if (!InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), after, !pauseEating.get())) {
+        if (!InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), after)) {
             status = "switch";
             return;
         }
@@ -962,8 +962,7 @@ public class AutoCrystal extends Module {
         BlockPos base = best;
         BlockHitResult hit = bestHit;
         Runnable place = () -> interaction.place(base, hit, swing.get());
-        if (pauseEating.get()) InventoryManager.get().withItem(blockSlot, switchMode.get(), place);
-        else InventoryManager.get().withItemWhileEating(blockSlot, switchMode.get(), place);
+        InventoryManager.get().withItem(blockSlot, switchMode.get(), place);
 
         if (!isBase(mc.world.getBlockState(base))) return;
         placeCrystal(base, bestChoice);
