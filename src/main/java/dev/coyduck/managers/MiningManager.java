@@ -13,6 +13,7 @@ import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.effect.StatusEffectInstance;
@@ -49,6 +50,7 @@ public final class MiningManager {
     private int holdHotbar = -1;
     private int holdAttempts;
     private long nextHold;
+    private long blockedSince;
 
     private BlockPos pos;
     private Direction side;
@@ -322,7 +324,14 @@ public final class MiningManager {
         }
 
         if (Util.getMeasuringTimeMs() < nextHold || !backgroundReady(state)) return;
-        if (InventoryManager.get().wantsToEat() || mc.player.getHealth() + mc.player.getAbsorptionAmount() <= HOLD_MIN_HEALTH) return;
+        if (InventoryManager.get().wantsToEat() || mc.player.getHealth() + mc.player.getAbsorptionAmount() <= HOLD_MIN_HEALTH
+            || mc.player.getMainHandStack().contains(DataComponentTypes.DEATH_PROTECTION)) {
+            long now = Util.getMeasuringTimeMs();
+            if (blockedSince == 0) blockedSince = now;
+            else if (now - blockedSince > LatencyManager.get().timeout()) clearBackground();
+            return;
+        }
+        blockedSince = 0;
 
         if (++holdAttempts > MAX_HOLDS) {
             clearBackground();
@@ -363,6 +372,7 @@ public final class MiningManager {
         unhold();
         background = null;
         holdAttempts = 0;
+        blockedSince = 0;
     }
 
     private void update(BlockState state) {

@@ -169,7 +169,11 @@ public final class HurtTracker {
     public long releaseTime(LivingEntity entity) {
         Window latest = window(entity, Long.MAX_VALUE);
         if (latest == null) return 0;
-        return latest.start + window() + MARGIN - LatencyManager.get().rtt() / 2;
+        return latest.start + window() + targetMargin() - LatencyManager.get().rtt() / 2;
+    }
+
+    private static long targetMargin() {
+        return Math.max(2L * LatencyManager.get().jitter(), MARGIN / 2);
     }
 
     private float damage(LivingEntity entity, float raw, long arrival, boolean self) {
@@ -180,7 +184,7 @@ public final class HurtTracker {
 
         boolean immune = self
             ? arrival < current.start + SELF_WINDOW - tick() - MARGIN - LatencyManager.get().jitter()
-            : arrival < current.start + window() + Math.max(2L * LatencyManager.get().jitter(), MARGIN / 2);
+            : arrival < current.start + window() + targetMargin();
         if (!immune) return full;
 
         if (Float.isNaN(current.raw)) return self || !current.explosion ? full : 0;

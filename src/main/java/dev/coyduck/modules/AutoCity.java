@@ -222,7 +222,7 @@ public class AutoCity extends Module {
         MiningManager mining = MiningManager.get();
         target = Targets.find(targetRange.get(), current != null ? target : null);
 
-        if (target == null || (needCrystals.get() && !hasCrystals())) {
+        if (target == null || (needCrystals.get() && !InteractionManager.get().hasCrystals())) {
             mining.release(this);
             current = null;
             return;
@@ -376,9 +376,5 @@ public class AutoCity extends Module {
         }
 
         return best;
-    }
-
-    private static boolean hasCrystals() {
-        return InventoryManager.get().find(stack -> stack.isOf(Items.END_CRYSTAL), 0, InventoryManager.MAIN_END) != -1;
     }
 }

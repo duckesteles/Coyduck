@@ -5,6 +5,7 @@ import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
+import dev.coyduck.managers.MiningManager;
 import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
@@ -223,7 +224,7 @@ public class AutoTrap extends Module {
     }
 
     private void run() {
-        target = Targets.find(targetRange.get());
+        target = Targets.find(targetRange.get(), target);
         if (target == null || budget <= 0) return;
 
         Box box = Targets.box(target);
@@ -293,6 +294,7 @@ public class AutoTrap extends Module {
 
     private boolean escape(BlockPos cell, int open) {
         if (!mc.world.getBlockState(cell).isReplaceable()) return false;
+        if (MiningManager.get().isMining(cell) || cell.equals(MiningManager.get().background())) return false;
         if (open > 1) return true;
 
         BlockPos base = cell.down();

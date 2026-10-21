@@ -178,7 +178,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> pauseEating = sgGeneral.add(new BoolSetting.Builder()
         .name("pause-eating")
-        .description("Pauses placing while you eat, even from the offhand. While you eat from the main hand nothing is ever switched into it, since that cancels the eating.")
+        .description("Pauses placing while you eat. When off, crystals are swapped into your hand and back in one packet batch, which keeps the eating going. Silent switching is never used while eating.")
         .defaultValue(false)
         .build()
     );
@@ -689,7 +689,6 @@ public class AutoCrystal extends Module {
         if (gap == null) return false;
 
         Vec3d gapCenter = Vec3d.ofCenter(gap);
-        long arrival = Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2;
         BlockPos best = null;
         double bestDistance = CLEAR_RANGE * CLEAR_RANGE;
 
@@ -697,14 +696,14 @@ public class AutoCrystal extends Module {
             Vec3d center = crystalCenter(base);
             double distance = center.squaredDistanceTo(gapCenter);
             if (distance > bestDistance) continue;
-            if (!selfSafe(center, health, arrival, mc.world) || hurtsFriend(center, mc.world)) continue;
+            if (!selfSafe(center, health, 0, mc.world) || hurtsFriend(center, mc.world)) continue;
             best = base;
             bestDistance = distance;
         }
         if (best == null) return false;
 
         if (!rotationReady(new Box(best), crystalCenter(best), placeRange.get() + 1, PLACE_PRIORITY)) return false;
-        if (!InteractionManager.get().placeCrystal(best, switchMode.get(), swing.get(), null)) return false;
+        if (!InteractionManager.get().placeCrystal(best, switchMode.get(), swing.get(), null, !pauseEating.get())) return false;
 
         clearing.put(best.asLong(), Util.getMeasuringTimeMs() + 2L * LatencyManager.get().timeout());
         placeBudget--;
@@ -753,7 +752,9 @@ public class AutoCrystal extends Module {
     }
 
     private boolean selfSafe(Vec3d crystal, float health, long arrival, BlockView view) {
-        if (selfDamage(crystal, view) >= health) return false;
+        float full = selfDamage(crystal, view);
+        if (full >= health) return false;
+        if (arrival == 0) return full <= maxSelfDamage.get();
         return HurtTracker.get().effectiveOnSelf(selfRaw(crystal, view), arrival) <= maxSelfDamage.get();
     }
 
@@ -769,7 +770,7 @@ public class AutoCrystal extends Module {
                 Vec3d center = crystalCenter(base);
                 if (!rotationReady(new Box(base), center, placeRange.get() + 1, GAP_PRIORITY)) return;
 
-                if (!InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), null)) return;
+                if (!InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), null, !pauseEating.get())) return;
                 gapBudget--;
                 status = "gap";
                 lastTarget = target.player;
@@ -785,8 +786,7 @@ public class AutoCrystal extends Module {
         if (CrystalTracker.get().isPlacing(base) || blocked(base) || !inPlaceRange(base) || !breakable(base) || overlapsOwnCells(base)) return false;
 
         Vec3d center = crystalCenter(base);
-        long arrival = Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2;
-        if (!selfSafe(center, health, arrival, mc.world) || hurtsFriend(center, mc.world)) return false;
+        if (!selfSafe(center, health, 0, mc.world) || hurtsFriend(center, mc.world)) return false;
 
         float raw = ExplosionDamage.crystalRaw(target.player, target.feet, target.box, center, mc.world);
         return ExplosionDamage.mitigate(target.player, raw) >= facePlaceDamage.get();
@@ -907,7 +907,7 @@ public class AutoCrystal extends Module {
         }
 
         Runnable after = idPredict.get() ? () -> predictAttack(base, choice) : null;
-        if (!InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), after)) {
+        if (!InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), after, !pauseEating.get())) {
             status = "switch";
             return;
         }
@@ -962,7 +962,8 @@ public class AutoCrystal extends Module {
         BlockPos base = best;
         BlockHitResult hit = bestHit;
         Runnable place = () -> interaction.place(base, hit, swing.get());
-        InventoryManager.get().withItem(blockSlot, switchMode.get(), place);
+        if (pauseEating.get()) InventoryManager.get().withItem(blockSlot, switchMode.get(), place);
+        else InventoryManager.get().withItemWhileEating(blockSlot, switchMode.get(), place);
 
         if (!isBase(mc.world.getBlockState(base))) return;
         placeCrystal(base, bestChoice);
@@ -1055,11 +1056,12 @@ public class AutoCrystal extends Module {
         }
         if (!reachable) return null;
 
-        if (selfDamage(crystal, view) >= health) {
+        float self = selfDamage(crystal, view);
+        if (self >= health) {
             rejectedSelf = true;
             return null;
         }
-        float self = HurtTracker.get().effectiveOnSelf(selfRaw(crystal, view), Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2);
+        if (arrival != 0) self = HurtTracker.get().effectiveOnSelf(selfRaw(crystal, view), arrival);
         if (self > maxSelfDamage.get()) {
             rejectedSelf = true;
             return null;
@@ -1207,7 +1209,7 @@ public class AutoCrystal extends Module {
                 for (int dz = -radius; dz <= radius; dz++) {
                     BlockPos base = eye.add(dx, dy, dz);
                     if (!inPlaceRange(base) || !breakable(base) || !isBase(mc.world.getBlockState(base))) continue;
-                    if (!mc.world.isAir(base.up()) || CrystalTracker.get().isPlacing(base) || blocked(base)) continue;
+                    if (!mc.world.isAir(base.up()) || CrystalTracker.get().placingOverlaps(base) || blocked(base)) continue;
                     if (overlapsOwnCells(base)) continue;
                     candidates.add(base);
                 }

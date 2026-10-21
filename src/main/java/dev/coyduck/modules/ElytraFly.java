@@ -58,7 +58,12 @@ public class ElytraFly extends Module {
         .build()
     );
 
+    private static final int TAKEOFF_TRIES = 5;
+    private static final int TAKEOFF_WINDOW = 40;
+
     private boolean fluidFlight;
+    private int takeoffTries;
+    private int airTicks;
     private boolean wasGliding;
 
     public ElytraFly() {
@@ -82,7 +87,11 @@ public class ElytraFly extends Module {
         if (mc.player == null) return;
 
         if (inFluid()) {
-            if (wasGliding) fluidFlight = true;
+            if (wasGliding) {
+                fluidFlight = true;
+                takeoffTries = TAKEOFF_TRIES;
+            }
+            airTicks = 0;
             return;
         }
         if (mc.player.isOnGround()) {
@@ -92,9 +101,14 @@ public class ElytraFly extends Module {
         }
 
         wasGliding = mc.player.isGliding();
-        if (wasGliding || !fluidFlight) return;
+        if (!fluidFlight) return;
+        if (++airTicks > TAKEOFF_WINDOW || takeoffTries <= 0) {
+            fluidFlight = false;
+            return;
+        }
+        if (wasGliding) return;
 
-        fluidFlight = false;
+        takeoffTries--;
         if (canTakeoff() && mc.player.checkGliding()) {
             mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
         }

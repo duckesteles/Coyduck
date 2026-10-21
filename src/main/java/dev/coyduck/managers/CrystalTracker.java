@@ -100,6 +100,16 @@ public final class CrystalTracker {
         }
     }
 
+    public boolean placingOverlaps(BlockPos base) {
+        long now = Util.getMeasuringTimeMs();
+        for (var entry : placing.long2LongEntrySet()) {
+            if (now >= entry.getLongValue()) continue;
+            BlockPos other = BlockPos.fromLong(entry.getLongKey());
+            if (Math.abs(other.getX() - base.getX()) <= 1 && Math.abs(other.getY() - base.getY()) <= 1 && Math.abs(other.getZ() - base.getZ()) <= 1) return true;
+        }
+        return false;
+    }
+
     public boolean placingNear(Vec3d center, double radius) {
         long now = Util.getMeasuringTimeMs();
         for (var entry : placing.long2LongEntrySet()) {

@@ -192,6 +192,7 @@ public class LadderTrap extends Module {
         BlockState floorState = mc.world.getBlockState(floor);
         if (floorState.isOf(Blocks.SCAFFOLDING) || BlockRules.isInteractable(floorState.getBlock())) return;
         if (ScaffoldingBlock.calculateDistance(mc.world, cell) >= ScaffoldingBlock.MAX_DISTANCE) return;
+        if (mc.player.getY() > cell.getY() + 1 && !mc.player.isSneaking()) return;
         if (new Box(floor).squaredMagnitude(mc.player.getEyePos()) >= reach() * reach()) return;
 
         BlockHitResult hit = new BlockHitResult(Vec3d.ofCenter(floor).add(0, 0.5, 0), Direction.UP, floor, false);
@@ -201,7 +202,8 @@ public class LadderTrap extends Module {
     private boolean usableWall(BlockPos wall, Direction side) {
         BlockState state = mc.world.getBlockState(wall);
         if (!state.isSideSolidFullSquare(mc.world, wall, side) || BlockRules.isInteractable(state.getBlock())) return false;
-        return !MiningManager.get().isMining(wall) && MiningTracker.get().mining(wall) == null && !MiningTracker.get().wasBroken(wall, BROKEN_TIME);
+        if (MiningManager.get().isMining(wall) || wall.equals(MiningManager.get().background())) return false;
+        return MiningTracker.get().mining(wall) == null && !MiningTracker.get().wasBroken(wall, BROKEN_TIME);
     }
 
     private boolean blocked(BlockState state, BlockPos cell, Box box) {

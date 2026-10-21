@@ -7,6 +7,7 @@ import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MotionTracker;
 import dev.coyduck.utils.Targets;
+import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -200,7 +201,7 @@ public class AutoWeb extends Module {
     }
 
     private LongSet cells(Box box) {
-        LongSet cells = new LongOpenHashSet();
+        LongSet cells = new LongLinkedOpenHashSet();
         int bottom = MathHelper.floor(box.minY);
         int top = MathHelper.floor(box.maxY - 1.0E-4);
 
