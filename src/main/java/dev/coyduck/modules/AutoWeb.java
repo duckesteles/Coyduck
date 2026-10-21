@@ -134,7 +134,7 @@ public class AutoWeb extends Module {
 
         switch (event.packet) {
             case BlockUpdateS2CPacket packet when packet.getState().isReplaceable() && packet.getPos().isWithinDistance(target.getBlockPos(), 3) -> pass();
-            case ChunkDeltaUpdateS2CPacket ignored -> pass();
+            case ChunkDeltaUpdateS2CPacket packet when Targets.touches(packet, target.getBlockPos(), 3) -> pass();
             default -> {}
         }
     }

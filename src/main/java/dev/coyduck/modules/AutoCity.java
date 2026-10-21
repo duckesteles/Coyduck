@@ -198,7 +198,7 @@ public class AutoCity extends Module {
 
         boolean relevant = switch (event.packet) {
             case BlockUpdateS2CPacket packet -> packet.getPos().isWithinDistance(target.getBlockPos(), 3);
-            case ChunkDeltaUpdateS2CPacket ignored -> true;
+            case ChunkDeltaUpdateS2CPacket packet -> Targets.touches(packet, target.getBlockPos(), 3);
             default -> false;
         };
 

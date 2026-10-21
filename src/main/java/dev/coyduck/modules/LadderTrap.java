@@ -112,7 +112,7 @@ public class LadderTrap extends Module {
 
         boolean relevant = switch (event.packet) {
             case BlockUpdateS2CPacket packet -> packet.getPos().isWithinDistance(target.getBlockPos(), 2);
-            case ChunkDeltaUpdateS2CPacket ignored -> true;
+            case ChunkDeltaUpdateS2CPacket packet -> Targets.touches(packet, target.getBlockPos(), 2);
             default -> false;
         };
 
@@ -192,7 +192,7 @@ public class LadderTrap extends Module {
         BlockState floorState = mc.world.getBlockState(floor);
         if (floorState.isOf(Blocks.SCAFFOLDING) || BlockRules.isInteractable(floorState.getBlock())) return;
         if (ScaffoldingBlock.calculateDistance(mc.world, cell) >= ScaffoldingBlock.MAX_DISTANCE) return;
-        if (mc.player.getY() > cell.getY() + 1 && !mc.player.isSneaking()) return;
+        if (mc.player.getY() > cell.getY() + 1 - 1.0E-5 && !mc.player.isSneaking()) return;
         if (new Box(floor).squaredMagnitude(mc.player.getEyePos()) >= reach() * reach()) return;
 
         BlockHitResult hit = new BlockHitResult(Vec3d.ofCenter(floor).add(0, 0.5, 0), Direction.UP, floor, false);

@@ -11,6 +11,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.predicate.entity.EntityPredicates;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.util.math.BlockPos;
@@ -153,6 +154,12 @@ public final class Targets {
         List<BlockPos> cells = ring(columns, 0);
         for (long key : columns) cells.add(BlockPos.fromLong(key).down());
         return cells;
+    }
+
+    public static boolean touches(ChunkDeltaUpdateS2CPacket packet, BlockPos center, double distance) {
+        boolean[] found = {false};
+        packet.visitUpdates((pos, state) -> found[0] |= pos.isWithinDistance(center, distance));
+        return found[0];
     }
 
     public static boolean isBase(BlockState state) {

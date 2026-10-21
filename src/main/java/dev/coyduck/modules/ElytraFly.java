@@ -80,6 +80,8 @@ public class ElytraFly extends Module {
 
         fluidFlight = false;
         wasGliding = false;
+        takeoffTries = 0;
+        airTicks = 0;
     }
 
     @EventHandler
@@ -87,7 +89,7 @@ public class ElytraFly extends Module {
         if (mc.player == null) return;
 
         if (inFluid()) {
-            if (wasGliding) {
+            if (wasGliding || fluidFlight) {
                 fluidFlight = true;
                 takeoffTries = TAKEOFF_TRIES;
             }

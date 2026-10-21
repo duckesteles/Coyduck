@@ -193,7 +193,7 @@ public class AutoTrap extends Module {
 
         boolean relevant = switch (event.packet) {
             case BlockUpdateS2CPacket packet -> packet.getPos().isWithinDistance(target.getBlockPos(), 3);
-            case ChunkDeltaUpdateS2CPacket ignored -> true;
+            case ChunkDeltaUpdateS2CPacket packet -> Targets.touches(packet, target.getBlockPos(), 3);
             case EntitiesDestroyS2CPacket ignored -> true;
             default -> false;
         };
@@ -224,7 +224,9 @@ public class AutoTrap extends Module {
     }
 
     private void run() {
-        target = Targets.find(targetRange.get(), target);
+        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
+        PlayerEntity focus = autoCrystal == null ? null : autoCrystal.target();
+        target = Targets.find(targetRange.get(), Targets.valid(focus, targetRange.get()) ? focus : target);
         if (target == null || budget <= 0) return;
 
         Box box = Targets.box(target);
