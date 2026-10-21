@@ -1,8 +1,6 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
-import dev.coyduck.events.PacketApplyEvent;
-import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.RotationManager;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -19,8 +17,6 @@ import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.MovementType;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
-import net.minecraft.network.packet.s2c.play.EntityTrackerUpdateS2CPacket;
-import net.minecraft.util.Util;
 import net.minecraft.util.PlayerInput;
 
 public class ElytraFly extends Module {
@@ -62,14 +58,8 @@ public class ElytraFly extends Module {
         .build()
     );
 
-    private static final int FLUID_GRACE = 40;
-    private static final int FLAGS = 0;
-
     private boolean fluidFlight;
     private boolean wasGliding;
-    private int ticks;
-    private int fluidSince;
-    private long takeoffUntil;
 
     public ElytraFly() {
         super(Coyduck.CATEGORY, "elytra-fly+", "Flies with an elytra at a set speed in any direction and picks the flight back up after water or lava.");
@@ -85,31 +75,19 @@ public class ElytraFly extends Module {
 
         fluidFlight = false;
         wasGliding = false;
-        takeoffUntil = 0;
     }
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
-        ticks++;
         if (mc.player == null) return;
 
-        if (takeoffUntil != 0 && Util.getMeasuringTimeMs() > takeoffUntil) {
-            takeoffUntil = 0;
-            if (mc.player.isGliding()) mc.player.stopGliding();
+        if (inFluid()) {
+            if (wasGliding) fluidFlight = true;
+            return;
         }
-
         if (mc.player.isOnGround()) {
             fluidFlight = false;
             wasGliding = false;
-            return;
-        }
-        if (inFluid()) {
-            if (wasGliding && !fluidFlight) {
-                fluidFlight = true;
-                fluidSince = ticks;
-                wasGliding = false;
-            }
-            if (fluidFlight && ticks - fluidSince > FLUID_GRACE) fluidFlight = false;
             return;
         }
 
@@ -119,28 +97,17 @@ public class ElytraFly extends Module {
         fluidFlight = false;
         if (canTakeoff() && mc.player.checkGliding()) {
             mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
-            takeoffUntil = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
         }
-    }
-
-    @EventHandler
-    private void onPacket(PacketApplyEvent.Post event) {
-        if (takeoffUntil == 0 || mc.player == null) return;
-        if (event.packet instanceof EntityTrackerUpdateS2CPacket packet && packet.id() == mc.player.getId()
-            && packet.trackedValues().stream().anyMatch(entry -> entry.id() == FLAGS)) takeoffUntil = 0;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onMove(PlayerMoveEvent event) {
         if (event.type != MovementType.SELF || mc.player == null || !hasElytra()) return;
 
-        if (mc.player.isOnGround() || takeoffUntil != 0) return;
-
-        boolean fluid = inFluid();
-        if (fluid ? !fluids.get() : !mc.player.isGliding()) return;
+        boolean fluid = fluids.get() && inFluid();
+        if (!fluid && !mc.player.isGliding()) return;
         if (fluid) {
-            fluidFlight = true;
-            fluidSince = ticks;
+            if (!mc.player.isOnGround()) fluidFlight = true;
             mc.player.setSprinting(false);
             mc.player.setSwimming(false);
         }
@@ -167,7 +134,7 @@ public class ElytraFly extends Module {
     }
 
     private boolean canTakeoff() {
-        return hasElytra() && !mc.player.hasVehicle() && !mc.player.getAbilities().flying && !mc.player.isClimbing();
+        return hasElytra() && !mc.player.hasVehicle() && !mc.player.getAbilities().flying;
     }
 
     private boolean hasElytra() {
