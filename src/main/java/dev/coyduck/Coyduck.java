@@ -17,7 +17,6 @@ import dev.coyduck.modules.AutoTrap;
 import dev.coyduck.modules.AutoWeb;
 import dev.coyduck.modules.ElytraFly;
 import dev.coyduck.modules.LadderTrap;
-import dev.coyduck.modules.Phase;
 import dev.coyduck.modules.Surround;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.addons.GithubRepo;
@@ -55,7 +54,6 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new AutoWeb());
         Modules.get().add(new LadderTrap());
         Modules.get().add(new ElytraFly());
-        Modules.get().add(new Phase());
     }
 
     @Override
