@@ -40,7 +40,7 @@ public final class ConfigSaver {
 
     @EventHandler
     private void onTick(TickEvent.Post event) {
-        if (++ticks < INTERVAL) return;
+        if (mc.world == null || ++ticks < INTERVAL) return;
         if (inCombat()) {
             ticks = INTERVAL - RETRY;
             return;

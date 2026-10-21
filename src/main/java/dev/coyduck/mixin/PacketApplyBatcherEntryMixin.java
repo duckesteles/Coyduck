@@ -1,5 +1,6 @@
 package dev.coyduck.mixin;
 
+import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
 import meteordevelopment.meteorclient.MeteorClient;
 import net.minecraft.network.NetworkSide;
@@ -27,13 +28,21 @@ public abstract class PacketApplyBatcherEntryMixin {
     @Inject(method = "apply", at = @At("HEAD"), cancellable = true)
     private void coyduck$onApplyHead(CallbackInfo ci) {
         if (!relevant()) return;
-        if (MeteorClient.EVENT_BUS.post(PacketApplyEvent.Pre.get(packet)).isCancelled()) ci.cancel();
+        try {
+            if (MeteorClient.EVENT_BUS.post(PacketApplyEvent.Pre.get(packet)).isCancelled()) ci.cancel();
+        } catch (RuntimeException e) {
+            Coyduck.LOG.error("Packet handler failed", e);
+        }
     }
 
     @Inject(method = "apply", at = @At("TAIL"))
     private void coyduck$onApplyTail(CallbackInfo ci) {
         if (!relevant()) return;
-        MeteorClient.EVENT_BUS.post(PacketApplyEvent.Post.get(packet));
+        try {
+            MeteorClient.EVENT_BUS.post(PacketApplyEvent.Post.get(packet));
+        } catch (RuntimeException e) {
+            Coyduck.LOG.error("Packet handler failed", e);
+        }
     }
 
     @Unique

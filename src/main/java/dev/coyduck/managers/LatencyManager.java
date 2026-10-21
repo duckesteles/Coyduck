@@ -1,5 +1,6 @@
 package dev.coyduck.managers;
 
+import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientWorldAccessor;
@@ -7,6 +8,8 @@ import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
+import meteordevelopment.meteorclient.systems.modules.Module;
+import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.network.packet.Packet;
@@ -105,7 +108,7 @@ public final class LatencyManager {
     private void onTick(TickEvent.Post event) {
         if (mc.getNetworkHandler() == null) return;
 
-        if (++probeTimer >= PROBE_INTERVAL) {
+        if (++probeTimer >= PROBE_INTERVAL && Modules.get().getGroup(Coyduck.CATEGORY).stream().anyMatch(Module::isActive)) {
             probeTimer = 0;
             mc.getNetworkHandler().sendPacket(new QueryPingC2SPacket(Util.getMeasuringTimeMs()));
         }

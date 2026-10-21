@@ -21,7 +21,6 @@
   "mixins": [
     "coyduck.mixins.json"
   ],
-  "accessWidener": "coyduck.accesswidener",
   "custom": {
     "meteor-client:color": "251,192,45",
     "modmenu": {
@@ -33,6 +32,7 @@
   "depends": {
     "java": ">=${jdk_version}",
     "minecraft": "${mc_version}",
+    "fabricloader": ">=0.16.0",
     "meteor-client": "*"
   }
 }

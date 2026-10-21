@@ -29,10 +29,6 @@ dependencies {
     modImplementation(libs.meteor.client)
 }
 
-loom {
-    accessWidenerPath = file("src/main/resources/coyduck.accesswidener")
-}
-
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(jdkVersion)

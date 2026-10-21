@@ -2,6 +2,7 @@ package dev.coyduck.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
 import meteordevelopment.meteorclient.MeteorClient;
@@ -22,8 +23,19 @@ public abstract class ClientPlayNetworkHandlerMixin {
 
     @WrapOperation(method = "onBundle", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/packet/Packet;apply(Lnet/minecraft/network/listener/PacketListener;)V"))
     private void coyduck$wrapBundled(Packet<?> packet, PacketListener listener, Operation<Void> original) {
-        if (MeteorClient.EVENT_BUS.post(PacketApplyEvent.Pre.get(packet)).isCancelled()) return;
+        boolean cancelled = false;
+        try {
+            cancelled = MeteorClient.EVENT_BUS.post(PacketApplyEvent.Pre.get(packet)).isCancelled();
+        } catch (RuntimeException e) {
+            Coyduck.LOG.error("Packet handler failed", e);
+        }
+        if (cancelled) return;
+
         original.call(packet, listener);
-        MeteorClient.EVENT_BUS.post(PacketApplyEvent.Post.get(packet));
+        try {
+            MeteorClient.EVENT_BUS.post(PacketApplyEvent.Post.get(packet));
+        } catch (RuntimeException e) {
+            Coyduck.LOG.error("Packet handler failed", e);
+        }
     }
 }
