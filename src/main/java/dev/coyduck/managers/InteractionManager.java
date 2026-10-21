@@ -142,6 +142,10 @@ public final class InteractionManager {
     }
 
     public boolean placeCrystal(BlockPos base, InventoryManager.SwitchMode mode, SwingMode swing, Runnable after) {
+        return placeCrystal(base, mode, swing, after, false);
+    }
+
+    public boolean placeCrystal(BlockPos base, InventoryManager.SwitchMode mode, SwingMode swing, Runnable after, boolean whileEating) {
         BlockHitResult hit = new BlockHitResult(new Vec3d(base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5), Direction.UP, base, false);
 
         if (mc.player.getOffHandStack().isOf(Items.END_CRYSTAL)) {
@@ -159,12 +163,14 @@ public final class InteractionManager {
         int slot = crystalSlot();
         if (slot == -1) return false;
 
-        return InventoryManager.get().withItem(slot, mode, () -> {
+        Runnable place = () -> {
             mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
             swing(swing);
             CrystalTracker.get().placed(base);
             if (after != null) after.run();
-        });
+        };
+        InventoryManager inventory = InventoryManager.get();
+        return whileEating ? inventory.withItemWhileEating(slot, mode, place) : inventory.withItem(slot, mode, place);
     }
 
     private int crystalSlot() {

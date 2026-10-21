@@ -144,8 +144,8 @@ public class AutoCrystal extends Module {
 
     private final Setting<Integer> placesPerTick = sgGeneral.add(new IntSetting.Builder()
         .name("places-per-tick")
-        .description("Most crystals placed in one tick.")
-        .defaultValue(1)
+        .description("Most crystals placed in one tick. Two lets a crystal broken mid tick be replaced at once.")
+        .defaultValue(2)
         .range(1, 4)
         .sliderRange(1, 4)
         .build()
@@ -176,8 +176,15 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> pauseEating = sgGeneral.add(new BoolSetting.Builder()
         .name("pause-eating")
-        .description("Pauses placing while you eat. Eating from the main hand already blocks item switches, so this matters when you eat from the offhand or keep crystals in the offhand.")
+        .description("Pauses placing while you eat. When off, crystals are swapped into your hand and back in the same packet batch, which keeps the eating going.")
         .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> showStatus = sgGeneral.add(new BoolSetting.Builder()
+        .name("show-status")
+        .description("Shows in the module list why the last crystal was or was not placed.")
+        .defaultValue(true)
         .build()
     );
 
@@ -379,6 +386,9 @@ public class AutoCrystal extends Module {
     private long predictedBase;
     private long predictedAt;
     private PlayerEntity predictedTarget;
+    private String status;
+    private boolean rejectedSelf;
+    private boolean rejectedFriend;
 
     public AutoCrystal() {
         super(Coyduck.CATEGORY, "auto-crystal", "Places and breaks crystals at any ping.");
@@ -435,7 +445,9 @@ public class AutoCrystal extends Module {
 
     @Override
     public String getInfoString() {
-        return focus == null ? null : focus.getName().getString();
+        String name = focus == null ? null : focus.getName().getString();
+        if (!showStatus.get() || status == null) return name;
+        return name == null ? status : name + " " + status;
     }
 
     @EventHandler
@@ -480,6 +492,12 @@ public class AutoCrystal extends Module {
 
     @EventHandler
     private void onEntityAdded(EntityAddedEvent event) {
+        if (event.entity instanceof ItemEntity || event.entity instanceof ExperienceOrbEntity) {
+            if (mc.player == null || !near(event.entity.getEntityPos())) return;
+            CrystalTracker.get().cancelPlacing(event.entity.getBoundingBox());
+            pass();
+            return;
+        }
         if (!(event.entity instanceof EndCrystalEntity crystal)) return;
 
         if (predictedAt != 0 && Util.getMeasuringTimeMs() - predictedAt > LatencyManager.get().timeout()) endPrediction();
@@ -535,7 +553,7 @@ public class AutoCrystal extends Module {
 
         for (int id : packet.getEntityIds()) {
             Entity entity = mc.world.getEntityById(id);
-            if (entity instanceof EndCrystalEntity && near(entity.getEntityPos())) {
+            if ((entity instanceof EndCrystalEntity || entity instanceof ItemEntity || entity instanceof ExperienceOrbEntity) && near(entity.getEntityPos())) {
                 destroyedCrystal = true;
                 return;
             }
@@ -590,11 +608,15 @@ public class AutoCrystal extends Module {
     }
 
     private void run() {
-        if (pauseMining.get() && mc.interactionManager.isBreakingBlock()) return;
+        if (pauseMining.get() && mc.interactionManager.isBreakingBlock()) {
+            status = "mining";
+            return;
+        }
 
         List<Target> targets = targets();
         if (targets.isEmpty()) {
             lastTarget = null;
+            status = null;
             return;
         }
 
@@ -603,15 +625,28 @@ public class AutoCrystal extends Module {
 
         float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
         boolean holding = breakBudget > 0 && breakCrystals(targets, health);
-        if (pauseEating.get() && mc.player.isUsingItem()) return;
-        if (!InteractionManager.get().hasCrystals()) return;
+        if (pauseEating.get() && mc.player.isUsingItem()) {
+            status = "eating";
+            return;
+        }
+        if (!InteractionManager.get().hasCrystals()) {
+            status = "no crystals";
+            return;
+        }
 
         if (antiSurround.get() && gapBudget > 0) fillGaps(targets, health);
-        if (placeBudget <= 0 || holding) return;
+        if (placeBudget <= 0) return;
+        if (holding) {
+            status = "hurt-sync";
+            return;
+        }
 
+        List<BlockPos> candidates = candidates();
+        rejectedSelf = false;
+        rejectedFriend = false;
         BlockPos spot = null;
         Choice spotChoice = null;
-        for (BlockPos base : candidates()) {
+        for (BlockPos base : candidates) {
             Choice choice = evaluate(targets, crystalCenter(base), health, 0, mc.world);
             if (choice != null && choice.beats(spotChoice)) {
                 spot = base;
@@ -621,9 +656,15 @@ public class AutoCrystal extends Module {
 
         if (spot != null) {
             placeCrystal(spot, spotChoice);
-        } else if (basePlace.get() && !CrystalTracker.get().hasPlacing()) {
-            placeBase(targets, health);
+            return;
         }
+
+        if (candidates.isEmpty()) status = "no spot";
+        else if (rejectedSelf) status = "self damage";
+        else if (rejectedFriend) status = "friend";
+        else status = "low damage";
+
+        if (basePlace.get() && !CrystalTracker.get().hasPlacing()) placeBase(targets, health);
     }
 
     private void fillGaps(List<Target> targets, float health) {
@@ -638,8 +679,9 @@ public class AutoCrystal extends Module {
                 Vec3d center = crystalCenter(base);
                 if (!rotationReady(new Box(base), center, placeRange.get() + 1, GAP_PRIORITY)) return;
 
-                if (!InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), null)) return;
+                if (!InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), null, !pauseEating.get())) return;
                 gapBudget--;
+                status = "gap";
                 lastTarget = target.player;
                 renderPos = base;
                 renderTime = Util.getMeasuringTimeMs();
@@ -698,6 +740,7 @@ public class AutoCrystal extends Module {
             if (best == null) break;
             if (!InteractionManager.get().canAttack()) {
                 InteractionManager.get().prepareAttack();
+                status = "weakness";
                 break;
             }
             if (!rotationReady(best.getBoundingBox(), best.getBoundingBox().getCenter(), breakRange.get(), BREAK_PRIORITY)) break;
@@ -767,12 +810,19 @@ public class AutoCrystal extends Module {
     private void placeCrystal(BlockPos base, Choice choice) {
         Box box = new Box(base);
         Vec3d aim = new Vec3d(base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5);
-        if (!rotationReady(box, aim, placeRange.get() + 1, PLACE_PRIORITY)) return;
+        if (!rotationReady(box, aim, placeRange.get() + 1, PLACE_PRIORITY)) {
+            status = "rotating";
+            return;
+        }
 
         Runnable after = idPredict.get() ? () -> predictAttack(base, choice) : null;
-        if (!InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), after)) return;
+        if (!InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), after, !pauseEating.get())) {
+            status = "switch";
+            return;
+        }
 
         placeBudget--;
+        status = String.format("%.1f dmg", choice.damage);
         lastTarget = choice.target.player;
         renderPos = base;
         renderTime = Util.getMeasuringTimeMs();
@@ -820,7 +870,9 @@ public class AutoCrystal extends Module {
 
         BlockPos base = best;
         BlockHitResult hit = bestHit;
-        InventoryManager.get().withItem(blockSlot, switchMode.get(), () -> interaction.place(base, hit, swing.get()));
+        Runnable place = () -> interaction.place(base, hit, swing.get());
+        if (pauseEating.get()) InventoryManager.get().withItem(blockSlot, switchMode.get(), place);
+        else InventoryManager.get().withItemWhileEating(blockSlot, switchMode.get(), place);
 
         if (!isBase(mc.world.getBlockState(base))) return;
         placeCrystal(base, bestChoice);
@@ -914,8 +966,14 @@ public class AutoCrystal extends Module {
         if (!reachable) return null;
 
         float self = selfDamage(crystal, view);
-        if (self >= health || self > maxSelfDamage.get()) return null;
-        if (hurtsFriend(crystal, view)) return null;
+        if (self >= health || self > maxSelfDamage.get()) {
+            rejectedSelf = true;
+            return null;
+        }
+        if (hurtsFriend(crystal, view)) {
+            rejectedFriend = true;
+            return null;
+        }
 
         Choice best = null;
         for (Target target : targets) {

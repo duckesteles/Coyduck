@@ -18,6 +18,7 @@ import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
@@ -50,6 +51,13 @@ public final class CrystalTracker {
     public boolean isPlacing(BlockPos base) {
         long until = placing.getOrDefault(base.asLong(), Long.MIN_VALUE);
         return until != Long.MIN_VALUE && Util.getMeasuringTimeMs() < until;
+    }
+
+    public void cancelPlacing(Box box) {
+        placing.keySet().removeIf(key -> {
+            BlockPos above = BlockPos.fromLong(key).up();
+            return box.intersects(new Box(above.getX(), above.getY(), above.getZ(), above.getX() + 1, above.getY() + 2, above.getZ() + 1));
+        });
     }
 
     public boolean hasPlacing() {

@@ -67,7 +67,7 @@ public final class HurtTracker {
         }
     }
 
-    private record Window(long start, float raw) {}
+    private record Window(long start, float raw, boolean explosion) {}
 
     private static final int RECEIVED_LIMIT = 256;
 
@@ -183,7 +183,7 @@ public final class HurtTracker {
             : arrival < current.start + window() + MARGIN;
         if (!immune) return full;
 
-        if (Float.isNaN(current.raw)) return self ? full : 0;
+        if (Float.isNaN(current.raw)) return self || !current.explosion ? full : 0;
         if (raw <= current.raw) return 0;
         return ExplosionDamage.mitigate(entity, raw - current.raw);
     }
@@ -194,12 +194,12 @@ public final class HurtTracker {
         Window best = null;
 
         Hurt hurt = hurts.get(id);
-        if (hurt != null && hurt.start <= arrival) best = new Window(hurt.start, Float.isNaN(hurt.raw) ? Float.NaN : max(hurt.raw, hurt.speculative));
+        if (hurt != null && hurt.start <= arrival) best = new Window(hurt.start, Float.isNaN(hurt.raw) ? Float.NaN : max(hurt.raw, hurt.speculative), hurt.explosion);
 
         Expected pending = freshExpected(id, now);
         if (pending != null) {
             long start = expectedStart(pending);
-            if (start <= arrival && (best == null || start > best.start)) best = new Window(start, max(pending.amount, pending.speculative));
+            if (start <= arrival && (best == null || start > best.start)) best = new Window(start, max(pending.amount, pending.speculative), true);
         }
 
         return best;
