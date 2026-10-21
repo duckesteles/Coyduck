@@ -3,6 +3,7 @@ package dev.coyduck.modules;
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
@@ -139,7 +140,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("Silent changes your held slot for each action. InvSwap swaps the item into your hand and back. Neither switches while you eat with your main hand.")
+        .description("Silent changes your held slot for each action. InvSwap swaps the item into your hand and back. While you eat with your main hand, Silent falls back to InvSwap.")
         .defaultValue(InventoryManager.SwitchMode.InvSwap)
         .build()
     );
@@ -467,6 +468,18 @@ public class AutoCrystal extends Module {
         updateFocus();
     }
 
+    @EventHandler
+    private void onWorldReset(WorldResetEvent event) {
+        focus = null;
+        lastTarget = null;
+        challengeTicks = 0;
+        predictedAt = 0;
+        predictedTarget = null;
+        clearing.clear();
+        renderPos = null;
+        releaseAt = 0;
+    }
+
     private void endPrediction() {
         if (predictedTarget != null) HurtTracker.get().forgetSpeculative(predictedTarget);
         predictedAt = 0;
@@ -499,8 +512,7 @@ public class AutoCrystal extends Module {
     private void onEntityAdded(EntityAddedEvent event) {
         if (event.entity instanceof ItemEntity || event.entity instanceof ExperienceOrbEntity) {
             if (mc.player == null || !near(event.entity.getEntityPos())) return;
-            CrystalTracker.get().cancelPlacing(event.entity.getBoundingBox());
-            pass();
+            if (CrystalTracker.get().cancelPlacing(event.entity.getBoundingBox())) pass();
             return;
         }
         if (!(event.entity instanceof EndCrystalEntity crystal)) return;
@@ -674,6 +686,8 @@ public class AutoCrystal extends Module {
     }
 
     private boolean placeClearing(List<Target> targets, float health) {
+        if (!clearing.isEmpty()) return false;
+
         BlockPos gap = null;
         for (Target target : targets) {
             for (long key : target.gaps) {

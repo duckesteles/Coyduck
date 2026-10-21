@@ -11,6 +11,7 @@ import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
+import net.minecraft.block.ShapeContext;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.ItemEntity;
@@ -56,8 +57,8 @@ public final class CrystalTracker {
         return until != Long.MIN_VALUE && Util.getMeasuringTimeMs() < until;
     }
 
-    public void cancelPlacing(Box box) {
-        placing.keySet().removeIf(key -> {
+    public boolean cancelPlacing(Box box) {
+        return placing.keySet().removeIf(key -> {
             BlockPos above = BlockPos.fromLong(key).up();
             return box.intersects(new Box(above.getX(), above.getY(), above.getZ(), above.getX() + 1, above.getY() + 2, above.getZ() + 1));
         });
@@ -96,7 +97,8 @@ public final class CrystalTracker {
         for (Entity entity : mc.world.getEntities()) {
             double distance = entity.getEntityPos().squaredDistanceTo(center);
             if (entity instanceof EndCrystalEntity && distance <= range) kill(entity, duration);
-            else if ((entity instanceof ItemEntity || entity instanceof ExperienceOrbEntity) && distance <= dropRange) kill(entity, duration);
+            else if ((entity instanceof ItemEntity || entity instanceof ExperienceOrbEntity) && distance <= dropRange
+                && ExplosionDamage.exposure(center, entity.getBoundingBox(), mc.world, ShapeContext.absent()) > 0) kill(entity, duration);
         }
     }
 

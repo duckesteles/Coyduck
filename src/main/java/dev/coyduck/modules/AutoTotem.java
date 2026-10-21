@@ -103,7 +103,7 @@ public class AutoTotem extends Module {
         .name("restore")
         .description("Switches back to the previous slot once the main hand totem is no longer needed.")
         .defaultValue(true)
-        .visible(() -> mainhand.get() == Mainhand.Smart)
+        .visible(() -> mainhand.get() != Mainhand.Off)
         .build()
     );
 
