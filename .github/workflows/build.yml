@@ -1,9 +1,15 @@
 name: Build
-on: [push, pull_request]
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -23,3 +29,10 @@ jobs:
         with:
           name: coyduck
           path: build/libs/*.jar
+
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body: Minecraft 1.21.11
+          files: build/libs/*.jar
