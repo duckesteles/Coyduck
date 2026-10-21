@@ -1,0 +1,43 @@
+- name: bug
+  color: d73a4a
+  description: Something does not work as described
+- name: feature
+  color: a2eeef
+  description: A new module or option
+  from_name: enhancement
+- name: question
+  color: d876e3
+  description: Asking how something works
+- name: needs info
+  color: fbca04
+  description: Waiting for more details from the author
+- name: duplicate
+  color: cfd3d7
+  description: Already reported
+- name: wontfix
+  color: ffffff
+  description: Will not be changed
+- name: autocrystal
+  color: 5319e7
+  description: AutoCrystal
+- name: autototem
+  color: 5319e7
+  description: AutoTotem+
+- name: surround
+  color: 5319e7
+  description: Surround+
+- name: autocity
+  color: 5319e7
+  description: AutoCity+
+- name: autotrap
+  color: 5319e7
+  description: AutoTrap+
+- name: autoweb
+  color: 5319e7
+  description: AutoWeb+
+- name: laddertrap
+  color: 5319e7
+  description: LadderTrap
+- name: elytrafly
+  color: 5319e7
+  description: ElytraFly+

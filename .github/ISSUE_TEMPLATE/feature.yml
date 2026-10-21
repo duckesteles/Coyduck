@@ -1,0 +1,11 @@
+name: Feature
+description: A new module or option
+labels: [feature]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Idea
+      description: What it should do and in which fight situation it helps.
+    validations:
+      required: true

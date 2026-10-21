@@ -1,0 +1,45 @@
+name: Bug
+description: Something does not work as described
+labels: [bug]
+body:
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      options:
+        - AutoCrystal
+        - AutoTotem+
+        - Surround+
+        - AutoCity+
+        - AutoTrap+
+        - AutoWeb+
+        - LadderTrap
+        - ElytraFly+
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Coyduck version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: server
+    attributes:
+      label: Server and ping
+      placeholder: 6b6t, 120 ms
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead. AutoCrystal shows its status next to its name in the module list, include it if it is relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: The crash report or latest.log, if there is one.
+      render: text
