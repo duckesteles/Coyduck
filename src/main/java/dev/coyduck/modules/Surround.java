@@ -10,6 +10,7 @@ import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.utils.ExplosionDamage;
+import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
@@ -22,6 +23,7 @@ import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.BlockListSetting;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
+import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
@@ -50,6 +52,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -65,6 +68,8 @@ public class Surround extends Module {
     private static final double EDGE = 1.0E-4;
     private static final double CENTER_SPEED = 0.2;
     private static final double NEAR = 5 * 5;
+    private static final double FACE_ENEMY_RANGE = 12;
+    private static final float FACE_MIN_DAMAGE = 2;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgProtect = settings.createGroup("Protect");
@@ -156,6 +161,23 @@ public class Surround extends Module {
         .description("Also covers the top of that block, so no crystal can be placed on it.")
         .defaultValue(true)
         .visible(blocker::get)
+        .build()
+    );
+
+    private final Setting<Boolean> face = sgProtect.add(new BoolSetting.Builder()
+        .name("face")
+        .description("Covers the cells at head level around you once a crystal there could pop you or your health is low, so you cannot be face placed.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Double> faceHealth = sgProtect.add(new DoubleSetting.Builder()
+        .name("face-health")
+        .description("Health and absorption at or below which every dangerous head level cell is covered.")
+        .defaultValue(10)
+        .range(0, 36)
+        .sliderRange(0, 36)
+        .visible(face::get)
         .build()
     );
 
@@ -445,12 +467,41 @@ public class Surround extends Module {
             }
         }
 
-        List<BlockPos> targets = new ArrayList<>(threatened.size() + floors.size() + sides.size() + blockers.size());
+        List<BlockPos> faces = faces();
+
+        List<BlockPos> targets = new ArrayList<>(threatened.size() + floors.size() + sides.size() + faces.size() + blockers.size());
         targets.addAll(threatened);
         targets.addAll(floors);
         targets.addAll(sides);
+        targets.addAll(faces);
         targets.addAll(blockers);
         return targets;
+    }
+
+    private List<BlockPos> faces() {
+        List<BlockPos> faces = new ArrayList<>();
+        if (!face.get() || Targets.find(FACE_ENEMY_RANGE) == null) return faces;
+
+        float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
+        for (long key : anchored) {
+            BlockPos column = BlockPos.fromLong(key);
+            for (Direction direction : Direction.Type.HORIZONTAL) {
+                BlockPos side = column.offset(direction);
+                if (anchored.contains(side.asLong())) continue;
+
+                BlockPos cell = side.up();
+                if (!faces.contains(cell) && faceThreat(cell, health)) faces.add(cell);
+            }
+        }
+        return faces;
+    }
+
+    private boolean faceThreat(BlockPos cell, float health) {
+        if (!Targets.isBase(mc.world.getBlockState(cell.down())) || !mc.world.getBlockState(cell).isReplaceable()) return false;
+
+        Vec3d crystal = new Vec3d(cell.getX() + 0.5, cell.getY(), cell.getZ() + 0.5);
+        float damage = ExplosionDamage.crystal(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), crystal, mc.world);
+        return damage >= health || (health <= faceHealth.get() && damage >= FACE_MIN_DAMAGE);
     }
 
     private void addBlocker(List<BlockPos> blockers, LongSet ring, BlockPos pos) {
