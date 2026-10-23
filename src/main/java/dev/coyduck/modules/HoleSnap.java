@@ -2,7 +2,7 @@ package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
+import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
@@ -11,243 +11,336 @@ import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
+import meteordevelopment.meteorclient.systems.modules.world.Timer;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.MovementType;
+import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+
+import java.util.List;
 
 public class HoleSnap extends Module {
     private static final float SAFE_RESISTANCE = 600;
-    private static final int MAX_DROP = 3;
-    private static final double PATH_STEP = 0.2;
-    private static final double ARRIVE = 0.05;
-    private static final int STUCK_TICKS = 10;
+    private static final double ARRIVE = 1.0E-3;
+    private static final double JUMP = 0.42;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
+    private final SettingGroup sgSpeed = settings.createGroup("Speed");
+    private final SettingGroup sgHole = settings.createGroup("Hole");
 
     private final Setting<Integer> range = sgGeneral.add(new IntSetting.Builder()
         .name("range")
         .description("Horizontal range to look for holes in.")
+        .defaultValue(3)
+        .range(0, 6)
+        .sliderRange(0, 6)
+        .build()
+    );
+
+    private final Setting<Integer> downRange = sgGeneral.add(new IntSetting.Builder()
+        .name("down-range")
+        .description("How far below you a hole may be.")
+        .defaultValue(3)
+        .range(0, 6)
+        .sliderRange(0, 6)
+        .build()
+    );
+
+    private final Setting<Boolean> jump = sgGeneral.add(new BoolSetting.Builder()
+        .name("jump")
+        .description("Jumps over anything in the way.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Integer> jumpCooldown = sgGeneral.add(new IntSetting.Builder()
+        .name("jump-cooldown")
+        .description("Ticks between jumps.")
         .defaultValue(5)
-        .range(1, 8)
-        .sliderRange(1, 8)
+        .range(0, 40)
+        .sliderRange(0, 40)
+        .visible(jump::get)
         .build()
     );
 
-    private final Setting<Double> speed = sgGeneral.add(new DoubleSetting.Builder()
+    private final Setting<Integer> collisions = sgGeneral.add(new IntSetting.Builder()
+        .name("collisions-to-disable")
+        .description("Gives up after running into a wall this many moves in a row. 0 never gives up.")
+        .defaultValue(15)
+        .range(0, 100)
+        .sliderRange(0, 100)
+        .build()
+    );
+
+    private final Setting<Integer> rubberbands = sgGeneral.add(new IntSetting.Builder()
+        .name("rubberbands-to-disable")
+        .description("Gives up after the server pulls you back this many times. 0 never gives up.")
+        .defaultValue(1)
+        .range(0, 20)
+        .sliderRange(0, 20)
+        .build()
+    );
+
+    private final Setting<Double> speed = sgSpeed.add(new DoubleSetting.Builder()
         .name("speed")
-        .description("Blocks moved per tick towards the hole.")
-        .defaultValue(0.28)
-        .range(0.05, 1)
-        .sliderRange(0.05, 1)
+        .description("Blocks moved per move towards the hole.")
+        .defaultValue(0.2873)
+        .range(0, 1)
+        .sliderRange(0, 1)
         .build()
     );
 
-    private final Setting<Boolean> doubles = sgGeneral.add(new BoolSetting.Builder()
-        .name("doubles")
-        .description("Also snaps into 2x1 holes.")
+    private final Setting<Boolean> boost = sgSpeed.add(new BoolSetting.Builder()
+        .name("boost")
+        .description("Moves faster for the first few moves.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Double> boostSpeed = sgSpeed.add(new DoubleSetting.Builder()
+        .name("boost-speed")
+        .description("Blocks moved per boosted move.")
+        .defaultValue(0.5)
+        .range(0, 1)
+        .sliderRange(0, 1)
+        .visible(boost::get)
+        .build()
+    );
+
+    private final Setting<Integer> boostMoves = sgSpeed.add(new IntSetting.Builder()
+        .name("boost-moves")
+        .description("How many moves are boosted.")
+        .defaultValue(3)
+        .range(1, 20)
+        .sliderRange(1, 10)
+        .visible(boost::get)
+        .build()
+    );
+
+    private final Setting<Double> timer = sgSpeed.add(new DoubleSetting.Builder()
+        .name("timer")
+        .description("Speeds up the game while snapping, so you are in the hole almost instantly. 1 leaves it alone.")
+        .defaultValue(10)
+        .range(1, 20)
+        .sliderRange(1, 20)
+        .build()
+    );
+
+    private final Setting<Boolean> singles = sgHole.add(new BoolSetting.Builder()
+        .name("single")
+        .description("Targets 1x1 holes.")
         .defaultValue(true)
         .build()
     );
 
-    private final Setting<Integer> timeout = sgGeneral.add(new IntSetting.Builder()
-        .name("timeout")
-        .description("Ticks to try before giving up.")
-        .defaultValue(40)
-        .range(5, 200)
-        .sliderRange(5, 100)
+    private final Setting<Boolean> doubles = sgHole.add(new BoolSetting.Builder()
+        .name("double")
+        .description("Targets 2x1 holes.")
+        .defaultValue(true)
         .build()
     );
 
-    private Vec3d target;
-    private int targetY;
-    private int ticks;
-    private int stuck;
-    private double lastDistance;
+    private final Setting<Boolean> quads = sgHole.add(new BoolSetting.Builder()
+        .name("quad")
+        .description("Targets 2x2 holes.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Integer> depth = sgHole.add(new IntSetting.Builder()
+        .name("depth")
+        .description("Free blocks a hole needs above its floor.")
+        .defaultValue(3)
+        .range(2, 5)
+        .sliderRange(2, 5)
+        .build()
+    );
+
+    private final Setting<Boolean> safeOnly = sgHole.add(new BoolSetting.Builder()
+        .name("safe-only")
+        .description("Only targets holes made of blast proof blocks like obsidian and bedrock.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> retarget = sgHole.add(new BoolSetting.Builder()
+        .name("retarget")
+        .description("Picks a new hole when the chosen one gets blocked, instead of giving up.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private record Hole(List<BlockPos> cells, Vec3d middle) {}
+
+    private Hole hole;
+    private int collided;
+    private int pulled;
+    private int jumpTicks;
+    private int boostLeft;
 
     public HoleSnap() {
-        super(Coyduck.CATEGORY, "hole-snap", "Moves you into the nearest safe hole.");
+        super(Coyduck.CATEGORY, "hole-snap", "Moves you into the nearest hole, then turns itself off.");
     }
 
     public static boolean snapping() {
         HoleSnap snap = Modules.get().get(HoleSnap.class);
-        return snap != null && snap.isActive() && snap.target != null;
+        return snap != null && snap.isActive() && snap.hole != null;
     }
 
     @Override
     public void onActivate() {
-        target = null;
-        ticks = 0;
-        stuck = 0;
-        lastDistance = Double.MAX_VALUE;
-
-        if (mc.player == null || mc.world == null) {
-            toggle();
-            return;
-        }
-        if (inHole()) {
-            toggle();
-            return;
-        }
-
-        find();
-        if (target == null) {
-            info("No reachable hole nearby.");
-            toggle();
-        }
+        collided = 0;
+        pulled = 0;
+        jumpTicks = 0;
+        boostLeft = boost.get() ? boostMoves.get() : 0;
+        hole = mc.player == null ? null : find();
     }
 
     @Override
     public void onDeactivate() {
-        target = null;
+        hole = null;
+        Modules.get().get(Timer.class).setOverride(Timer.OFF);
     }
 
     @EventHandler
-    private void onTick(TickEvent.Pre event) {
-        if (mc.player == null || target == null) {
-            toggle();
-            return;
-        }
-
-        if (inHole()) {
-            mc.player.setVelocity(0, mc.player.getVelocity().y, 0);
-            toggle();
-            return;
-        }
-
-        double distance = horizontal(target);
-        if (distance > lastDistance - 1.0E-3 && mc.player.getY() > targetY + 1.0E-3 && distance > ARRIVE) stuck++;
-        else stuck = 0;
-        lastDistance = distance;
-
-        if (++ticks > timeout.get() || stuck > STUCK_TICKS) {
-            info("Could not reach the hole.");
-            toggle();
-        }
+    private void onReceive(PacketEvent.Receive event) {
+        if (!(event.packet instanceof PlayerPositionLookS2CPacket) || rubberbands.get() == 0) return;
+        if (++pulled >= rubberbands.get()) mc.execute(() -> stop("Pulled back by the server."));
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onMove(PlayerMoveEvent event) {
-        if (event.type != MovementType.SELF || mc.player == null || target == null) return;
+        if (event.type != MovementType.SELF || mc.player == null || mc.world == null) return;
 
-        double dx = target.x - mc.player.getX();
-        double dz = target.z - mc.player.getZ();
-        double distance = Math.sqrt(dx * dx + dz * dz);
-
-        double x = 0;
-        double z = 0;
-        if (distance > 1.0E-4) {
-            double step = Math.min(speed.get(), distance);
-            x = dx / distance * step;
-            z = dz / distance * step;
+        if (hole != null && blocked(hole)) hole = retarget.get() ? find() : null;
+        if (hole == null) {
+            stop("No hole to snap into.");
+            return;
         }
 
-        ((IVec3d) event.movement).meteor$set(x, event.movement.y, z);
+        Vec3d middle = hole.middle;
+        double dx = middle.x - mc.player.getX();
+        double dz = middle.z - mc.player.getZ();
+
+        if (Math.abs(dx) < ARRIVE && Math.abs(dz) < ARRIVE) {
+            ((IVec3d) event.movement).meteor$setXZ(0, 0);
+            mc.player.setVelocity(0, mc.player.getVelocity().y, 0);
+            if (Math.abs(mc.player.getY() - middle.y) < ARRIVE) stop(null);
+            else if (standing()) stop("Cannot drop into the hole.");
+            return;
+        }
+
+        Modules.get().get(Timer.class).setOverride(timer.get());
+
+        double distance = Math.sqrt(dx * dx + dz * dz);
+        double step = Math.min(boostLeft-- > 0 ? boostSpeed.get() : speed.get(), distance);
+        double x = dx / distance * step;
+        double z = dz / distance * step;
+
+        if (!mc.world.isSpaceEmpty(mc.player, mc.player.getBoundingBox().offset(x, 0, z))) {
+            if (collisions.get() > 0 && ++collided >= collisions.get()) {
+                stop("Ran into a wall.");
+                return;
+            }
+        } else {
+            collided = 0;
+        }
+
+        if (jumpTicks > 0) jumpTicks--;
+        else if (jump.get() && standing()) {
+            jumpTicks = jumpCooldown.get();
+            ((IVec3d) event.movement).meteor$setY(JUMP);
+        }
+
+        ((IVec3d) event.movement).meteor$setXZ(x, z);
         mc.player.setVelocity(0, mc.player.getVelocity().y, 0);
     }
 
-    private void find() {
-        BlockPos feet = BlockPos.ofFloored(mc.player.getX(), mc.player.getY() + 1.0E-3, mc.player.getZ());
-        int r = range.get();
-        double best = Double.MAX_VALUE;
+    private void stop(String reason) {
+        if (!isActive()) return;
+        if (reason != null) info(reason);
+        toggle();
+    }
 
-        for (int dx = -r; dx <= r; dx++) {
-            for (int dz = -r; dz <= r; dz++) {
-                for (int dy = 0; dy >= -MAX_DROP; dy--) {
-                    BlockPos pos = feet.add(dx, dy, dz);
+    private boolean standing() {
+        return !mc.world.isSpaceEmpty(mc.player, mc.player.getBoundingBox().offset(0, -0.05, 0));
+    }
 
-                    Vec3d center = null;
-                    if (single(pos)) {
-                        center = new Vec3d(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
-                    } else if (doubles.get()) {
-                        for (Direction direction : new Direction[]{Direction.EAST, Direction.SOUTH}) {
-                            if (!pair(pos, direction)) continue;
-                            BlockPos other = pos.offset(direction);
-                            center = new Vec3d((pos.getX() + other.getX()) / 2.0 + 0.5, pos.getY(), (pos.getZ() + other.getZ()) / 2.0 + 0.5);
-                            break;
-                        }
+    private Hole find() {
+        BlockPos feet = mc.player.getBlockPos();
+        Vec3d position = mc.player.getEntityPos();
+        Hole best = null;
+        double bestDistance = Double.MAX_VALUE;
+
+        for (int dx = -range.get(); dx <= range.get(); dx++) {
+            for (int dz = -range.get(); dz <= range.get(); dz++) {
+                for (int dy = -downRange.get(); dy <= 0; dy++) {
+                    Hole candidate = hole(feet.add(dx, dy, dz));
+                    if (candidate == null) continue;
+                    if (dy == 0 && candidate.cells.contains(feet)) return candidate;
+
+                    double distance = candidate.middle.squaredDistanceTo(position);
+                    if (distance < bestDistance) {
+                        best = candidate;
+                        bestDistance = distance;
                     }
-                    if (center == null) continue;
-
-                    double distance = horizontal(center) + (feet.getY() - pos.getY()) * 0.5;
-                    if (distance >= best || !reachable(center)) continue;
-
-                    best = distance;
-                    target = center;
-                    targetY = pos.getY();
                 }
             }
         }
+        return best;
     }
 
-    private boolean single(BlockPos pos) {
-        if (!open(pos) || !safe(pos.down())) return false;
-        for (Direction direction : Direction.Type.HORIZONTAL) {
-            if (!safe(pos.offset(direction))) return false;
-        }
-        return true;
-    }
+    private Hole hole(BlockPos pos) {
+        if (!open(pos) || !wall(pos.west()) || !wall(pos.north())) return null;
 
-    private boolean pair(BlockPos pos, Direction direction) {
-        BlockPos other = pos.offset(direction);
-        if (!open(pos) || !open(other) || !safe(pos.down()) || !safe(other.down())) return false;
+        boolean east = open(pos.east()) && wall(pos.east().north()) && wall(pos.east(2));
+        boolean south = open(pos.south()) && wall(pos.south().west()) && wall(pos.south(2));
 
-        for (Direction side : Direction.Type.HORIZONTAL) {
-            if (side != direction && !safe(pos.offset(side))) return false;
-            if (side != direction.getOpposite() && !safe(other.offset(side))) return false;
+        if (singles.get() && !east && !south && wall(pos.east()) && wall(pos.south())) {
+            return new Hole(List.of(pos), new Vec3d(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5));
         }
-        return true;
+
+        if (quads.get() && east && south && open(pos.south().east()) && wall(pos.east(2).south()) && wall(pos.south(2).east())) {
+            return new Hole(List.of(pos, pos.east(), pos.south(), pos.south().east()), new Vec3d(pos.getX() + 1, pos.getY(), pos.getZ() + 1));
+        }
+
+        if (!doubles.get()) return null;
+        if (east && !south && wall(pos.south()) && wall(pos.south().east())) {
+            return new Hole(List.of(pos, pos.east()), new Vec3d(pos.getX() + 1, pos.getY(), pos.getZ() + 0.5));
+        }
+        if (south && !east && wall(pos.east()) && wall(pos.south().east())) {
+            return new Hole(List.of(pos, pos.south()), new Vec3d(pos.getX() + 0.5, pos.getY(), pos.getZ() + 1));
+        }
+        return null;
     }
 
     private boolean open(BlockPos pos) {
-        return mc.world.getBlockState(pos).getCollisionShape(mc.world, pos).isEmpty()
-            && mc.world.getBlockState(pos.up()).getCollisionShape(mc.world, pos.up()).isEmpty();
+        if (!wall(pos.down())) return false;
+        for (int i = 0; i < depth.get(); i++) {
+            if (collidable(pos.up(i))) return false;
+        }
+        return true;
     }
 
-    private boolean safe(BlockPos pos) {
+    private boolean wall(BlockPos pos) {
+        if (!collidable(pos)) return false;
+        if (!safeOnly.get()) return true;
+
         BlockState state = mc.world.getBlockState(pos);
-        if (!state.isFullCube(mc.world, pos)) return false;
         return state.getHardness(mc.world, pos) < 0 || state.getBlock().getBlastResistance() >= SAFE_RESISTANCE;
     }
 
-    private boolean reachable(Vec3d center) {
-        Vec3d start = mc.player.getEntityPos();
-        Vec3d flat = new Vec3d(center.x, start.y, center.z);
-        double length = start.distanceTo(flat);
-        Box box = mc.player.getBoundingBox();
-
-        int steps = MathHelper.ceil(length / PATH_STEP);
-        for (int i = 1; i <= steps; i++) {
-            Vec3d point = start.lerp(flat, (double) i / steps);
-            if (!mc.world.isSpaceEmpty(mc.player, box.offset(point.subtract(start)))) return false;
-        }
-
-        Box drop = box.offset(flat.subtract(start)).stretch(0, center.y - start.y, 0).contract(1.0E-3);
-        return mc.world.isSpaceEmpty(mc.player, drop);
+    private boolean collidable(BlockPos pos) {
+        return !mc.world.getBlockState(pos).getCollisionShape(mc.world, pos).isEmpty();
     }
 
-    private boolean inHole() {
-        if (!mc.player.isOnGround()) return false;
-        BlockPos feet = BlockPos.ofFloored(mc.player.getX(), mc.player.getY() + 1.0E-3, mc.player.getZ());
-        if (target != null && (feet.getY() != targetY || horizontal(target) > ARRIVE)) return false;
-        if (target != null) return true;
-
-        if (single(feet)) return true;
-        if (!doubles.get()) return false;
-        for (Direction direction : Direction.Type.HORIZONTAL) {
-            if (pair(feet, direction)) return true;
+    private boolean blocked(Hole target) {
+        for (BlockPos cell : target.cells) {
+            if (collidable(cell)) return true;
         }
         return false;
-    }
-
-    private double horizontal(Vec3d pos) {
-        double dx = pos.x - mc.player.getX();
-        double dz = pos.z - mc.player.getZ();
-        return Math.sqrt(dx * dx + dz * dz);
     }
 }

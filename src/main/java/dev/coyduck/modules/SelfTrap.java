@@ -77,7 +77,7 @@ public class SelfTrap extends Module {
     private final Setting<Boolean> smart = sgGeneral.add(new BoolSetting.Builder()
         .name("smart")
         .description("Only traps while an enemy is in range.")
-        .defaultValue(true)
+        .defaultValue(false)
         .build()
     );
 
