@@ -15,6 +15,9 @@ body:
         - AutoWeb+
         - LadderTrap
         - ElytraFly+
+        - SelfTrap+
+        - HoleSnap
+        - CustomFov
         - Other
     validations:
       required: true

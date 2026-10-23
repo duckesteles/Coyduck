@@ -41,3 +41,12 @@
 - name: elytrafly
   color: 5319e7
   description: ElytraFly+
+- name: selftrap
+  color: 5319e7
+  description: SelfTrap+
+- name: holesnap
+  color: 5319e7
+  description: HoleSnap
+- name: customfov
+  color: 5319e7
+  description: CustomFov

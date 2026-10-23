@@ -273,7 +273,7 @@ public class Surround extends Module {
 
     @EventHandler(priority = EventPriority.HIGH)
     private void onMove(PlayerMoveEvent event) {
-        if (extend.get() || event.type != MovementType.SELF || !canAct() || anchored.size() != 1) return;
+        if (extend.get() || event.type != MovementType.SELF || !canAct() || anchored.size() != 1 || HoleSnap.snapping()) return;
         if (!mc.player.isOnGround() || hasInput() || level() != anchorY) return;
 
         BlockPos column = BlockPos.fromLong(anchored.iterator().nextLong());
