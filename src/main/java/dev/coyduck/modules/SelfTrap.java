@@ -61,15 +61,15 @@ public class SelfTrap extends Module {
 
     private final Setting<List<Block>> blocks = sgGeneral.add(new BlockListSetting.Builder()
         .name("blocks")
-        .description("Blocks used for the trap, in order of preference. Crying obsidian first, since crystals cannot be placed on it.")
-        .defaultValue(Blocks.CRYING_OBSIDIAN, Blocks.OBSIDIAN, Blocks.ENDER_CHEST)
+        .description("Blocks used for the trap, in order of preference.")
+        .defaultValue(Blocks.OBSIDIAN, Blocks.CRYING_OBSIDIAN, Blocks.NETHERITE_BLOCK)
         .filter(block -> block.getBlastResistance() >= 600)
         .build()
     );
 
     private final Setting<Boolean> top = sgGeneral.add(new BoolSetting.Builder()
         .name("top")
-        .description("Also covers the block above your head, only with a block crystals cannot be placed on, so it can never be used to crystal you from above.")
+        .description("Also covers the block above your head. Prefers a block crystals cannot be placed on, so it cannot be used to crystal you from above.")
         .defaultValue(true)
         .build()
     );
@@ -179,7 +179,7 @@ public class SelfTrap extends Module {
     private boolean running;
 
     public SelfTrap() {
-        super(Coyduck.CATEGORY, "self-trap+", "Covers the cells around your head so you cannot be face placed.");
+        super(Coyduck.CATEGORY, "self-trap+", "Boxes you in: the block under your feet, the four sides at your feet and head, and the block above your head.");
     }
 
     @Override
@@ -306,6 +306,21 @@ public class SelfTrap extends Module {
                 BlockPos side = column.offset(direction);
                 if (columns.contains(side.asLong())) continue;
 
+                if (!cells.contains(side)) cells.add(side);
+            }
+        }
+
+        for (long key : columns) {
+            BlockPos below = BlockPos.fromLong(key).down();
+            if (!cells.contains(below)) cells.add(below);
+        }
+
+        for (long key : columns) {
+            BlockPos column = BlockPos.fromLong(key);
+            for (Direction direction : Direction.Type.HORIZONTAL) {
+                BlockPos side = column.offset(direction);
+                if (columns.contains(side.asLong())) continue;
+
                 BlockPos head = side.up();
                 if (!cells.contains(head)) cells.add(head);
             }
@@ -385,12 +400,23 @@ public class SelfTrap extends Module {
     }
 
     private int blockSlot(boolean roof) {
+        if (roof) {
+            for (Block block : blocks.get()) {
+                if (Targets.isBase(block.getDefaultState())) continue;
+                int slot = find(block);
+                if (slot != -1) return slot;
+            }
+        }
+
         for (Block block : blocks.get()) {
-            if (roof && (block == Blocks.OBSIDIAN || block == Blocks.BEDROCK)) continue;
-            int slot = InventoryManager.get().find(stack -> stack.getItem() instanceof BlockItem item && item.getBlock() == block, 0, InventoryManager.MAIN_END);
+            int slot = find(block);
             if (slot != -1) return slot;
         }
         return -1;
+    }
+
+    private static int find(Block block) {
+        return InventoryManager.get().find(stack -> stack.getItem() instanceof BlockItem item && item.getBlock() == block, 0, InventoryManager.MAIN_END);
     }
 
     private boolean isBlock(ItemStack stack) {
