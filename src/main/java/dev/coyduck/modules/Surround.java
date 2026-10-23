@@ -55,7 +55,9 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public class Surround extends Module {
     public enum Disable {
@@ -469,13 +471,13 @@ public class Surround extends Module {
 
         List<BlockPos> faces = faces();
 
-        List<BlockPos> targets = new ArrayList<>(threatened.size() + floors.size() + sides.size() + faces.size() + blockers.size());
+        Set<BlockPos> targets = new LinkedHashSet<>();
         targets.addAll(threatened);
         targets.addAll(floors);
         targets.addAll(sides);
         targets.addAll(faces);
         targets.addAll(blockers);
-        return targets;
+        return new ArrayList<>(targets);
     }
 
     private List<BlockPos> faces() {
