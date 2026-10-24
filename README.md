@@ -19,4 +19,3 @@
 - HoleSnap
 - CustomFov
 - AirMine
-- AntiWeb

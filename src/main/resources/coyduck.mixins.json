@@ -9,7 +9,6 @@
     "ClientPlayerEntityMixin",
     "ClientPlayerInteractionManagerAccessor",
     "ClientWorldAccessor",
-    "CobwebBlockMixin",
     "EntityMixin",
     "GameRendererMixin",
     "KeyboardInputMixin",
