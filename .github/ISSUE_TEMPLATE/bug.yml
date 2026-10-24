@@ -19,6 +19,7 @@ body:
         - SelfTrap+
         - HoleSnap
         - CustomFov
+        - AirMine
         - Other
     validations:
       required: true

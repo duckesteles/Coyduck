@@ -4,6 +4,7 @@ import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
+import dev.coyduck.modules.AirMine;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
@@ -208,6 +209,10 @@ public final class MiningManager {
     }
 
     public float delta(BlockState state, BlockPos at, ItemStack tool) {
+        return delta(state, at, tool, mc.player.isOnGround() || AirMine.spoofing());
+    }
+
+    private float delta(BlockState state, BlockPos at, ItemStack tool, boolean ground) {
         float hardness = state.getHardness(mc.world, at);
         if (hardness < 0) return 0;
         if (hardness == 0) return Float.MAX_VALUE;
@@ -232,7 +237,7 @@ public final class MiningManager {
 
         speed *= (float) mc.player.getAttributeValue(EntityAttributes.BLOCK_BREAK_SPEED);
         if (mc.player.isSubmergedIn(FluidTags.WATER)) speed *= (float) mc.player.getAttributeValue(EntityAttributes.SUBMERGED_MINING_SPEED);
-        if (!mc.player.isOnGround()) speed /= 5.0f;
+        if (!ground) speed /= 5.0f;
 
         boolean harvest = !state.isToolRequired() || tool.isSuitableFor(state);
         return speed / hardness / (harvest ? 30 : 100);
@@ -342,7 +347,7 @@ public final class MiningManager {
 
     private boolean backgroundReady(BlockState state) {
         int tool = bestTool(state, background);
-        float delta = delta(state, background, tool == -1 ? mc.player.getMainHandStack() : InventoryManager.get().stack(tool));
+        float delta = delta(state, background, tool == -1 ? mc.player.getMainHandStack() : InventoryManager.get().stack(tool), mc.player.isOnGround());
         float margin = (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
         float rate = Math.min(TickRate.INSTANCE.getTickRate() / 20.0f, 1.0f);
         return delta * ((ticks - backgroundStart) * rate - margin) >= BACKGROUND_THRESHOLD;

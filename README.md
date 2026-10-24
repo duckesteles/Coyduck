@@ -18,3 +18,4 @@
 - SelfTrap
 - HoleSnap
 - CustomFov
+- AirMine
