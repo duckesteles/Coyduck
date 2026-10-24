@@ -236,6 +236,24 @@ public class AutoCrystal extends Module {
         .build()
     );
 
+    private final Setting<Double> balance = sgDamage.add(new DoubleSetting.Builder()
+        .name("balance")
+        .description("Least ratio of the damage a crystal deals to the target over the damage it deals to you. A crystal below it is neither placed nor broken, unless it kills the target. 0 turns it off.")
+        .defaultValue(1.0)
+        .range(0, 5)
+        .sliderRange(0, 3)
+        .build()
+    );
+
+    private final Setting<Double> selfWeight = sgDamage.add(new DoubleSetting.Builder()
+        .name("self-weight")
+        .description("How much the damage to you counts against a crystal when choosing the best one. 0 only looks at the target's damage.")
+        .defaultValue(0.5)
+        .range(0, 2)
+        .sliderRange(0, 2)
+        .build()
+    );
+
     private final Setting<Boolean> defend = sgDamage.add(new BoolSetting.Builder()
         .name("defend")
         .description("Breaks an enemy crystal near you while your own damage immunity makes the blast almost harmless, so it is wasted instead of hitting you later.")
@@ -392,6 +410,7 @@ public class AutoCrystal extends Module {
     private String status;
     private boolean rejectedSelf;
     private boolean rejectedFriend;
+    private boolean rejectedBalance;
     private final Long2LongOpenHashMap clearing = new Long2LongOpenHashMap();
 
     public AutoCrystal() {
@@ -661,6 +680,7 @@ public class AutoCrystal extends Module {
         List<BlockPos> candidates = candidates();
         rejectedSelf = false;
         rejectedFriend = false;
+        rejectedBalance = false;
         BlockPos spot = null;
         Choice spotChoice = null;
         for (BlockPos base : candidates) {
@@ -679,6 +699,7 @@ public class AutoCrystal extends Module {
         if (candidates.isEmpty()) status = "no spot";
         else if (rejectedSelf) status = "self damage";
         else if (rejectedFriend) status = "friend";
+        else if (rejectedBalance) status = "balance";
         else status = "low damage";
 
         if (antiSurround.get() && placeClearing(targets, health)) return;
@@ -803,7 +824,12 @@ public class AutoCrystal extends Module {
         if (!selfSafe(center, health, 0, mc.world) || hurtsFriend(center, mc.world)) return false;
 
         float raw = ExplosionDamage.crystalRaw(target.player, target.feet, target.box, center, mc.world);
-        return ExplosionDamage.mitigate(target.player, raw) >= facePlaceDamage.get();
+        float damage = ExplosionDamage.mitigate(target.player, raw);
+        return damage >= facePlaceDamage.get() && balanced(damage, selfDamage(center, mc.world), target.health);
+    }
+
+    private boolean balanced(float damage, float self, float health) {
+        return balance.get() <= 0 || damage >= health || damage >= self * balance.get();
     }
 
     private boolean breakCrystals(List<Target> targets, float health) {
@@ -1103,8 +1129,12 @@ public class AutoCrystal extends Module {
 
             float damage = arrival != 0 ? HurtTracker.get().effective(target.player, raw, arrival) : ExplosionDamage.mitigate(target.player, raw);
             if (damage < target.minDamage && damage < target.health) continue;
+            if (!balanced(damage, self, target.health)) {
+                rejectedBalance = true;
+                continue;
+            }
 
-            float score = damage + (target.player == focus ? FOCUS_BONUS : 0);
+            float score = damage - self * selfWeight.get().floatValue() + (target.player == focus ? FOCUS_BONUS : 0);
             if (damage >= target.health) score += LETHAL_BONUS;
             if (antiSurround.get() && target.gaps.contains(key)) score += GAP_BONUS;
             Choice choice = new Choice(target, damage, raw, self, score);
