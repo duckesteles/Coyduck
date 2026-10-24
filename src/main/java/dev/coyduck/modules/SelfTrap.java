@@ -246,7 +246,7 @@ public class SelfTrap extends Module {
     }
 
     private void run() {
-        if (budget <= 0) return;
+        if (budget <= 0 || HoleSnap.snapping()) return;
         if (smart.get() && Targets.find(enemyRange.get()) == null) return;
         if (onlyStill.get() && (!mc.player.isOnGround() || mc.player.getVelocity().horizontalLengthSquared() > STILL_SPEED * STILL_SPEED)) return;
 

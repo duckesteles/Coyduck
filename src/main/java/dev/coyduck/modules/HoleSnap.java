@@ -2,6 +2,7 @@ package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
+import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
 import meteordevelopment.meteorclient.settings.BoolSetting;
@@ -88,8 +89,8 @@ public class HoleSnap extends Module {
         .name("speed")
         .description("Blocks moved per move towards the hole.")
         .defaultValue(0.2873)
-        .range(0, 1)
-        .sliderRange(0, 1)
+        .range(0.01, 1)
+        .sliderRange(0.01, 1)
         .build()
     );
 
@@ -104,8 +105,8 @@ public class HoleSnap extends Module {
         .name("boost-speed")
         .description("Blocks moved per boosted move.")
         .defaultValue(0.5)
-        .range(0, 1)
-        .sliderRange(0, 1)
+        .range(0.01, 1)
+        .sliderRange(0.01, 1)
         .visible(boost::get)
         .build()
     );
@@ -214,6 +215,10 @@ public class HoleSnap extends Module {
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onMove(PlayerMoveEvent event) {
         if (event.type != MovementType.SELF || mc.player == null || mc.world == null) return;
+        if (!mc.player.isAlive()) {
+            stop(null);
+            return;
+        }
 
         if (hole != null && blocked(hole)) hole = retarget.get() ? find() : null;
         if (hole == null) {
@@ -279,7 +284,7 @@ public class HoleSnap extends Module {
             for (int dz = -range.get(); dz <= range.get(); dz++) {
                 for (int dy = -downRange.get(); dy <= 0; dy++) {
                     Hole candidate = hole(feet.add(dx, dy, dz));
-                    if (candidate == null) continue;
+                    if (candidate == null || covered(candidate, feet.getY() + 1)) continue;
                     if (dy == 0 && candidate.cells.contains(feet)) return candidate;
 
                     double distance = candidate.middle.squaredDistanceTo(position);
@@ -335,6 +340,20 @@ public class HoleSnap extends Module {
 
     private boolean collidable(BlockPos pos) {
         return !mc.world.getBlockState(pos).getCollisionShape(mc.world, pos).isEmpty();
+    }
+
+    private boolean covered(Hole target, int top) {
+        for (BlockPos cell : target.cells) {
+            for (int y = cell.getY() + depth.get(); y <= top; y++) {
+                if (collidable(cell.withY(y))) return true;
+            }
+        }
+        return false;
+    }
+
+    @EventHandler
+    private void onGameLeft(GameLeftEvent event) {
+        if (isActive()) toggle();
     }
 
     private boolean blocked(Hole target) {

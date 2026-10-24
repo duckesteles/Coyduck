@@ -9,6 +9,8 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 
 public class CustomFov extends Module {
+    private static final float MAX_FOV = 179.0f;
+
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
     private final Setting<Integer> fov = sgGeneral.add(new IntSetting.Builder()
@@ -60,7 +62,8 @@ public class CustomFov extends Module {
 
     public static float multiplier(float original) {
         CustomFov module = active();
-        return module == null || module.effects.get() ? original : 1.0f;
+        if (module == null) return original;
+        return module.effects.get() ? Math.min(original, MAX_FOV / module.fov.get()) : 1.0f;
     }
 
     public static float hand(float original) {

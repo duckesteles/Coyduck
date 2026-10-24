@@ -309,7 +309,7 @@ public class Surround extends Module {
     }
 
     private void run() {
-        if (!updateAnchor() || budget <= 0) return;
+        if (HoleSnap.snapping() || !updateAnchor() || budget <= 0) return;
 
         int slot = blockSlot();
         if (slot == -1) return;
