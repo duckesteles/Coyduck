@@ -13,10 +13,13 @@
     "EndCrystalEntityRendererMixin",
     "EntityMixin",
     "GameRendererMixin",
+    "GuiThemeAccessor",
     "KeyboardInputMixin",
     "LivingEntityMixin",
     "PacketApplyBatcherEntryMixin",
-    "PlayerEntityMixin"
+    "PlayerEntityMixin",
+    "RenderLayerInvoker",
+    "RenderPipelinesAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

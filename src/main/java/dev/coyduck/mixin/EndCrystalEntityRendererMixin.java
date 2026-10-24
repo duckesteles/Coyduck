@@ -42,6 +42,6 @@ public abstract class EndCrystalEntityRendererMixin {
             original.call(queue, model, state, matrices, layer, light, overlay, outline, crumbling);
             return;
         }
-        queue.submitModel(model, state, matrices, CrystalChams.layer(), light, overlay, color, null, outline, crumbling);
+        queue.submitModel(model, state, matrices, CrystalChams.layer(), CrystalChams.light(light), overlay, color, null, outline, crumbling);
     }
 }

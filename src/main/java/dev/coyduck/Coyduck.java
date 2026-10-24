@@ -1,5 +1,6 @@
 package dev.coyduck;
 
+import dev.coyduck.gui.CoyduckGuiTheme;
 import dev.coyduck.managers.ConfigSaver;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
@@ -27,6 +28,7 @@ import dev.coyduck.modules.PopCounter;
 import dev.coyduck.modules.SelfTrap;
 import dev.coyduck.modules.Surround;
 import meteordevelopment.meteorclient.MeteorClient;
+import meteordevelopment.meteorclient.gui.GuiThemes;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
 import meteordevelopment.meteorclient.systems.modules.Category;
@@ -42,6 +44,8 @@ public class Coyduck extends MeteorAddon {
     @Override
     public void onInitialize() {
         LOG.info("Initializing Coyduck");
+
+        GuiThemes.add(new CoyduckGuiTheme());
 
         MeteorClient.EVENT_BUS.subscribe(ConfigSaver.get());
         MeteorClient.EVENT_BUS.subscribe(LatencyManager.get());

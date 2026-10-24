@@ -2,7 +2,12 @@ package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.DepthTestFunction;
 import dev.coyduck.managers.CrystalTracker;
+import dev.coyduck.mixin.RenderLayerInvoker;
+import dev.coyduck.mixin.RenderPipelinesAccessor;
 import dev.coyduck.utils.ExplosionDamage;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import meteordevelopment.meteorclient.MeteorClient;
@@ -22,6 +27,7 @@ import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.RenderLayers;
+import net.minecraft.client.render.RenderSetup;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.network.packet.s2c.play.EntitiesDestroyS2CPacket;
@@ -40,7 +46,10 @@ public class CrystalChams extends Module {
     }
 
     private static final Identifier TEXTURE = Identifier.ofVanilla("textures/entity/end_crystal/end_crystal.png");
-    private static RenderLayer layer;
+    private static final int FULL_BRIGHT = 0xF000F0;
+    private static RenderLayer glowLayer;
+    private static RenderLayer wallLayer;
+    private static boolean wallFailed;
     private static final double RANGE = 16.0;
 
     private record Burst(Vec3d center, Color color, long time) {}
@@ -53,6 +62,13 @@ public class CrystalChams extends Module {
         .name("mode")
         .description("Owner colors your crystals and the enemy's apart. Danger colors each crystal by how much it would hurt you. Static uses one color.")
         .defaultValue(Mode.Owner)
+        .build()
+    );
+
+    private final Setting<Boolean> throughWalls = sgGeneral.add(new BoolSetting.Builder()
+        .name("through-walls")
+        .description("Draws crystals through blocks.")
+        .defaultValue(true)
         .build()
     );
 
@@ -167,8 +183,39 @@ public class CrystalChams extends Module {
     }
 
     public static RenderLayer layer() {
-        if (layer == null) layer = RenderLayers.entityTranslucent(TEXTURE);
-        return layer;
+        CrystalChams module = active();
+        if (module != null && module.throughWalls.get()) {
+            RenderLayer walls = wallLayer();
+            if (walls != null) return walls;
+        }
+        if (glowLayer == null) glowLayer = RenderLayers.entityTranslucentEmissive(TEXTURE);
+        return glowLayer;
+    }
+
+    public static int light(int original) {
+        return active() == null ? original : FULL_BRIGHT;
+    }
+
+    private static RenderLayer wallLayer() {
+        if (wallLayer != null || wallFailed) return wallLayer;
+        try {
+            RenderPipeline pipeline = RenderPipeline.builder(RenderPipelinesAccessor.coyduck$entityEmissive())
+                .withLocation(Identifier.of("coyduck", "pipeline/crystal_chams"))
+                .withShaderDefine("ALPHA_CUTOUT", 0.1f)
+                .withShaderDefine("PER_FACE_LIGHTING")
+                .withSampler("Sampler1")
+                .withBlend(BlendFunction.TRANSLUCENT)
+                .withCull(false)
+                .withDepthWrite(false)
+                .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+                .build();
+            RenderSetup setup = RenderSetup.builder(pipeline).texture("Sampler0", TEXTURE).useOverlay().translucent().outlineMode(RenderSetup.OutlineMode.NONE).build();
+            wallLayer = RenderLayerInvoker.coyduck$of("coyduck_crystal_chams", setup);
+        } catch (RuntimeException e) {
+            wallFailed = true;
+            Coyduck.LOG.error("Could not build the through walls crystal layer", e);
+        }
+        return wallLayer;
     }
 
     @Override
