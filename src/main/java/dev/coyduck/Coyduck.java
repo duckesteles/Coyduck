@@ -11,6 +11,7 @@ import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.managers.MotionTracker;
 import dev.coyduck.managers.RotationManager;
 import dev.coyduck.modules.AirMine;
+import dev.coyduck.modules.AntiWeb;
 import dev.coyduck.modules.AutoAnchor;
 import dev.coyduck.modules.AutoCity;
 import dev.coyduck.modules.AutoCrystal;
@@ -64,6 +65,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new HoleSnap());
         Modules.get().add(new CustomFov());
         Modules.get().add(new AirMine());
+        Modules.get().add(new AntiWeb());
     }
 
     @Override
