@@ -3,6 +3,7 @@ package dev.coyduck.modules;
 import dev.coyduck.Coyduck;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
+import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
 import meteordevelopment.meteorclient.settings.BoolSetting;
@@ -18,6 +19,7 @@ import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.MovementType;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
+import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 
@@ -27,6 +29,7 @@ public class HoleSnap extends Module {
     private static final float SAFE_RESISTANCE = 600;
     private static final double ARRIVE = 1.0E-3;
     private static final double JUMP = 0.42;
+    private static final long MAX_TIME = 3_000;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgSpeed = settings.createGroup("Speed");
@@ -181,6 +184,7 @@ public class HoleSnap extends Module {
     private int pulled;
     private int jumpTicks;
     private int boostLeft;
+    private long startedAt;
 
     public HoleSnap() {
         super(Coyduck.CATEGORY, "hole-snap", "Moves you into the nearest hole, then turns itself off.");
@@ -197,6 +201,7 @@ public class HoleSnap extends Module {
         pulled = 0;
         jumpTicks = 0;
         boostLeft = boost.get() ? boostMoves.get() : 0;
+        startedAt = Util.getMeasuringTimeMs();
         hole = mc.player == null ? null : find();
     }
 
@@ -354,6 +359,13 @@ public class HoleSnap extends Module {
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
         if (isActive()) toggle();
+    }
+
+    @EventHandler
+    private void onTick(TickEvent.Post event) {
+        if (mc.player == null) return;
+        if (mc.player.hasVehicle()) stop("Cannot snap while riding.");
+        else if (Util.getMeasuringTimeMs() - startedAt > MAX_TIME) stop("Took too long to reach the hole.");
     }
 
     private boolean blocked(Hole target) {
