@@ -19,3 +19,6 @@
 - HoleSnap
 - CustomFov
 - AirMine
+- CrystalChams
+- PopCounter
+- KillEffects

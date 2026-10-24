@@ -9,6 +9,8 @@
     "ClientPlayerEntityMixin",
     "ClientPlayerInteractionManagerAccessor",
     "ClientWorldAccessor",
+    "EndCrystalEntityRenderStateMixin",
+    "EndCrystalEntityRendererMixin",
     "EntityMixin",
     "GameRendererMixin",
     "KeyboardInputMixin",

@@ -20,6 +20,9 @@ body:
         - HoleSnap
         - CustomFov
         - AirMine
+        - CrystalChams
+        - PopCounter
+        - KillEffects
         - Other
     validations:
       required: true

@@ -17,10 +17,13 @@ import dev.coyduck.modules.AutoCrystal;
 import dev.coyduck.modules.AutoTotem;
 import dev.coyduck.modules.AutoTrap;
 import dev.coyduck.modules.AutoWeb;
+import dev.coyduck.modules.CrystalChams;
 import dev.coyduck.modules.CustomFov;
 import dev.coyduck.modules.ElytraFly;
 import dev.coyduck.modules.HoleSnap;
+import dev.coyduck.modules.KillEffects;
 import dev.coyduck.modules.LadderTrap;
+import dev.coyduck.modules.PopCounter;
 import dev.coyduck.modules.SelfTrap;
 import dev.coyduck.modules.Surround;
 import meteordevelopment.meteorclient.MeteorClient;
@@ -64,6 +67,9 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new HoleSnap());
         Modules.get().add(new CustomFov());
         Modules.get().add(new AirMine());
+        Modules.get().add(new CrystalChams());
+        Modules.get().add(new PopCounter());
+        Modules.get().add(new KillEffects());
     }
 
     @Override
