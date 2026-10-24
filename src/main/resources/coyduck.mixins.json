@@ -11,7 +11,6 @@
     "ClientWorldAccessor",
     "EntityMixin",
     "GameRendererMixin",
-    "GuiThemeAccessor",
     "KeyboardInputMixin",
     "LivingEntityMixin",
     "PacketApplyBatcherEntryMixin",
