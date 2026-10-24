@@ -1,6 +1,7 @@
 package dev.coyduck;
 
 import dev.coyduck.gui.CoyduckGuiTheme;
+import dev.coyduck.gui.ThemeSelector;
 import dev.coyduck.managers.ConfigSaver;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
@@ -18,7 +19,6 @@ import dev.coyduck.modules.AutoCrystal;
 import dev.coyduck.modules.AutoTotem;
 import dev.coyduck.modules.AutoTrap;
 import dev.coyduck.modules.AutoWeb;
-import dev.coyduck.modules.CrystalChams;
 import dev.coyduck.modules.CustomFov;
 import dev.coyduck.modules.ElytraFly;
 import dev.coyduck.modules.HoleSnap;
@@ -46,6 +46,7 @@ public class Coyduck extends MeteorAddon {
         LOG.info("Initializing Coyduck");
 
         GuiThemes.add(new CoyduckGuiTheme());
+        MeteorClient.EVENT_BUS.subscribe(new ThemeSelector());
 
         MeteorClient.EVENT_BUS.subscribe(ConfigSaver.get());
         MeteorClient.EVENT_BUS.subscribe(LatencyManager.get());
@@ -71,7 +72,6 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new HoleSnap());
         Modules.get().add(new CustomFov());
         Modules.get().add(new AirMine());
-        Modules.get().add(new CrystalChams());
         Modules.get().add(new PopCounter());
         Modules.get().add(new KillEffects());
     }

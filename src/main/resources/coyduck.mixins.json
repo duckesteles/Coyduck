@@ -9,17 +9,13 @@
     "ClientPlayerEntityMixin",
     "ClientPlayerInteractionManagerAccessor",
     "ClientWorldAccessor",
-    "EndCrystalEntityRenderStateMixin",
-    "EndCrystalEntityRendererMixin",
     "EntityMixin",
     "GameRendererMixin",
     "GuiThemeAccessor",
     "KeyboardInputMixin",
     "LivingEntityMixin",
     "PacketApplyBatcherEntryMixin",
-    "PlayerEntityMixin",
-    "RenderLayerInvoker",
-    "RenderPipelinesAccessor"
+    "PlayerEntityMixin"
   ],
   "injectors": {
     "defaultRequire": 1
