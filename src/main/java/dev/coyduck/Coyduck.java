@@ -10,6 +10,7 @@ import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.managers.MotionTracker;
 import dev.coyduck.managers.RotationManager;
+import dev.coyduck.modules.AutoAnchor;
 import dev.coyduck.modules.AutoCity;
 import dev.coyduck.modules.AutoCrystal;
 import dev.coyduck.modules.AutoTotem;
@@ -52,6 +53,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new AutoTotem());
         Modules.get().add(new Surround());
         Modules.get().add(new AutoCrystal());
+        Modules.get().add(new AutoAnchor());
         Modules.get().add(new AutoCity());
         Modules.get().add(new AutoTrap());
         Modules.get().add(new AutoWeb());

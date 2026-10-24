@@ -90,7 +90,11 @@ public final class CrystalTracker {
     }
 
     public void explodeAt(Vec3d center) {
-        double range = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
+        explodeAt(center, ExplosionDamage.CRYSTAL_RANGE);
+    }
+
+    public void explodeAt(Vec3d center, double radius) {
+        double range = radius * radius;
         double dropRange = DROP_KILL_RANGE * DROP_KILL_RANGE;
         long duration = LatencyManager.get().timeout();
 

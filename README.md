@@ -7,6 +7,7 @@
 ## Modules
 
 - AutoCrystal
+- AutoAnchor
 - AutoTotem
 - Surround
 - AutoTrap
