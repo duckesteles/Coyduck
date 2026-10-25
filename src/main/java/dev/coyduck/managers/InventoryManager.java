@@ -8,6 +8,7 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
+import meteordevelopment.meteorclient.utils.world.TickRate;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.component.DataComponentTypes;
@@ -46,6 +47,9 @@ public final class InventoryManager {
 
     private static final int BARRIER_DISTANCE = 64;
     private static final long SELECT_MARGIN = 50;
+    private static final int FINISH_TICKS = 4;
+    private static final float MIN_TPS = 5;
+    private static final long MAX_SERVER_LAG = 2000;
 
     private final long[] heldAt = new long[HOTBAR_END];
     private Hand burstHand = Hand.MAIN_HAND;
@@ -54,6 +58,10 @@ public final class InventoryManager {
     private boolean burstAttacked;
     private int sentSlot = -1;
     private final Map<Item, Integer> homes = new HashMap<>();
+    private long eatStart;
+    private long eatSeen;
+    private int eatLeft;
+    private long eatGuard;
 
     public enum Swap {
         NONE,
@@ -103,7 +111,28 @@ public final class InventoryManager {
     }
 
     public boolean isEating() {
-        return mc.player.isUsingItem() && mc.player.getActiveHand() == Hand.MAIN_HAND;
+        if (mc.player == null) return false;
+        long now = Util.getMeasuringTimeMs();
+
+        if (mc.player.isUsingItem() && mc.player.getActiveHand() == Hand.MAIN_HAND) {
+            if (eatStart == 0) eatStart = now;
+            eatSeen = now;
+            eatLeft = mc.player.getItemUseTimeLeft();
+            return true;
+        }
+
+        if (eatStart != 0) {
+            if (eatLeft <= FINISH_TICKS) eatGuard = eatSeen + serverTail(eatSeen - eatStart);
+            eatStart = 0;
+        }
+        return now < eatGuard;
+    }
+
+    private long serverTail(long eaten) {
+        LatencyManager latency = LatencyManager.get();
+        float tps = Math.max(TickRate.INSTANCE.getTickRate(), MIN_TPS);
+        long lag = (long) (eaten * Math.max(0, 20 / tps - 1));
+        return latency.rtt() + 2L * latency.jitter() + SELECT_MARGIN + Math.min(lag, MAX_SERVER_LAG);
     }
 
     public boolean wantsToEat() {
@@ -232,11 +261,13 @@ public final class InventoryManager {
         if (homes.isEmpty() || mc.player == null || mc.interactionManager == null || mc.currentScreen instanceof HandledScreen<?>) return;
         if (!mc.player.currentScreenHandler.getCursorStack().isEmpty()) return;
 
+        int hand = isEating() ? selectedSlot() : -1;
         Iterator<Map.Entry<Item, Integer>> it = homes.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<Item, Integer> home = it.next();
             Item item = home.getKey();
             int slot = home.getValue();
+            if (slot == hand) continue;
             ItemStack held = stack(slot);
             if (!held.isEmpty()) {
                 if (!held.isOf(item)) it.remove();
@@ -250,7 +281,13 @@ public final class InventoryManager {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
+        isEating();
         refill();
+    }
+
+    @EventHandler
+    private void onTickPost(TickEvent.Post event) {
+        isEating();
     }
 
     public Hand hand() {
@@ -324,6 +361,8 @@ public final class InventoryManager {
     private void onWorldReset(WorldResetEvent event) {
         sentSlot = -1;
         homes.clear();
+        eatStart = 0;
+        eatGuard = 0;
         Arrays.fill(heldAt, 0);
     }
 
@@ -331,6 +370,8 @@ public final class InventoryManager {
     private void onGameLeft(GameLeftEvent event) {
         sentSlot = -1;
         homes.clear();
+        eatStart = 0;
+        eatGuard = 0;
         Arrays.fill(heldAt, 0);
     }
 
