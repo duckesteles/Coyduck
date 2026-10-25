@@ -7,10 +7,14 @@ import dev.coyduck.utils.PacketBatch;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
+import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket;
@@ -26,6 +30,9 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.function.Predicate;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
@@ -41,10 +48,12 @@ public final class InventoryManager {
     private static final long SELECT_MARGIN = 50;
 
     private final long[] heldAt = new long[HOTBAR_END];
+    private Hand burstHand = Hand.MAIN_HAND;
     private int burst;
     private int burstMask;
     private boolean burstAttacked;
     private int sentSlot = -1;
+    private final Map<Item, Integer> homes = new HashMap<>();
 
     public enum Swap {
         NONE,
@@ -196,6 +205,7 @@ public final class InventoryManager {
     }
 
     private boolean withItemNow(int index, SwitchMode mode, Runnable action) {
+        if (PlayerInventory.isValidHotbarIndex(index)) remember(stack(index).getItem(), index);
         int before = serverSlot();
         burst++;
         try {
@@ -207,8 +217,44 @@ public final class InventoryManager {
                 else if (after != before) stamp(bit(before) | bit(after));
                 burstMask = 0;
                 burstAttacked = false;
+                refill();
             }
         }
+    }
+
+    private void remember(Item item, int slot) {
+        if (item == Items.AIR) return;
+        homes.values().removeIf(home -> home == slot);
+        homes.put(item, slot);
+    }
+
+    private void refill() {
+        if (homes.isEmpty() || mc.player == null || mc.interactionManager == null || mc.currentScreen instanceof HandledScreen<?>) return;
+        if (!mc.player.currentScreenHandler.getCursorStack().isEmpty()) return;
+
+        Iterator<Map.Entry<Item, Integer>> it = homes.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<Item, Integer> home = it.next();
+            Item item = home.getKey();
+            int slot = home.getValue();
+            ItemStack held = stack(slot);
+            if (!held.isEmpty()) {
+                if (!held.isOf(item)) it.remove();
+                continue;
+            }
+
+            int from = find(stack -> stack.isOf(item), HOTBAR_END, MAIN_END);
+            if (from != -1) swapWithHotbar(from, slot);
+        }
+    }
+
+    @EventHandler
+    private void onTick(TickEvent.Pre event) {
+        refill();
+    }
+
+    public Hand hand() {
+        return burstHand;
     }
 
     private boolean switchedNow(int index, SwitchMode mode, Runnable action) {
@@ -218,7 +264,9 @@ public final class InventoryManager {
             return true;
         }
 
-        if (mode == SwitchMode.Silent && PlayerInventory.isValidHotbarIndex(index) && !isEating()) {
+        if (isEating()) return withOffhand(index, action);
+
+        if (mode != SwitchMode.InvSwap && PlayerInventory.isValidHotbarIndex(index)) {
             selectNow(index);
             action.run();
             selectNow(selected);
@@ -229,6 +277,31 @@ public final class InventoryManager {
         action.run();
         swapWithHotbar(index, selected);
         return true;
+    }
+
+    private boolean withOffhand(int index, Runnable action) {
+        if (index == OFFHAND) return useOffhand(action);
+
+        ScreenHandler handler = mc.player.currentScreenHandler;
+        int id = handlerSlot(handler, index);
+        if (id == -1) return false;
+
+        mc.interactionManager.clickSlot(handler.syncId, id, OFFHAND, SlotActionType.SWAP, mc.player);
+        try {
+            return useOffhand(action);
+        } finally {
+            mc.interactionManager.clickSlot(handler.syncId, id, OFFHAND, SlotActionType.SWAP, mc.player);
+        }
+    }
+
+    private boolean useOffhand(Runnable action) {
+        burstHand = Hand.OFF_HAND;
+        try {
+            action.run();
+            return true;
+        } finally {
+            burstHand = Hand.MAIN_HAND;
+        }
     }
 
     @EventHandler
@@ -250,12 +323,14 @@ public final class InventoryManager {
     @EventHandler
     private void onWorldReset(WorldResetEvent event) {
         sentSlot = -1;
+        homes.clear();
         Arrays.fill(heldAt, 0);
     }
 
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
         sentSlot = -1;
+        homes.clear();
         Arrays.fill(heldAt, 0);
     }
 

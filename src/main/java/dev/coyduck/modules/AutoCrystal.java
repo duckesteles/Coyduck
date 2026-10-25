@@ -140,7 +140,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("Silent changes your held slot for each action. InvSwap swaps the item into your hand and back. While you eat with your main hand, Silent falls back to InvSwap.")
+        .description("Silent selects the item's hotbar slot for a moment. InvSwap swaps the item into your hand and back. While you eat, the item is used from your offhand instead, so eating is never cut off.")
         .defaultValue(InventoryManager.SwitchMode.InvSwap)
         .build()
     );
@@ -179,7 +179,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> pauseEating = sgGeneral.add(new BoolSetting.Builder()
         .name("pause-eating")
-        .description("Pauses placing while you eat. When off, crystals are swapped into your hand and back in one packet batch, which keeps the eating going. Silent switching is never used while eating.")
+        .description("Pauses placing while you eat. When off, crystals are used from your offhand for a moment, so your main hand and the eating are never touched.")
         .defaultValue(false)
         .build()
     );

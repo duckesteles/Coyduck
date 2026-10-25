@@ -87,7 +87,7 @@ public class Surround extends Module {
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("Silent changes your held slot for the placement. InvSwap swaps the block into your hand and back, so it never stops you eating.")
+        .description("Silent selects the item's hotbar slot for a moment. InvSwap swaps the item into your hand and back. While you eat, the item is used from your offhand instead, so eating is never cut off.")
         .defaultValue(InventoryManager.SwitchMode.InvSwap)
         .build()
     );

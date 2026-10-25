@@ -131,7 +131,7 @@ public final class InteractionManager {
     }
 
     public void place(BlockPos pos, BlockHitResult hit, SwingMode swing) {
-        mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+        mc.interactionManager.interactBlock(mc.player, InventoryManager.get().hand(), hit);
         int sequence = ((ClientWorldAccessor) mc.world).coyduck$getPendingUpdateManager().getSequence();
         swing(swing);
         pending.put(pos.asLong(), new Pending(sequence, Util.getMeasuringTimeMs() + LatencyManager.get().timeout()));
@@ -164,7 +164,7 @@ public final class InteractionManager {
         if (slot == -1) return false;
 
         Runnable place = () -> {
-            mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+            mc.interactionManager.interactBlock(mc.player, InventoryManager.get().hand(), hit);
             swing(swing);
             CrystalTracker.get().placed(base);
             if (after != null) after.run();
@@ -316,7 +316,7 @@ public final class InteractionManager {
     }
 
     public void swing(SwingMode mode) {
-        swing(mode, Hand.MAIN_HAND);
+        swing(mode, InventoryManager.get().hand());
     }
 
     public void swing(SwingMode mode, Hand hand) {

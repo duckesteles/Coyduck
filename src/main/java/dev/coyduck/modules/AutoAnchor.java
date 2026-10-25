@@ -110,7 +110,7 @@ public class AutoAnchor extends Module {
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("How the anchor and glowstone are put in your hand. While you eat with your main hand, Silent falls back to InvSwap.")
+        .description("Silent selects the item's hotbar slot for a moment. InvSwap swaps the item into your hand and back. While you eat, the item is used from your offhand instead, so eating is never cut off.")
         .defaultValue(InventoryManager.SwitchMode.InvSwap)
         .build()
     );
@@ -152,7 +152,7 @@ public class AutoAnchor extends Module {
 
     private final Setting<Boolean> pauseEating = sgGeneral.add(new BoolSetting.Builder()
         .name("pause-eating")
-        .description("Pauses while you eat. When off, the anchor and glowstone are swapped into your hand and back in one packet batch, which keeps the eating going.")
+        .description("Pauses while you eat. When off, the anchor and glowstone are used from your offhand for a moment, so your main hand and the eating are never touched.")
         .defaultValue(false)
         .build()
     );
@@ -516,7 +516,7 @@ public class AutoAnchor extends Module {
 
             BlockHitResult anchorHit = face(pos);
             if (!withItem(glowSlot, () -> {
-                mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, anchorHit);
+                mc.interactionManager.interactBlock(mc.player, InventoryManager.get().hand(), anchorHit);
                 interaction.swing(swing.get());
             })) return;
             if (charges(mc.world.getBlockState(pos)) == 0) return;
