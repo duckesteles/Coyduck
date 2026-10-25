@@ -198,7 +198,7 @@ public final class InventoryManager {
             return Swap.CLICK;
         }
 
-        if (!PlayerInventory.isValidHotbarIndex(index) || mc.player.isUsingItem()) return Swap.NONE;
+        if (!PlayerInventory.isValidHotbarIndex(index) || mc.player.isUsingItem() || isEating()) return Swap.NONE;
 
         int selected = selectedSlot();
         if (selected != index) selectNow(index);
