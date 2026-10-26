@@ -107,13 +107,6 @@ public class AutoTotem extends Module {
         .build()
     );
 
-    private final Setting<Boolean> preSwap = sgGeneral.add(new BoolSetting.Builder()
-        .name("pre-swap")
-        .description("In a fight, swaps a spare totem into your offhand every tick. While the offhand still holds a totem nothing changes, but right after a pop the next swap already refills it, so the offhand is empty for about a tick instead of your whole ping. Works while you eat.")
-        .defaultValue(true)
-        .build()
-    );
-
     private final Setting<Boolean> closeContainers = sgGeneral.add(new BoolSetting.Builder()
         .name("close-containers")
         .description("Closes an open container when you pop. The server never reports the offhand while a container is open, so the refill could not be confirmed.")
@@ -211,7 +204,6 @@ public class AutoTotem extends Module {
         if (pending && Util.getMeasuringTimeMs() >= pendingUntil) retry();
         refill(false);
         if (!pending && !confirmed && isTotem(mc.player.getOffHandStack()) && Util.getMeasuringTimeMs() >= nextVerify) verify();
-        if (!pending && preSwap.get()) preSwap();
         updateMainhand();
 
         totems = InventoryManager.get().count(AutoTotem::isTotem);
@@ -369,15 +361,6 @@ public class AutoTotem extends Module {
         pendingSyncId = syncId;
         pendingUntil = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
         barrier = inventory.barrier();
-    }
-
-    private void preSwap() {
-        if (!isTotem(mc.player.getOffHandStack()) || !danger()) return;
-
-        InventoryManager inventory = InventoryManager.get();
-        int source = offhandSource();
-        if (source == NONE || source == inventory.serverSlot() || inventory.handlerSlot(mc.player.currentScreenHandler, source) == -1) return;
-        inventory.swapWithOffhand(source);
     }
 
     private int offhandSource() {
