@@ -511,10 +511,15 @@ public class Surround extends Module {
         if (Targets.isBase(mc.world.getBlockState(cell.down()))) {
             Vec3d crystal = new Vec3d(cell.getX() + 0.5, cell.getY(), cell.getZ() + 0.5);
             damage = ExplosionDamage.crystal(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), crystal, mc.world);
+            if (threatens(damage, health)) return true;
         }
         if (mc.world.getRegistryKey() != World.NETHER && !mc.world.getDimensionEntry().matchesKey(DimensionTypes.THE_NETHER)) {
             damage = Math.max(damage, ExplosionDamage.explosion(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), Vec3d.ofCenter(cell), ANCHOR_POWER, mc.world));
         }
+        return threatens(damage, health);
+    }
+
+    private boolean threatens(float damage, float health) {
         return damage >= health || (health <= faceHealth.get() && damage >= FACE_MIN_DAMAGE);
     }
 

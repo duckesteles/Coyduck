@@ -345,9 +345,14 @@ public class HoleSnap extends Module {
     private boolean occupied(Hole target) {
         for (BlockPos cell : target.cells) {
             Box box = new Box(cell).stretch(0, depth.get() - 1, 0);
-            if (!mc.world.getOtherEntities(mc.player, box, entity -> entity instanceof EndCrystalEntity || entity instanceof PlayerEntity).isEmpty()) return true;
+            if (!mc.world.getOtherEntities(mc.player, box.contract(0.2, 0, 0.2), entity -> entity instanceof PlayerEntity).isEmpty()) return true;
+            if (!mc.world.getOtherEntities(mc.player, box.expand(2), entity -> entity instanceof EndCrystalEntity crystal && inCell(crystal.getBlockPos(), cell)).isEmpty()) return true;
         }
         return false;
+    }
+
+    private boolean inCell(BlockPos pos, BlockPos cell) {
+        return pos.getX() == cell.getX() && pos.getZ() == cell.getZ() && pos.getY() >= cell.getY() && pos.getY() < cell.getY() + depth.get();
     }
 
     private boolean wall(BlockPos pos) {

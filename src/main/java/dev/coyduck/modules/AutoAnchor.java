@@ -438,6 +438,8 @@ public class AutoAnchor extends Module {
             if (held != null) {
                 status = "hurt-sync";
                 if (release > 0 && (releaseAt == 0 || release < releaseAt)) releaseAt = release;
+            } else if (charged.isEmpty() && InventoryManager.get().isEating()) {
+                status = "eating";
             } else if (charged.isEmpty() && glowSlot == -1) {
                 status = anchorSlot == -1 ? "no anchors" : "no glowstone";
             } else if (charged.isEmpty() && fresh.isEmpty()) {

@@ -327,12 +327,11 @@ public final class MiningManager {
         if (holdTicks > 0) return;
 
         if (Util.getMeasuringTimeMs() < nextHold || !backgroundReady(state)) return;
-        boolean eating = InventoryManager.get().wantsToEat();
-        if (eating || mc.player.getHealth() + mc.player.getAbsorptionAmount() <= HOLD_MIN_HEALTH
+        if (InventoryManager.get().wantsToEat() || mc.player.getHealth() + mc.player.getAbsorptionAmount() <= HOLD_MIN_HEALTH
             || mc.player.getMainHandStack().contains(DataComponentTypes.DEATH_PROTECTION)) {
             long now = Util.getMeasuringTimeMs();
             if (blockedSince == 0) blockedSince = now;
-            else if (!eating && now - blockedSince > LatencyManager.get().timeout()) clearBackground();
+            else if (!InventoryManager.get().isEating() && now - blockedSince > LatencyManager.get().timeout()) clearBackground();
             return;
         }
         blockedSince = 0;
