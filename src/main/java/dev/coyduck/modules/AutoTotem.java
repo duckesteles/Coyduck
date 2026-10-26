@@ -132,8 +132,8 @@ public class AutoTotem extends Module {
 
     private final Setting<Boolean> pearlGuard = sgGeneral.add(new BoolSetting.Builder()
         .name("pearl-guard")
-        .description("Cancels an ender pearl throw whose first blocks of flight cross an end crystal. The pearl would explode it in your face and the blast counts as yours.")
-        .defaultValue(true)
+        .description("Cancels an ender pearl throw that would hit an end crystal right in front of your face, since the blast would count as yours. Off by default.")
+        .defaultValue(false)
         .build()
     );
 
@@ -152,7 +152,7 @@ public class AutoTotem extends Module {
     );
 
     private static final int MAIN_MISSING_TICKS = 1;
-    private static final double PEARL_GUARD_RANGE = 4.5;
+    private static final double PEARL_GUARD_RANGE = 2.0;
     private static final double PEARL_SIZE = 0.125;
 
     private final long[] sourceUsedAt = new long[InventoryManager.MAIN_END];
