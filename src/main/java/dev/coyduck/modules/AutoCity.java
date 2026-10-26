@@ -297,10 +297,11 @@ public class AutoCity extends Module {
         MiningManager mining = MiningManager.get();
         BlockPos background = mining.background();
 
+        List<BlockPos> own = Targets.ownRing();
         if (burrow.get()) {
             for (long key : columns) {
                 BlockPos pos = BlockPos.fromLong(key);
-                if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || !mining.inRange(pos) || !Targets.isBurrowedIn(box, pos)) continue;
+                if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || own.contains(pos) || !mining.inRange(pos) || !Targets.isBurrowedIn(box, pos)) continue;
                 if (mc.world.getBlockState(pos).isOf(Blocks.BEDROCK)) continue;
 
                 choices.add(new Choice(pos, BURROW_SCORE + mining.delta(mc.world.getBlockState(pos), pos, mc.player.getMainHandStack()), null));
@@ -309,7 +310,6 @@ public class AutoCity extends Module {
 
         Vec3d feet = Targets.feet(box);
         List<BlockPos> ring = Targets.ring(columns, 0);
-        List<BlockPos> own = Targets.ownRing();
 
         for (BlockPos pos : ring) {
             if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || !mining.inRange(pos) || own.contains(pos)) continue;
@@ -354,9 +354,9 @@ public class AutoCity extends Module {
         InteractionManager interaction = InteractionManager.get();
         int slot = InventoryManager.get().find(stack -> stack.isOf(Items.OBSIDIAN), 0, InventoryManager.MAIN_END);
         BlockHitResult hit = slot == -1 || !interaction.canPlace(support) ? null : interaction.hit(support, true);
-        if (hit == null) return false;
+        if (hit == null || !interaction.aimed(hit.getPos(), new Box(hit.getBlockPos()), InteractionManager.TRAP_PRIORITY)) return false;
 
-        InventoryManager.get().withItem(slot, switchMode.get(), () -> interaction.place(support, hit, swing.get()));
+        InventoryManager.get().withItem(slot, switchMode.get(), () -> interaction.place(support, hit, swing.get(), true, InteractionManager.TRAP_PRIORITY));
         return Targets.isBase(mc.world.getBlockState(support));
     }
 

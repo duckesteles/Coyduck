@@ -373,7 +373,7 @@ public final class InteractionManager {
 
     public boolean canHitWithHand() {
         if (!mc.player.hasStatusEffect(StatusEffects.WEAKNESS)) return attackDamage(mc.player.getMainHandStack()) > 0;
-        return ticks - heldSince >= WEAPON_SETTLE && attackDamage(heldStack) > 0;
+        return ticks - heldSince >= WEAPON_SETTLE && mc.player.getMainHandStack().getItem() == heldItem && attackDamage(heldStack) > 0;
     }
 
     public boolean canAttack() {

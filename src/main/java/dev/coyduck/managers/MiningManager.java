@@ -192,7 +192,7 @@ public final class MiningManager {
     }
 
     private boolean stop(Object owner, BlockState state) {
-        if (!owns(owner) || !isReady(state) || state.isOf(Blocks.COBWEB) || lastStopTick == ticks) return false;
+        if (!owns(owner) || !isReady(state) || state.isOf(Blocks.COBWEB) || lastStopTick == ticks || InventoryManager.get().isOffhandEating()) return false;
 
         int tool = bestTool(state);
         Runnable action = () -> send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
@@ -271,7 +271,7 @@ public final class MiningManager {
     @EventHandler(priority = EventPriority.HIGH)
     private void onTick(TickEvent.Pre event) {
         ticks++;
-        if (mc.player == null || mc.world == null) return;
+        if (mc.player == null || mc.world == null || !mc.player.isAlive()) return;
         if (InventoryManager.get().isOffhandEating()) return;
 
         tickBackground();
