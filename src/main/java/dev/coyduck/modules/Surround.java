@@ -53,6 +53,8 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
+import net.minecraft.world.dimension.DimensionTypes;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -72,6 +74,8 @@ public class Surround extends Module {
     private static final double NEAR = 5 * 5;
     private static final double FACE_ENEMY_RANGE = 12;
     private static final float FACE_MIN_DAMAGE = 2;
+
+    private static final float ANCHOR_POWER = 5.0f;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgProtect = settings.createGroup("Protect");
@@ -221,6 +225,7 @@ public class Surround extends Module {
     private int anchorY;
     private int budget;
     private boolean running;
+    private boolean canPlaceNow = true;
 
     public Surround() {
         super(Coyduck.CATEGORY, "surround+", "Surrounds your feet with obsidian and keeps it up against any break.");
@@ -313,6 +318,7 @@ public class Surround extends Module {
 
         int slot = blockSlot();
         if (slot == -1) return;
+        canPlaceNow = slot == InventoryManager.get().selectedSlot() || !InventoryManager.get().isEating();
 
         InteractionManager interaction = InteractionManager.get();
         List<BlockPos> placeable = new ArrayList<>();
@@ -428,7 +434,7 @@ public class Surround extends Module {
 
         float health = AutoTotem.popInFlight() ? 1.0f : mc.player.getHealth() + mc.player.getAbsorptionAmount();
         if (damage < health) return Verdict.Safe;
-        return allowPop.get() && AutoTotem.canAffordPop() ? Verdict.Pop : Verdict.Unsafe;
+        return allowPop.get() && canPlaceNow && AutoTotem.canAffordPop() ? Verdict.Pop : Verdict.Unsafe;
     }
 
     private List<BlockPos> targets() {
@@ -499,10 +505,16 @@ public class Surround extends Module {
     }
 
     private boolean faceThreat(BlockPos cell, float health) {
-        if (!Targets.isBase(mc.world.getBlockState(cell.down())) || !mc.world.getBlockState(cell).isReplaceable()) return false;
+        if (!mc.world.getBlockState(cell).isReplaceable()) return false;
 
-        Vec3d crystal = new Vec3d(cell.getX() + 0.5, cell.getY(), cell.getZ() + 0.5);
-        float damage = ExplosionDamage.crystal(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), crystal, mc.world);
+        float damage = 0;
+        if (Targets.isBase(mc.world.getBlockState(cell.down()))) {
+            Vec3d crystal = new Vec3d(cell.getX() + 0.5, cell.getY(), cell.getZ() + 0.5);
+            damage = ExplosionDamage.crystal(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), crystal, mc.world);
+        }
+        if (mc.world.getRegistryKey() != World.NETHER && !mc.world.getDimensionEntry().matchesKey(DimensionTypes.THE_NETHER)) {
+            damage = Math.max(damage, ExplosionDamage.explosion(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), Vec3d.ofCenter(cell), ANCHOR_POWER, mc.world));
+        }
         return damage >= health || (health <= faceHealth.get() && damage >= FACE_MIN_DAMAGE);
     }
 

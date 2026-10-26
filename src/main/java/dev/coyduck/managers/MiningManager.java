@@ -315,6 +315,7 @@ public final class MiningManager {
     }
 
     private void tickBackground() {
+        if (holdTicks > 0 && --holdTicks == 0) unhold();
         if (background == null) return;
 
         BlockState state = mc.world.getBlockState(background);
@@ -323,17 +324,15 @@ public final class MiningManager {
             return;
         }
 
-        if (holdTicks > 0) {
-            if (--holdTicks == 0) unhold();
-            return;
-        }
+        if (holdTicks > 0) return;
 
         if (Util.getMeasuringTimeMs() < nextHold || !backgroundReady(state)) return;
-        if (InventoryManager.get().wantsToEat() || mc.player.getHealth() + mc.player.getAbsorptionAmount() <= HOLD_MIN_HEALTH
+        boolean eating = InventoryManager.get().wantsToEat();
+        if (eating || mc.player.getHealth() + mc.player.getAbsorptionAmount() <= HOLD_MIN_HEALTH
             || mc.player.getMainHandStack().contains(DataComponentTypes.DEATH_PROTECTION)) {
             long now = Util.getMeasuringTimeMs();
             if (blockedSince == 0) blockedSince = now;
-            else if (now - blockedSince > LatencyManager.get().timeout()) clearBackground();
+            else if (!eating && now - blockedSince > LatencyManager.get().timeout()) clearBackground();
             return;
         }
         blockedSince = 0;
@@ -367,6 +366,10 @@ public final class MiningManager {
     }
 
     private void unhold() {
+        if (holdSource != -1 && mc.player != null && InventoryManager.get().isEating()) {
+            holdTicks = 1;
+            return;
+        }
         if (holdSource != -1) InventoryManager.get().swapWithHotbar(holdSource, holdHotbar);
         holdSource = -1;
         holdHotbar = -1;

@@ -818,7 +818,7 @@ public class AutoCrystal extends Module {
     private boolean canFillGap(BlockPos gap, Target target, float health) {
         BlockPos base = gap.down();
         if (!mc.world.getBlockState(gap).isAir() || !isBase(mc.world.getBlockState(base))) return false;
-        if (CrystalTracker.get().isPlacing(base) || blocked(base) || !inPlaceRange(base) || !breakable(base) || overlapsOwnCells(base)) return false;
+        if (CrystalTracker.get().placingOverlaps(base) || blocked(base) || !inPlaceRange(base) || !breakable(base) || overlapsOwnCells(base)) return false;
 
         Vec3d center = crystalCenter(base);
         if (!selfSafe(center, health, 0, mc.world) || hurtsFriend(center, mc.world)) return false;

@@ -15,6 +15,7 @@ import net.minecraft.block.ShapeContext;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.ItemEntity;
+import net.minecraft.entity.EntityType;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.network.packet.s2c.play.EntitiesDestroyS2CPacket;
 import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
@@ -138,7 +139,11 @@ public final class CrystalTracker {
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onApplyPre(PacketApplyEvent.Pre event) {
         switch (event.packet) {
-            case EntitySpawnS2CPacket packet -> highestId = Math.max(highestId, packet.getEntityId());
+            case EntitySpawnS2CPacket packet -> {
+                int id = packet.getEntityId();
+                boolean own = packet.getEntityType() == EntityType.END_CRYSTAL && isPlacing(BlockPos.ofFloored(packet.getX(), packet.getY(), packet.getZ()).down());
+                if (id > highestId || own) highestId = id;
+            }
             case EntitiesDestroyS2CPacket packet when mc.world != null -> {
                 long now = Util.getMeasuringTimeMs();
                 for (int id : packet.getEntityIds()) {

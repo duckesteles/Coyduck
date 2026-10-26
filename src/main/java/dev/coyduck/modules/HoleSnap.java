@@ -17,10 +17,16 @@ import meteordevelopment.meteorclient.systems.modules.world.Timer;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
+import net.minecraft.entity.decoration.EndCrystalEntity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.registry.tag.BlockTags;
+import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.entity.MovementType;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.List;
@@ -289,7 +295,7 @@ public class HoleSnap extends Module {
             for (int dz = -range.get(); dz <= range.get(); dz++) {
                 for (int dy = -downRange.get(); dy <= 0; dy++) {
                     Hole candidate = hole(feet.add(dx, dy, dz));
-                    if (candidate == null || covered(candidate, feet.getY() + 1)) continue;
+                    if (candidate == null || covered(candidate, feet.getY() + 1) || occupied(candidate)) continue;
                     if (dy == 0 && candidate.cells.contains(feet)) return candidate;
 
                     double distance = candidate.middle.squaredDistanceTo(position);
@@ -330,9 +336,18 @@ public class HoleSnap extends Module {
     private boolean open(BlockPos pos) {
         if (!wall(pos.down())) return false;
         for (int i = 0; i < depth.get(); i++) {
-            if (collidable(pos.up(i))) return false;
+            BlockState state = mc.world.getBlockState(pos.up(i));
+            if (collidable(pos.up(i)) || state.isOf(Blocks.COBWEB) || state.isIn(BlockTags.FIRE) || state.getFluidState().isIn(FluidTags.LAVA)) return false;
         }
         return true;
+    }
+
+    private boolean occupied(Hole target) {
+        for (BlockPos cell : target.cells) {
+            Box box = new Box(cell).stretch(0, depth.get() - 1, 0);
+            if (!mc.world.getOtherEntities(mc.player, box, entity -> entity instanceof EndCrystalEntity || entity instanceof PlayerEntity).isEmpty()) return true;
+        }
+        return false;
     }
 
     private boolean wall(BlockPos pos) {
@@ -372,6 +387,6 @@ public class HoleSnap extends Module {
         for (BlockPos cell : target.cells) {
             if (collidable(cell)) return true;
         }
-        return false;
+        return occupied(target);
     }
 }

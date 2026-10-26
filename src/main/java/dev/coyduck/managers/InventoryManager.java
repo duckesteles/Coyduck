@@ -183,6 +183,7 @@ public final class InventoryManager {
     }
 
     public boolean swapWithHotbar(int index, int hotbar) {
+        if (isEating()) return false;
         ScreenHandler handler = mc.player.currentScreenHandler;
         int id = handlerSlot(handler, index);
         if (id == -1) return false;

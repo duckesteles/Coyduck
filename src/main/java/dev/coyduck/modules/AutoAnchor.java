@@ -386,7 +386,7 @@ public class AutoAnchor extends Module {
         }
 
         List<Target> targets = targets();
-        float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
+        float health = AutoTotem.popInFlight() ? 1.0f : mc.player.getHealth() + mc.player.getAbsorptionAmount();
         ownCrystals = ownCrystals();
         rejectedSelf = false;
         rejectedFriend = false;
@@ -409,7 +409,7 @@ public class AutoAnchor extends Module {
         int glowSlot = slot(Items.GLOWSTONE);
 
         List<BlockPos> charged = chargedAnchors();
-        List<BlockPos> fresh = glowSlot != -1 ? candidates(targets, anchorSlot != -1) : List.of();
+        List<BlockPos> fresh = glowSlot != -1 && !InventoryManager.get().isEating() ? candidates(targets, anchorSlot != -1) : List.of();
         long timing = hurtSync.get() ? arrival : 0;
 
         for (BlockPos pos : charged) {

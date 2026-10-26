@@ -9,6 +9,7 @@ import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
+import meteordevelopment.orbit.EventPriority;
 import net.minecraft.entity.EntityStatuses;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LightningEntity;
@@ -40,7 +41,7 @@ public class KillEffects extends Module {
         super(Coyduck.CATEGORY, "kill-effects", "Strikes lightning where an enemy dies. Only you see it.");
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGH)
     private void onPacket(PacketApplyEvent.Pre event) {
         if (!(event.packet instanceof EntityStatusS2CPacket packet) || mc.world == null || mc.player == null) return;
         if (packet.getStatus() != EntityStatuses.PLAY_DEATH_SOUND_OR_ADD_PROJECTILE_HIT_PARTICLES) return;

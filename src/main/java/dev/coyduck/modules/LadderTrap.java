@@ -190,7 +190,7 @@ public class LadderTrap extends Module {
 
         BlockPos floor = cell.down();
         BlockState floorState = mc.world.getBlockState(floor);
-        if (floorState.isOf(Blocks.SCAFFOLDING) || BlockRules.isInteractable(floorState.getBlock())) return;
+        if (floorState.isReplaceable() || floorState.isOf(Blocks.SCAFFOLDING) || BlockRules.isInteractable(floorState.getBlock())) return;
         if (ScaffoldingBlock.calculateDistance(mc.world, cell) >= ScaffoldingBlock.MAX_DISTANCE) return;
         if (mc.player.getY() > cell.getY() + 1 - 1.0E-5 && !mc.player.isSneaking()) return;
         if (new Box(floor).squaredMagnitude(mc.player.getEyePos()) >= reach() * reach()) return;
