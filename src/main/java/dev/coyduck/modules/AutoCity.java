@@ -281,8 +281,13 @@ public class AutoCity extends Module {
         boolean partOfHole = columns.contains(pos.asLong()) || Targets.ring(columns, 0).contains(pos);
         if (!partOfHole) return false;
 
+        if (webbed(pos)) return false;
         if (Targets.isMinable(pos)) return true;
         return rebreak.get() && MiningManager.get().owns(this) && MiningManager.get().isMining(pos);
+    }
+
+    private boolean webbed(BlockPos pos) {
+        return mc.world.getBlockState(pos).isOf(Blocks.COBWEB);
     }
 
     private record Choice(BlockPos pos, float score, BlockPos support) {}
@@ -295,7 +300,7 @@ public class AutoCity extends Module {
         if (burrow.get()) {
             for (long key : columns) {
                 BlockPos pos = BlockPos.fromLong(key);
-                if (pos.equals(background) || !Targets.isMinable(pos) || !mining.inRange(pos) || !Targets.isBurrowedIn(box, pos)) continue;
+                if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || !mining.inRange(pos) || !Targets.isBurrowedIn(box, pos)) continue;
                 if (mc.world.getBlockState(pos).isOf(Blocks.BEDROCK)) continue;
 
                 choices.add(new Choice(pos, BURROW_SCORE + mining.delta(mc.world.getBlockState(pos), pos, mc.player.getMainHandStack()), null));
@@ -307,7 +312,7 @@ public class AutoCity extends Module {
         List<BlockPos> own = Targets.ownRing();
 
         for (BlockPos pos : ring) {
-            if (pos.equals(background) || !Targets.isMinable(pos) || !mining.inRange(pos) || own.contains(pos)) continue;
+            if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || !mining.inRange(pos) || own.contains(pos)) continue;
 
             BlockPos support = null;
             float damage = gapDamage(pos, box, feet, null);

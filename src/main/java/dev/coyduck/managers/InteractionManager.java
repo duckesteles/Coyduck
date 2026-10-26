@@ -156,7 +156,17 @@ public final class InteractionManager {
             Vec3d point = visiblePoint(pos, direction, eye, reachSquared);
             if (point != null) return new BlockHitResult(point, direction, pos, false);
         }
-        return new BlockHitResult(Vec3d.ofCenter(pos), Direction.UP, pos, false);
+        Direction side = null;
+        double best = 0;
+        for (Direction direction : Direction.values()) {
+            Vec3d normal = Vec3d.of(direction.getVector());
+            double facingBy = eye.subtract(Vec3d.ofCenter(pos).add(normal.multiply(0.5))).dotProduct(normal);
+            if (facingBy > best) {
+                side = direction;
+                best = facingBy;
+            }
+        }
+        return side == null ? null : new BlockHitResult(Vec3d.ofCenter(pos).add(Vec3d.of(side.getVector()).multiply(0.5)), side, pos, false);
     }
 
     public Vec3d visiblePoint(BlockPos block, Direction side, Vec3d eye, double reachSquared) {

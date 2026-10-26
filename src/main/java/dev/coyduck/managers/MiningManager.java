@@ -393,7 +393,12 @@ public final class MiningManager {
     }
 
     private void send(PlayerActionC2SPacket.Action action) {
-        send(action, pos, side, action == PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
+        Direction face = switch (action) {
+            case ABORT_DESTROY_BLOCK -> Direction.DOWN;
+            case STOP_DESTROY_BLOCK -> facing(pos);
+            default -> side;
+        };
+        send(action, pos, face, action == PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
     }
 
     private void send(PlayerActionC2SPacket.Action action, BlockPos target, Direction face, boolean predict) {
