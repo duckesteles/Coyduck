@@ -408,7 +408,7 @@ public class SelfTrap extends Module {
             }
         }
 
-        if (target == null || !interaction.attack(target, switchMode.get(), swing.get(), true, rotate.get())) return false;
+        if (target == null || !interaction.attack(target, switchMode.get(), swing.get(), true, rotate.get(), interaction.clearAim(target, pos, airplace.get()))) return false;
 
         CrystalTracker.get().explodeAt(target.getEntityPos());
         if (pop) AutoTotem.notePop();

@@ -18,6 +18,7 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.MovementType;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.util.PlayerInput;
+import net.minecraft.util.math.Box;
 
 public class ElytraFly extends Module {
 
@@ -28,6 +29,13 @@ public class ElytraFly extends Module {
         .name("fluids")
         .description("Also forces the flight controls in water and lava instead of swimming normally. Experimental, the server may pull you back.")
         .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> wallGuard = sgGeneral.add(new BoolSetting.Builder()
+        .name("wall-guard")
+        .description("Shortens a move that would slam you into a wall, so you stop right in front of it instead of taking elytra crash damage.")
+        .defaultValue(true)
         .build()
     );
 
@@ -145,8 +153,32 @@ public class ElytraFly extends Module {
         if (input.jump() && !input.sneak()) y = up.get();
         else if (input.sneak() && !input.jump()) y = -down.get();
 
+        if (wallGuard.get() && (x != 0 || z != 0)) {
+            x *= freeScale(x, 0, y);
+            z *= freeScale(0, z, y);
+            double both = freeScale(x, z, y);
+            x *= both;
+            z *= both;
+        }
+
         ((IVec3d) event.movement).meteor$set(x, y, z);
         mc.player.setVelocity(0, 0, 0);
+    }
+
+    private double freeScale(double x, double z, double y) {
+        if (x == 0 && z == 0) return 1;
+        Box box = mc.player.getBoundingBox().offset(0, y, 0);
+        if (!mc.world.isSpaceEmpty(mc.player, box)) box = mc.player.getBoundingBox();
+        if (mc.world.isSpaceEmpty(mc.player, box.offset(x, 0, z))) return 1;
+
+        double low = 0;
+        double high = 1;
+        for (int i = 0; i < 6; i++) {
+            double mid = (low + high) / 2;
+            if (mc.world.isSpaceEmpty(mc.player, box.offset(x * mid, 0, z * mid))) low = mid;
+            else high = mid;
+        }
+        return low;
     }
 
     private boolean canTakeoff() {

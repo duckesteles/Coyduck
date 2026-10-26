@@ -429,7 +429,7 @@ public class Surround extends Module {
             }
         }
 
-        if (safest == null || !interaction.attack(safest, switchMode.get(), swing.get(), true, rotate.get())) return false;
+        if (safest == null || !interaction.attack(safest, switchMode.get(), swing.get(), true, rotate.get(), interaction.clearAim(safest, pos, airplace.get()))) return false;
 
         CrystalTracker.get().explodeAt(safest.getEntityPos());
         if (safestVerdict == Verdict.Pop) AutoTotem.notePop();

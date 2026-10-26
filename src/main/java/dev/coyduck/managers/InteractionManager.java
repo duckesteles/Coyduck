@@ -260,7 +260,18 @@ public final class InteractionManager {
     }
 
     public boolean attack(Entity target, InventoryManager.SwitchMode mode, SwingMode swing, boolean whileEating, boolean rotate) {
-        if (rotate && !aimed(target.getBoundingBox().getCenter(), target.getBoundingBox(), CLEAR_PRIORITY)) return false;
+        return attack(target, mode, swing, whileEating, rotate, target.getBoundingBox().getCenter());
+    }
+
+    public Vec3d clearAim(Entity crystal, BlockPos cell, boolean airplace) {
+        BlockHitResult place = hit(cell, airplace);
+        Vec3d eye = mc.player.getEyePos();
+        if (place != null && crystal.getBoundingBox().raycast(eye, place.getPos()).isPresent()) return place.getPos();
+        return crystal.getBoundingBox().getCenter();
+    }
+
+    public boolean attack(Entity target, InventoryManager.SwitchMode mode, SwingMode swing, boolean whileEating, boolean rotate, Vec3d aim) {
+        if (rotate && !aimed(aim, target.getBoundingBox(), CLEAR_PRIORITY)) return false;
         Runnable hit = () -> {
             mc.interactionManager.attackEntity(mc.player, target);
             swing(swing);
