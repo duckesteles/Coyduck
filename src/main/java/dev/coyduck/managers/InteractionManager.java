@@ -277,7 +277,7 @@ public final class InteractionManager {
         if (rotate && !aimed(aim, target.getBoundingBox(), CLEAR_PRIORITY)) return false;
         Runnable hit = () -> {
             mc.interactionManager.attackEntity(mc.player, target);
-            swing(swing);
+            swing(swing == SwingMode.None ? SwingMode.Packet : swing);
         };
 
         if (canHitWithHand()) {

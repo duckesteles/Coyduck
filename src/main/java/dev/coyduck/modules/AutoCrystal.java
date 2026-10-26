@@ -56,6 +56,8 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket;
+import net.minecraft.util.Hand;
+import net.minecraft.network.packet.c2s.play.HandSwingC2SPacket;
 import net.minecraft.predicate.entity.EntityPredicates;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
@@ -1078,6 +1080,7 @@ public class AutoCrystal extends Module {
             EndCrystalEntity fake = new EndCrystalEntity(mc.world, 0, 0, 0);
             fake.setId(id);
             mc.getNetworkHandler().sendPacket(PlayerInteractEntityC2SPacket.attack(fake, mc.player.isSneaking()));
+            mc.getNetworkHandler().sendPacket(new HandSwingC2SPacket(Hand.MAIN_HAND));
             predictedIds.add(id);
         }
 
