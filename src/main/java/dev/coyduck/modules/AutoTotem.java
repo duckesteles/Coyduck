@@ -36,6 +36,7 @@ import net.minecraft.screen.PlayerScreenHandler;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.util.Util;
 
+import java.util.Arrays;
 import java.util.List;
 
 public class AutoTotem extends Module {
@@ -121,6 +122,7 @@ public class AutoTotem extends Module {
         .build()
     );
 
+    private final long[] sourceUsedAt = new long[InventoryManager.MAIN_END];
     private boolean pending;
     private boolean verifying;
     private long nextVerify;
@@ -236,6 +238,7 @@ public class AutoTotem extends Module {
 
     @EventHandler
     private void onWorldReset(WorldResetEvent event) {
+        Arrays.fill(sourceUsedAt, 0);
         clearPending();
         attempts = 0;
         confirmed = false;
@@ -352,6 +355,7 @@ public class AutoTotem extends Module {
         InventoryManager inventory = InventoryManager.get();
         InventoryManager.Swap swap = inventory.swapWithOffhand(source);
         if (swap == InventoryManager.Swap.NONE) return;
+        sourceUsedAt[source] = Util.getMeasuringTimeMs();
 
         if (swap == InventoryManager.Swap.CLICK) inventory.resync();
 
@@ -364,19 +368,31 @@ public class AutoTotem extends Module {
     }
 
     private int offhandSource() {
+        int source = offhandSource(true);
+        return source != NONE ? source : offhandSource(false);
+    }
+
+    private int offhandSource(boolean avoidRecent) {
         InventoryManager inventory = InventoryManager.get();
         ScreenHandler handler = mc.player.currentScreenHandler;
 
         for (int i = InventoryManager.HOTBAR_END; i < InventoryManager.MAIN_END; i++) {
+            if (avoidRecent && recentSource(i)) continue;
             if (isTotem(inventory.stack(i)) && inventory.handlerSlot(handler, i) != -1) return i;
         }
 
         int server = inventory.serverSlot();
         for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
+            if (avoidRecent && recentSource(i)) continue;
             if (i != server && i != reserveSlot && (skipMask & (1 << i)) == 0 && isTotem(inventory.stack(i))) return i;
         }
 
+        if (avoidRecent && recentSource(server)) return NONE;
         return (skipMask & (1 << server)) == 0 && isTotem(inventory.stack(server)) ? server : NONE;
+    }
+
+    private boolean recentSource(int index) {
+        return Util.getMeasuringTimeMs() - sourceUsedAt[index] < 2L * LatencyManager.get().timeout();
     }
 
     private void updateMainhand() {
