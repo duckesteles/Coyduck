@@ -26,7 +26,9 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityStatuses;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
 import net.minecraft.network.packet.s2c.play.InventoryS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
@@ -34,6 +36,7 @@ import net.minecraft.network.packet.s2c.play.ScreenHandlerSlotUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.SetPlayerInventoryS2CPacket;
 import net.minecraft.screen.PlayerScreenHandler;
 import net.minecraft.screen.ScreenHandler;
+import net.minecraft.util.Hand;
 import net.minecraft.util.Util;
 
 import java.util.Arrays;
@@ -116,6 +119,13 @@ public class AutoTotem extends Module {
         .build()
     );
 
+    private final Setting<Boolean> offhandGapple = sgGeneral.add(new BoolSetting.Builder()
+        .name("offhand-gapple")
+        .description("While a totem is in your main hand, holding use swaps a golden apple into your offhand so you eat it there, then puts the offhand totem back. The main hand totem guards you while you eat, and switching hotbar slots never cuts offhand eating.")
+        .defaultValue(true)
+        .build()
+    );
+
     private final Setting<Boolean> closeContainers = sgGeneral.add(new BoolSetting.Builder()
         .name("close-containers")
         .description("Closes an open container when you pop. The server never reports the offhand while a container is open, so the refill could not be confirmed.")
@@ -130,7 +140,11 @@ public class AutoTotem extends Module {
         .build()
     );
 
+    private static final int MAIN_MISSING_TICKS = 2;
+
     private final long[] sourceUsedAt = new long[InventoryManager.MAIN_END];
+    private boolean gapple;
+    private int mainMissing;
     private boolean pending;
     private boolean verifying;
     private long nextVerify;
@@ -177,6 +191,8 @@ public class AutoTotem extends Module {
 
     @Override
     public void onActivate() {
+        gapple = false;
+        mainMissing = 0;
         clearPending();
         attempts = 0;
         confirmed = false;
@@ -215,6 +231,7 @@ public class AutoTotem extends Module {
         refill(false);
         if (!pending && !confirmed && isTotem(mc.player.getOffHandStack()) && Util.getMeasuringTimeMs() >= nextVerify) verify();
         updateMainhand();
+        updateGapple();
 
         totems = InventoryManager.get().count(AutoTotem::isTotem);
         if (pending) return;
@@ -247,6 +264,8 @@ public class AutoTotem extends Module {
     @EventHandler
     private void onWorldReset(WorldResetEvent event) {
         Arrays.fill(sourceUsedAt, 0);
+        gapple = false;
+        mainMissing = 0;
         clearPending();
         attempts = 0;
         confirmed = false;
@@ -313,6 +332,11 @@ public class AutoTotem extends Module {
     }
 
     private void onBarrier() {
+        if (gapple) {
+            clearPending();
+            attempts = 0;
+            return;
+        }
         if (verifying) {
             boolean screen = mc.player.currentScreenHandler.syncId == pendingSyncId && mc.player.currentScreenHandler == mc.player.playerScreenHandler;
             clearPending();
@@ -342,6 +366,11 @@ public class AutoTotem extends Module {
     }
 
     private void retry() {
+        if (gapple) {
+            clearPending();
+            attempts = 0;
+            return;
+        }
         if (verifying) {
             clearPending();
             return;
@@ -353,7 +382,7 @@ public class AutoTotem extends Module {
     }
 
     private void refill(boolean force) {
-        if (pending) return;
+        if (pending || gapple) return;
         if (!force && isTotem(mc.player.getOffHandStack())) return;
 
         int source = offhandSource();
@@ -373,6 +402,53 @@ public class AutoTotem extends Module {
         pendingSyncId = syncId;
         pendingUntil = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
         barrier = inventory.barrier();
+    }
+
+    private void updateGapple() {
+        InventoryManager inventory = InventoryManager.get();
+        boolean mainTotem = isTotem(mc.player.getMainHandStack());
+
+        if (gapple) {
+            mainMissing = mainTotem ? 0 : mainMissing + 1;
+            boolean eating = mc.player.isUsingItem() && mc.player.getActiveHand() == Hand.OFF_HAND;
+            boolean food = isGapple(mc.player.getOffHandStack());
+            if ((!eating && !mc.options.useKey.isPressed()) || !food || mainMissing > MAIN_MISSING_TICKS || !offhandGapple.get()) {
+                gapple = false;
+                mainMissing = 0;
+                refill(false);
+            }
+            return;
+        }
+
+        if (!offhandGapple.get() || !mc.options.useKey.isPressed() || !mainTotem || pending || mc.currentScreen != null) return;
+        if (!isTotem(mc.player.getOffHandStack()) || mc.player.isUsingItem()) return;
+
+        int source = gappleSource();
+        if (source == NONE || inventory.handlerSlot(mc.player.currentScreenHandler, source) == -1) return;
+        if (inventory.swapWithOffhand(source) != InventoryManager.Swap.CLICK) return;
+
+        inventory.resync();
+        sourceUsedAt[source] = Util.getMeasuringTimeMs();
+        gapple = true;
+        mainMissing = 0;
+    }
+
+    private int gappleSource() {
+        InventoryManager inventory = InventoryManager.get();
+        int server = inventory.serverSlot();
+        for (Item item : new Item[] {Items.ENCHANTED_GOLDEN_APPLE, Items.GOLDEN_APPLE}) {
+            for (int i = InventoryManager.HOTBAR_END; i < InventoryManager.MAIN_END; i++) {
+                if (inventory.stack(i).isOf(item) && !recentSource(i)) return i;
+            }
+            for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
+                if (i != server && i != reserveSlot && inventory.stack(i).isOf(item) && !recentSource(i)) return i;
+            }
+        }
+        return NONE;
+    }
+
+    private static boolean isGapple(ItemStack stack) {
+        return stack.isOf(Items.ENCHANTED_GOLDEN_APPLE) || stack.isOf(Items.GOLDEN_APPLE);
     }
 
     private int offhandSource() {
@@ -405,6 +481,7 @@ public class AutoTotem extends Module {
 
     private void updateMainhand() {
         if (MiningManager.get().isHolding()) return;
+        if (gapple) dangerHold = DANGER_HOLD;
 
         InventoryManager inventory = InventoryManager.get();
         int selected = inventory.selectedSlot();
