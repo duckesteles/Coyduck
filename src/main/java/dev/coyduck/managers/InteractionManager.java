@@ -178,6 +178,10 @@ public final class InteractionManager {
     }
 
     public boolean attack(Entity target, InventoryManager.SwitchMode mode, SwingMode swing) {
+        return attack(target, mode, swing, false);
+    }
+
+    public boolean attack(Entity target, InventoryManager.SwitchMode mode, SwingMode swing, boolean whileEating) {
         Runnable hit = () -> {
             mc.interactionManager.attackEntity(mc.player, target);
             swing(swing);
@@ -188,7 +192,8 @@ public final class InteractionManager {
         } else {
             int burst = sharpWeaponSlot();
             if (burst != -1) {
-                if (!InventoryManager.get().withItem(burst, mode, hit)) return false;
+                InventoryManager inventory = InventoryManager.get();
+                if (!(whileEating ? inventory.withItemWhileEating(burst, mode, hit) : inventory.withItem(burst, mode, hit))) return false;
             } else {
                 holdWeapon();
                 return false;

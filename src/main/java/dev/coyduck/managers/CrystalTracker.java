@@ -77,6 +77,10 @@ public final class CrystalTracker {
         return own.containsKey(crystal.getId());
     }
 
+    public boolean isRecentOwn(Entity crystal, long age) {
+        return own.containsKey(crystal.getId()) && Util.getMeasuringTimeMs() - own.get(crystal.getId()) <= age;
+    }
+
     public void kill(Entity crystal, long duration) {
         dead.put(crystal.getId(), Util.getMeasuringTimeMs() + duration);
     }

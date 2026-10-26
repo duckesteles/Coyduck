@@ -669,6 +669,11 @@ public class AutoCrystal extends Module {
             status = "no crystals";
             return;
         }
+        if (!InteractionManager.get().canAttack()) {
+            InteractionManager.get().prepareAttack();
+            status = "weakness";
+            return;
+        }
 
         if (antiSurround.get() && gapBudget > 0) fillGaps(targets, health);
         if (placeBudget <= 0) return;
@@ -778,7 +783,7 @@ public class AutoCrystal extends Module {
             if (!selfSafe(center, health, arrival, mc.world) || hurtsFriend(center, mc.world)) continue;
             if (!InteractionManager.get().canAttack()) return;
             if (!rotationReady(crystal.getBoundingBox(), crystal.getBoundingBox().getCenter(), breakRange.get(), BREAK_PRIORITY)) return;
-            if (!InteractionManager.get().attack(crystal, switchMode.get(), swing.get())) return;
+            if (!InteractionManager.get().attack(crystal, switchMode.get(), swing.get(), !pauseEating.get())) return;
 
             tracker.explodeAt(center);
             clearing.remove(base);
@@ -874,7 +879,7 @@ public class AutoCrystal extends Module {
                 break;
             }
             if (!rotationReady(best.getBoundingBox(), best.getBoundingBox().getCenter(), breakRange.get(), BREAK_PRIORITY)) break;
-            if (!InteractionManager.get().attack(best, switchMode.get(), swing.get())) break;
+            if (!InteractionManager.get().attack(best, switchMode.get(), swing.get(), !pauseEating.get())) break;
 
 
             tracker.explodeAt(best.getEntityPos());
@@ -912,7 +917,7 @@ public class AutoCrystal extends Module {
 
             if (!InteractionManager.get().canAttack()) return broke;
             if (!rotationReady(crystal.getBoundingBox(), crystal.getBoundingBox().getCenter(), breakRange.get(), DEFEND_PRIORITY)) return broke;
-            if (!InteractionManager.get().attack(crystal, switchMode.get(), swing.get())) return broke;
+            if (!InteractionManager.get().attack(crystal, switchMode.get(), swing.get(), !pauseEating.get())) return broke;
 
             tracker.explodeAt(center);
             for (Target target : targets) {

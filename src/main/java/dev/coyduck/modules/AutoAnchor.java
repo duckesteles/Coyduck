@@ -620,9 +620,10 @@ public class AutoAnchor extends Module {
         if (autoCrystal == null || !autoCrystal.isActive()) return null;
 
         CrystalTracker tracker = CrystalTracker.get();
+        long age = 2L * LatencyManager.get().timeout();
         List<Vec3d> crystals = new ArrayList<>();
         for (Entity entity : mc.world.getEntities()) {
-            if (entity instanceof EndCrystalEntity crystal && tracker.isOwn(crystal) && tracker.isAlive(crystal)) crystals.add(crystal.getEntityPos());
+            if (entity instanceof EndCrystalEntity crystal && tracker.isRecentOwn(crystal, age) && tracker.isAlive(crystal)) crystals.add(crystal.getEntityPos());
         }
         return crystals;
     }
