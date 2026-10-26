@@ -210,6 +210,15 @@ public class AutoCrystal extends Module {
         .build()
     );
 
+    private final Setting<Double> minHealth = sgDamage.add(new DoubleSetting.Builder()
+        .name("min-health")
+        .description("Least health plus absorption you keep after a crystal's damage to you. Ones that would leave you lower are not used, so your own crystals never set you up for the next hit. Ones that can't hurt you are always allowed.")
+        .defaultValue(6)
+        .range(0, 36)
+        .sliderRange(0, 20)
+        .build()
+    );
+
     private final Setting<Double> facePlaceHealth = sgDamage.add(new DoubleSetting.Builder()
         .name("face-place-health")
         .description("Uses face place damage once the target's health is at or below this.")
@@ -792,9 +801,13 @@ public class AutoCrystal extends Module {
         }
     }
 
+    private boolean leavesLow(float self, float health) {
+        return self > 0 && health - self < minHealth.get();
+    }
+
     private boolean selfSafe(Vec3d crystal, float health, long arrival, BlockView view) {
         float full = selfDamage(crystal, view);
-        if (full >= health) return false;
+        if (full >= health || leavesLow(full, health)) return false;
         if (arrival == 0) return full <= maxSelfDamage.get();
         return HurtTracker.get().effectiveOnSelf(selfRaw(crystal, view), arrival) <= maxSelfDamage.get();
     }
@@ -1080,7 +1093,7 @@ public class AutoCrystal extends Module {
                     if (crystalBox(base).squaredMagnitude(eye) > reach || standsOn(base)) continue;
 
                     float self = selfDamage(crystalCenter(base), mc.world);
-                    if (self >= health || self > maxSelfDamage.get()) return false;
+                    if (self >= health || leavesLow(self, health) || self > maxSelfDamage.get()) return false;
                 }
             }
         }
@@ -1103,7 +1116,7 @@ public class AutoCrystal extends Module {
         if (!reachable) return null;
 
         float self = selfDamage(crystal, view);
-        if (self >= health) {
+        if (self >= health || leavesLow(self, health)) {
             rejectedSelf = true;
             return null;
         }

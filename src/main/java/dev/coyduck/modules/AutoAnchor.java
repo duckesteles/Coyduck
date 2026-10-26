@@ -189,6 +189,15 @@ public class AutoAnchor extends Module {
         .build()
     );
 
+    private final Setting<Double> minHealth = sgDamage.add(new DoubleSetting.Builder()
+        .name("min-health")
+        .description("Least health plus absorption you keep after an anchor's damage to you. Anchors that would leave you lower are not used, so your own anchors never set you up for the next hit. Anchors that can't hurt you are always allowed.")
+        .defaultValue(6)
+        .range(0, 36)
+        .sliderRange(0, 20)
+        .build()
+    );
+
     private final Setting<Double> facePlaceHealth = sgDamage.add(new DoubleSetting.Builder()
         .name("face-place-health")
         .description("Uses face place damage once the target's health is at or below this.")
@@ -588,7 +597,7 @@ public class AutoAnchor extends Module {
         if (!reachable) return null;
 
         float self = ExplosionDamage.explosion(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), center, POWER, view);
-        if (self + FIRE_MARGIN >= health || self > maxSelfDamage.get()) {
+        if (self + FIRE_MARGIN >= health || self > maxSelfDamage.get() || self > 0 && health - self - FIRE_MARGIN < minHealth.get()) {
             rejectedSelf = true;
             return null;
         }
