@@ -271,6 +271,7 @@ public final class MiningManager {
     private void onTick(TickEvent.Pre event) {
         ticks++;
         if (mc.player == null || mc.world == null) return;
+        if (InventoryManager.get().isOffhandEating()) return;
 
         tickBackground();
         if (pos == null) return;
