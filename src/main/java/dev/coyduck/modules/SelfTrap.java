@@ -136,6 +136,13 @@ public class SelfTrap extends Module {
         .build()
     );
 
+    private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
+        .name("rotate")
+        .description("Sends a look packet toward every block right before placing it, for servers whose anticheat checks where you look.")
+        .defaultValue(false)
+        .build()
+    );
+
     private final Setting<InteractionManager.SwingMode> swing = sgGeneral.add(new EnumSetting.Builder<InteractionManager.SwingMode>()
         .name("swing")
         .description("How the hand swing is shown.")
@@ -362,7 +369,7 @@ public class SelfTrap extends Module {
     }
 
     private void commit(BlockPos pos, BlockHitResult hit) {
-        InteractionManager.get().place(pos, hit, swing.get());
+        InteractionManager.get().place(pos, hit, swing.get(), rotate.get());
         rendered.put(pos.asLong(), Util.getMeasuringTimeMs());
         budget--;
     }
@@ -392,7 +399,7 @@ public class SelfTrap extends Module {
             }
         }
 
-        if (target == null || !interaction.attack(target, switchMode.get(), swing.get(), true)) return false;
+        if (target == null || !interaction.attack(target, switchMode.get(), swing.get(), true, rotate.get())) return false;
 
         CrystalTracker.get().explodeAt(target.getEntityPos());
         if (pop) AutoTotem.notePop();

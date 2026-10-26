@@ -126,6 +126,13 @@ public class Surround extends Module {
         .build()
     );
 
+    private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
+        .name("rotate")
+        .description("Sends a look packet toward every block right before placing it, for servers whose anticheat checks where you look.")
+        .defaultValue(false)
+        .build()
+    );
+
     private final Setting<InteractionManager.SwingMode> swing = sgGeneral.add(new EnumSetting.Builder<InteractionManager.SwingMode>()
         .name("swing")
         .description("How the hand swing is shown.")
@@ -387,7 +394,7 @@ public class Surround extends Module {
     }
 
     private void commit(BlockPos pos, BlockHitResult hit) {
-        InteractionManager.get().place(pos, hit, swing.get());
+        InteractionManager.get().place(pos, hit, swing.get(), rotate.get());
         rendered.put(pos.asLong(), Util.getMeasuringTimeMs());
         budget--;
     }
@@ -412,7 +419,7 @@ public class Surround extends Module {
             }
         }
 
-        if (safest == null || !interaction.attack(safest, switchMode.get(), swing.get(), true)) return false;
+        if (safest == null || !interaction.attack(safest, switchMode.get(), swing.get(), true, rotate.get())) return false;
 
         CrystalTracker.get().explodeAt(safest.getEntityPos());
         if (safestVerdict == Verdict.Pop) AutoTotem.notePop();

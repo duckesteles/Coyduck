@@ -34,6 +34,7 @@ import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.HandSwingC2SPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
+import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Util;
 import net.minecraft.util.hit.BlockHitResult;
@@ -131,10 +132,33 @@ public final class InteractionManager {
     }
 
     public void place(BlockPos pos, BlockHitResult hit, SwingMode swing) {
+        place(pos, hit, swing, false);
+    }
+
+    public void place(BlockPos pos, BlockHitResult hit, SwingMode swing, boolean rotate) {
+        if (rotate) lookAt(hit.getPos());
         mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
         int sequence = ((ClientWorldAccessor) mc.world).coyduck$getPendingUpdateManager().getSequence();
         swing(swing);
+        if (rotate) lookBack();
         pending.put(pos.asLong(), new Pending(sequence, Util.getMeasuringTimeMs() + LatencyManager.get().timeout()));
+    }
+
+    public void lookAt(Vec3d target) {
+        Vec3d eye = mc.player.getEyePos();
+        double dx = target.x - eye.x;
+        double dy = target.y - eye.y;
+        double dz = target.z - eye.z;
+        float yaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90.0f;
+        float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
+        mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(yaw, pitch, mc.player.isOnGround(), mc.player.horizontalCollision));
+    }
+
+    private void lookBack() {
+        RotationManager rotations = RotationManager.get();
+        float yaw = rotations.packetYaw(mc.player.getYaw());
+        float pitch = rotations.packetPitch(mc.player.getPitch());
+        mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(yaw, pitch, mc.player.isOnGround(), mc.player.horizontalCollision));
     }
 
     public boolean hasCrystals() {
@@ -182,9 +206,15 @@ public final class InteractionManager {
     }
 
     public boolean attack(Entity target, InventoryManager.SwitchMode mode, SwingMode swing, boolean whileEating) {
+        return attack(target, mode, swing, whileEating, false);
+    }
+
+    public boolean attack(Entity target, InventoryManager.SwitchMode mode, SwingMode swing, boolean whileEating, boolean rotate) {
         Runnable hit = () -> {
+            if (rotate) lookAt(target.getBoundingBox().getCenter());
             mc.interactionManager.attackEntity(mc.player, target);
             swing(swing);
+            if (rotate) lookBack();
         };
 
         if (canHitWithHand()) {

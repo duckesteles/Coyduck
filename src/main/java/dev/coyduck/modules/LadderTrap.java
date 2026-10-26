@@ -11,6 +11,7 @@ import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
+import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
@@ -74,6 +75,13 @@ public class LadderTrap extends Module {
         .name("switch")
         .description("Silent selects the item's hotbar slot for a moment and sends no inventory clicks; an item in your inventory is first moved into an empty hotbar slot once. InvSwap swaps the item into your hand and back with inventory clicks, which some servers answer by resending the whole inventory. While you eat, InvSwap is always used. Your offhand totem is never touched.")
         .defaultValue(InventoryManager.SwitchMode.Silent)
+        .build()
+    );
+
+    private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
+        .name("rotate")
+        .description("Sends a look packet toward every block right before placing it, for servers whose anticheat checks where you look.")
+        .defaultValue(false)
         .build()
     );
 
@@ -180,7 +188,7 @@ public class LadderTrap extends Module {
         Vec3d point = Vec3d.ofCenter(wall).add(best.getOffsetX() * 0.5, 0, best.getOffsetZ() * 0.5);
         BlockHitResult hit = new BlockHitResult(point, best, wall, false);
 
-        InventoryManager.get().withItem(slot, switchMode.get(), () -> InteractionManager.get().place(cell, hit, swing.get()));
+        InventoryManager.get().withItem(slot, switchMode.get(), () -> InteractionManager.get().place(cell, hit, swing.get(), rotate.get()));
         return mc.world.getBlockState(cell).isOf(Blocks.LADDER);
     }
 
@@ -196,7 +204,7 @@ public class LadderTrap extends Module {
         if (new Box(floor).squaredMagnitude(mc.player.getEyePos()) >= reach() * reach()) return;
 
         BlockHitResult hit = new BlockHitResult(Vec3d.ofCenter(floor).add(0, 0.5, 0), Direction.UP, floor, false);
-        InventoryManager.get().withItem(slot, switchMode.get(), () -> InteractionManager.get().place(cell, hit, swing.get()));
+        InventoryManager.get().withItem(slot, switchMode.get(), () -> InteractionManager.get().place(cell, hit, swing.get(), rotate.get()));
     }
 
     private boolean usableWall(BlockPos wall, Direction side) {

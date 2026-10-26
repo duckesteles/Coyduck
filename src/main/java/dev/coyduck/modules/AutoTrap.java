@@ -116,6 +116,13 @@ public class AutoTrap extends Module {
         .build()
     );
 
+    private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
+        .name("rotate")
+        .description("Sends a look packet toward every block right before placing it, for servers whose anticheat checks where you look.")
+        .defaultValue(false)
+        .build()
+    );
+
     private final Setting<InteractionManager.SwingMode> swing = sgGeneral.add(new EnumSetting.Builder<InteractionManager.SwingMode>()
         .name("swing")
         .description("How the hand swing is shown.")
@@ -259,7 +266,7 @@ public class AutoTrap extends Module {
         BlockHitResult hit = interaction.hit(pos, airplace.get());
         if (hit == null) return false;
 
-        interaction.place(pos, hit, swing.get());
+        interaction.place(pos, hit, swing.get(), rotate.get());
         rendered.put(pos.asLong(), Util.getMeasuringTimeMs());
         budget--;
         return true;
