@@ -22,7 +22,6 @@ body:
         - AirMine
         - PopCounter
         - KillEffects
-        - PlainChat
         - Other
     validations:
       required: true

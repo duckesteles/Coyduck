@@ -22,7 +22,6 @@ import dev.coyduck.modules.ElytraFly;
 import dev.coyduck.modules.HoleSnap;
 import dev.coyduck.modules.KillEffects;
 import dev.coyduck.modules.LadderTrap;
-import dev.coyduck.modules.PlainChat;
 import dev.coyduck.modules.PopCounter;
 import dev.coyduck.modules.SelfTrap;
 import dev.coyduck.modules.Surround;
@@ -69,7 +68,6 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new AirMine());
         Modules.get().add(new PopCounter());
         Modules.get().add(new KillEffects());
-        Modules.get().add(new PlainChat());
     }
 
     @Override

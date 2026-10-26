@@ -21,4 +21,3 @@
 - AirMine
 - PopCounter
 - KillEffects
-- PlainChat
