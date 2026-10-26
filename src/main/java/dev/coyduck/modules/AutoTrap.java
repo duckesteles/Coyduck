@@ -231,6 +231,7 @@ public class AutoTrap extends Module {
     }
 
     private void run() {
+        if (InventoryManager.get().isOffhandEating()) return;
         AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
         PlayerEntity focus = autoCrystal == null ? null : autoCrystal.target();
         target = Targets.find(targetRange.get(), Targets.valid(focus, targetRange.get()) ? focus : target);

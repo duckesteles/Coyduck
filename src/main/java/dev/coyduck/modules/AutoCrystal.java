@@ -465,7 +465,7 @@ public class AutoCrystal extends Module {
     public boolean wouldFillGap(BlockPos gap, PlayerEntity player) {
         if (!isActive() || !antiSurround.get() || !canAct() || !InteractionManager.get().hasCrystals()) return false;
         if (pauseMining.get() && mc.interactionManager.isBreakingBlock()) return false;
-        if (pauseEating.get() && mc.player.isUsingItem()) return false;
+        if (pauseEating.get() && mc.player.isUsingItem() || InventoryManager.get().isOffhandEating()) return false;
 
         long signature = signature();
         if (signature != cacheSignature) {
@@ -673,6 +673,10 @@ public class AutoCrystal extends Module {
         ownCells = surround != null && surround.isActive() ? Targets.ownRing() : List.of();
 
         float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
+        if (InventoryManager.get().isOffhandEating()) {
+            status = "eating";
+            return;
+        }
         boolean holding = breakBudget > 0 && breakCrystals(targets, health);
         if (pauseEating.get() && mc.player.isUsingItem()) {
             status = "eating";

@@ -389,7 +389,7 @@ public class AutoAnchor extends Module {
             status = "offhand glowstone";
             return;
         }
-        if (pauseEating.get() && mc.player.isUsingItem()) {
+        if (pauseEating.get() && mc.player.isUsingItem() || InventoryManager.get().isOffhandEating()) {
             status = "eating";
             return;
         }

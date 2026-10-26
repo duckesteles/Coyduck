@@ -217,6 +217,7 @@ public class AutoCity extends Module {
     }
 
     private void update() {
+        if (InventoryManager.get().isOffhandEating()) return;
         if (mc.player == null || mc.world == null || !mc.player.isAlive()) return;
 
         MiningManager mining = MiningManager.get();

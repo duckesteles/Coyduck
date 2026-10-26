@@ -158,6 +158,7 @@ public class AutoWeb extends Module {
     }
 
     private void run() {
+        if (InventoryManager.get().isOffhandEating()) return;
         target = Targets.find(targetRange.get());
         if (target == null || budget <= 0) return;
 

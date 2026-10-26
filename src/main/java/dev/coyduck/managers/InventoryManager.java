@@ -106,6 +106,10 @@ public final class InventoryManager {
         return mc.player.isUsingItem() && mc.player.getActiveHand() == Hand.MAIN_HAND;
     }
 
+    public boolean isOffhandEating() {
+        return mc.player != null && mc.player.isUsingItem() && mc.player.getActiveHand() == Hand.OFF_HAND;
+    }
+
     public boolean wantsToEat() {
         if (isEating() || mc.options.useKey.isPressed()) return true;
         ItemStack main = mc.player.getMainHandStack();
