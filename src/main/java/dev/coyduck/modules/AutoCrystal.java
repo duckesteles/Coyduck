@@ -1311,7 +1311,6 @@ public class AutoCrystal extends Module {
                 for (int dz = -radius; dz <= radius; dz++) {
                     BlockPos base = eye.add(dx, dy, dz);
                     if (!inPlaceRange(base) || !breakable(base) || !isBase(mc.world.getBlockState(base))) continue;
-                    if (base.getY() + 1 >= mc.player.getEyeY()) continue;
                     if (!mc.world.isAir(base.up()) || CrystalTracker.get().placingOverlaps(base) || CrystalTracker.get().isBlacklisted(base) || blocked(base)) continue;
                     if (overlapsOwnCells(base)) continue;
                     candidates.add(base);
