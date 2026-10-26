@@ -821,11 +821,12 @@ public class AutoCrystal extends Module {
     }
 
     private boolean selfSafe(Vec3d crystal, float health, long arrival, BlockView view) {
-        float full = selfDamage(crystal, view);
-        if (full >= health) return false;
-        if (arrival == 0) return !leavesLow(full, health) && full <= maxSelfDamage.get();
+        if (arrival == 0) {
+            float full = selfDamage(crystal, view);
+            return full < health && !leavesLow(full, health) && full <= maxSelfDamage.get();
+        }
         float effective = HurtTracker.get().effectiveOnSelf(selfRaw(crystal, view), arrival);
-        return !leavesLow(effective, health) && effective <= maxSelfDamage.get();
+        return effective < health && !leavesLow(effective, health) && effective <= maxSelfDamage.get();
     }
 
     private void fillGaps(List<Target> targets, float health) {
@@ -1135,12 +1136,11 @@ public class AutoCrystal extends Module {
         }
         if (!reachable) return null;
 
-        float self = selfDamage(crystal, view);
+        float self = arrival != 0 ? HurtTracker.get().effectiveOnSelf(selfRaw(crystal, view), arrival) : selfDamage(crystal, view);
         if (self >= health) {
             rejectedSelf = true;
             return null;
         }
-        if (arrival != 0) self = HurtTracker.get().effectiveOnSelf(selfRaw(crystal, view), arrival);
         boolean low = leavesLow(self, health);
         if (self > maxSelfDamage.get()) {
             rejectedSelf = true;
@@ -1304,7 +1304,7 @@ public class AutoCrystal extends Module {
                 for (int dz = -radius; dz <= radius; dz++) {
                     BlockPos base = eye.add(dx, dy, dz);
                     if (!inPlaceRange(base) || !breakable(base) || !isBase(mc.world.getBlockState(base))) continue;
-                    if (!mc.world.isAir(base.up()) || CrystalTracker.get().placingOverlaps(base) || blocked(base)) continue;
+                    if (!mc.world.isAir(base.up()) || CrystalTracker.get().placingOverlaps(base) || CrystalTracker.get().isBlacklisted(base) || blocked(base)) continue;
                     if (overlapsOwnCells(base)) continue;
                     candidates.add(base);
                 }

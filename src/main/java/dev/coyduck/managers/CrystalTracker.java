@@ -31,11 +31,15 @@ public final class CrystalTracker {
     private static final CrystalTracker INSTANCE = new CrystalTracker();
 
     private static final long OWN_LIFETIME = 10_000;
+    private static final long BLACKLIST_TIME = 1_500;
+    private static final int BLACKLIST_FAILURES = 2;
     private static final float MIN_RADIUS = 2.0f;
     private static final long REMOVED_LIFETIME = 2_000;
     private static final double DROP_KILL_RANGE = 6.0;
 
     private final Long2LongOpenHashMap placing = new Long2LongOpenHashMap();
+    private final Long2LongOpenHashMap failedAt = new Long2LongOpenHashMap();
+    private final Long2LongOpenHashMap failures = new Long2LongOpenHashMap();
     private final Int2LongOpenHashMap own = new Int2LongOpenHashMap();
     private final Int2LongOpenHashMap dead = new Int2LongOpenHashMap();
     private final Int2ObjectOpenHashMap<Removed> removed = new Int2ObjectOpenHashMap<>();
@@ -51,6 +55,11 @@ public final class CrystalTracker {
 
     public void placed(BlockPos base) {
         placing.put(base.asLong(), Util.getMeasuringTimeMs() + LatencyManager.get().timeout());
+    }
+
+    public boolean isBlacklisted(BlockPos base) {
+        long key = base.asLong();
+        return failures.get(key) >= BLACKLIST_FAILURES && Util.getMeasuringTimeMs() - failedAt.get(key) < BLACKLIST_TIME;
     }
 
     public boolean isPlacing(BlockPos base) {
@@ -163,7 +172,13 @@ public final class CrystalTracker {
         if (mc.world == null) return;
 
         switch (event.packet) {
-            case ExplosionS2CPacket packet when packet.radius() >= MIN_RADIUS && !ExplosionDamage.isWind(packet) -> explode(packet.center(), packet.radius() * 2.0);
+            case ExplosionS2CPacket packet when packet.radius() >= MIN_RADIUS && !ExplosionDamage.isWind(packet) -> {
+                long base = BlockPos.ofFloored(packet.center()).down().asLong();
+                placing.remove(base);
+                failures.remove(base);
+                failedAt.remove(base);
+                explode(packet.center(), packet.radius() * 2.0);
+            }
             case EntitiesDestroyS2CPacket packet -> {
                 for (int id : packet.getEntityIds()) {
                     dead.remove(id);
@@ -180,12 +195,23 @@ public final class CrystalTracker {
 
         long base = crystal.getBlockPos().down().asLong();
         if (placing.remove(base) != placing.defaultReturnValue()) own.put(crystal.getId(), Util.getMeasuringTimeMs());
+        failures.remove(base);
+        failedAt.remove(base);
     }
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         long now = Util.getMeasuringTimeMs();
-        placing.values().removeIf(until -> now >= until);
+        var expired = placing.long2LongEntrySet().iterator();
+        while (expired.hasNext()) {
+            var entry = expired.next();
+            if (now < entry.getLongValue()) continue;
+            long key = entry.getLongKey();
+            long count = now - failedAt.get(key) < BLACKLIST_TIME ? failures.get(key) + 1 : 1;
+            failures.put(key, count);
+            failedAt.put(key, now);
+            expired.remove();
+        }
         dead.values().removeIf(until -> now >= until);
         own.values().removeIf(time -> now - time > OWN_LIFETIME);
         removed.values().removeIf(entry -> now - entry.time > REMOVED_LIFETIME);
@@ -202,6 +228,8 @@ public final class CrystalTracker {
     }
 
     private void reset() {
+        failures.clear();
+        failedAt.clear();
         placing.clear();
         own.clear();
         dead.clear();
