@@ -91,7 +91,7 @@ public class Surround extends Module {
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("Silent selects the item's hotbar slot for a moment. InvSwap swaps the item into your hand and back. Nothing is switched while you eat, so the eating is never cut off.")
+        .description("Silent selects the item's hotbar slot for a moment. InvSwap swaps the item into your hand and back. While you eat, InvSwap is always used. Your offhand totem is never touched.")
         .defaultValue(InventoryManager.SwitchMode.InvSwap)
         .build()
     );
@@ -225,7 +225,6 @@ public class Surround extends Module {
     private int anchorY;
     private int budget;
     private boolean running;
-    private boolean canPlaceNow = true;
 
     public Surround() {
         super(Coyduck.CATEGORY, "surround+", "Surrounds your feet with obsidian and keeps it up against any break.");
@@ -318,7 +317,6 @@ public class Surround extends Module {
 
         int slot = blockSlot();
         if (slot == -1) return;
-        canPlaceNow = slot == InventoryManager.get().selectedSlot() || !InventoryManager.get().isEating();
 
         InteractionManager interaction = InteractionManager.get();
         List<BlockPos> placeable = new ArrayList<>();
@@ -434,7 +432,7 @@ public class Surround extends Module {
 
         float health = AutoTotem.popInFlight() ? 1.0f : mc.player.getHealth() + mc.player.getAbsorptionAmount();
         if (damage < health) return Verdict.Safe;
-        return allowPop.get() && canPlaceNow && AutoTotem.canAffordPop() ? Verdict.Pop : Verdict.Unsafe;
+        return allowPop.get() && AutoTotem.canAffordPop() ? Verdict.Pop : Verdict.Unsafe;
     }
 
     private List<BlockPos> targets() {

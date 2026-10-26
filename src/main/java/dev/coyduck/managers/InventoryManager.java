@@ -183,7 +183,6 @@ public final class InventoryManager {
     }
 
     public boolean swapWithHotbar(int index, int hotbar) {
-        if (isEating()) return false;
         ScreenHandler handler = mc.player.currentScreenHandler;
         int id = handlerSlot(handler, index);
         if (id == -1) return false;
@@ -260,9 +259,7 @@ public final class InventoryManager {
             return true;
         }
 
-        if (isEating()) return false;
-
-        if (mode != SwitchMode.InvSwap && PlayerInventory.isValidHotbarIndex(index)) {
+        if (mode == SwitchMode.Silent && PlayerInventory.isValidHotbarIndex(index) && !isEating()) {
             selectNow(index);
             action.run();
             selectNow(selected);

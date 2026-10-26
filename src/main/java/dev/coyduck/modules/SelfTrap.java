@@ -100,7 +100,7 @@ public class SelfTrap extends Module {
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("Silent selects the item's hotbar slot for a moment. InvSwap swaps the item into your hand and back. Nothing is switched while you eat, so the eating is never cut off.")
+        .description("Silent selects the item's hotbar slot for a moment. InvSwap swaps the item into your hand and back. While you eat, InvSwap is always used. Your offhand totem is never touched.")
         .defaultValue(InventoryManager.SwitchMode.InvSwap)
         .build()
     );
@@ -175,7 +175,6 @@ public class SelfTrap extends Module {
     );
 
     private final Long2LongOpenHashMap rendered = new Long2LongOpenHashMap();
-    private boolean canPlaceNow = true;
     private int budget;
     private boolean running;
 
@@ -258,7 +257,6 @@ public class SelfTrap extends Module {
 
     private void placeAll(int slot, List<BlockPos> cells) {
         if (slot == -1 || budget <= 0) return;
-        canPlaceNow = slot == InventoryManager.get().selectedSlot() || !InventoryManager.get().isEating();
 
         InteractionManager interaction = InteractionManager.get();
         MiningManager mining = MiningManager.get();
@@ -387,7 +385,7 @@ public class SelfTrap extends Module {
             float health = AutoTotem.popInFlight() ? 1.0f : mc.player.getHealth() + mc.player.getAbsorptionAmount();
 
             boolean pops = damage >= health;
-            if (pops && !(allowPop.get() && canPlaceNow && AutoTotem.canAffordPop())) continue;
+            if (pops && !(allowPop.get() && AutoTotem.canAffordPop())) continue;
             if (target == null || (pop && !pops)) {
                 target = crystal;
                 pop = pops;

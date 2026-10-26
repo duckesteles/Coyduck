@@ -110,7 +110,7 @@ public class AutoAnchor extends Module {
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("Silent selects the item's hotbar slot for a moment. InvSwap swaps the item into your hand and back. Nothing is switched while you eat, so the eating is never cut off.")
+        .description("Silent selects the item's hotbar slot for a moment. InvSwap swaps the item into your hand and back. While you eat, InvSwap is always used. Your offhand totem is never touched.")
         .defaultValue(InventoryManager.SwitchMode.InvSwap)
         .build()
     );
@@ -152,7 +152,7 @@ public class AutoAnchor extends Module {
 
     private final Setting<Boolean> pauseEating = sgGeneral.add(new BoolSetting.Builder()
         .name("pause-eating")
-        .description("Pauses while you eat. When off, anchors can still be detonated, but your inventory is never touched while you eat, since that cuts the eating.")
+        .description("Pauses while you eat. When off, the anchor and glowstone are swapped into your main hand and back even while you eat, which can cut the eating. Your offhand totem is never touched.")
         .defaultValue(false)
         .build()
     );
@@ -409,7 +409,7 @@ public class AutoAnchor extends Module {
         int glowSlot = slot(Items.GLOWSTONE);
 
         List<BlockPos> charged = chargedAnchors();
-        List<BlockPos> fresh = glowSlot != -1 && !InventoryManager.get().isEating() ? candidates(targets, anchorSlot != -1) : List.of();
+        List<BlockPos> fresh = glowSlot != -1 ? candidates(targets, anchorSlot != -1) : List.of();
         long timing = hurtSync.get() ? arrival : 0;
 
         for (BlockPos pos : charged) {
@@ -438,8 +438,6 @@ public class AutoAnchor extends Module {
             if (held != null) {
                 status = "hurt-sync";
                 if (release > 0 && (releaseAt == 0 || release < releaseAt)) releaseAt = release;
-            } else if (charged.isEmpty() && InventoryManager.get().isEating()) {
-                status = "eating";
             } else if (charged.isEmpty() && glowSlot == -1) {
                 status = anchorSlot == -1 ? "no anchors" : "no glowstone";
             } else if (charged.isEmpty() && fresh.isEmpty()) {
