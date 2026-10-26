@@ -209,6 +209,11 @@ public class SelfTrap extends Module {
     }
 
     @EventHandler
+    private void onTickPost(TickEvent.Post event) {
+        pass();
+    }
+
+    @EventHandler
     private void onPacket(PacketApplyEvent.Post event) {
         if (!canAct()) return;
 

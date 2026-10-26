@@ -48,6 +48,8 @@ import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
 import net.minecraft.util.Util;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.entity.player.PlayerEntity;
+import meteordevelopment.meteorclient.systems.friends.Friends;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
@@ -257,6 +259,11 @@ public class Surround extends Module {
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         budget = blocksPerTick.get();
+        pass();
+    }
+
+    @EventHandler
+    private void onTickPost(TickEvent.Post event) {
         pass();
     }
 
@@ -541,7 +548,8 @@ public class Surround extends Module {
 
     private boolean isThreatened(BlockPos pos) {
         MiningTracker mining = MiningTracker.get();
-        return mining.stage(pos) >= 0 || mining.wasBroken(pos, HOT_TIME);
+        if (mining.stage(pos) >= 0 || mining.wasBroken(pos, HOT_TIME)) return true;
+        return !mc.world.getOtherEntities(mc.player, new Box(pos), entity -> entity instanceof PlayerEntity player && !Friends.get().isFriend(player)).isEmpty();
     }
 
     private boolean updateAnchor() {

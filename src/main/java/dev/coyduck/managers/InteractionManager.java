@@ -50,6 +50,7 @@ import java.util.List;
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 public final class InteractionManager {
+    public static final int CLEAR_PRIORITY = 125;
     public static final int SURROUND_PRIORITY = 121;
     public static final int DEFENSE_PRIORITY = 120;
     public static final int TRAP_PRIORITY = 90;
@@ -136,7 +137,7 @@ public final class InteractionManager {
             }
 
             if (distance >= seenDistance) continue;
-            Vec3d point = visiblePoint(neighbor, side, eye, reachSquared);
+            Vec3d point = new Box(neighbor).contains(eye) ? center : visiblePoint(neighbor, side, eye, reachSquared);
             if (point != null) {
                 seen = new BlockHitResult(point, side, neighbor, false);
                 seenDistance = distance;
@@ -144,6 +145,12 @@ public final class InteractionManager {
         }
 
         if (seen != null) return seen;
+        if (airplace && new Box(pos).squaredMagnitude(eye) < reachSquared) {
+            for (Direction direction : Direction.values()) {
+                Vec3d point = visiblePoint(pos, direction, eye, reachSquared);
+                if (point != null) return new BlockHitResult(point, direction, pos, false);
+            }
+        }
         if (best != null || !airplace) return best;
         if (new Box(pos).squaredMagnitude(eye) >= reachSquared) return null;
         return new BlockHitResult(Vec3d.ofCenter(pos), Direction.UP, pos, false);
@@ -193,6 +200,7 @@ public final class InteractionManager {
     public boolean ready(BlockPos pos, boolean airplace, boolean rotate, int priority) {
         if (!rotate) return true;
         BlockHitResult hit = hit(pos, airplace);
+        if (hit == null && !airplace) hit = hit(pos.down(), false);
         return hit == null || aimed(hit.getPos(), new Box(hit.getBlockPos()), priority);
     }
 
@@ -252,7 +260,7 @@ public final class InteractionManager {
     }
 
     public boolean attack(Entity target, InventoryManager.SwitchMode mode, SwingMode swing, boolean whileEating, boolean rotate) {
-        if (rotate && !aimed(target.getBoundingBox().getCenter(), target.getBoundingBox(), DEFENSE_PRIORITY)) return false;
+        if (rotate && !aimed(target.getBoundingBox().getCenter(), target.getBoundingBox(), CLEAR_PRIORITY)) return false;
         Runnable hit = () -> {
             mc.interactionManager.attackEntity(mc.player, target);
             swing(swing);

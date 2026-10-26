@@ -182,12 +182,14 @@ public class AutoWeb extends Module {
         Box self = selfBox();
         InteractionManager interaction = InteractionManager.get();
         List<BlockPos> planned = new ArrayList<>();
+        Surround surround = Modules.get().get(Surround.class);
+        List<BlockPos> ownRing = surround != null && surround.isActive() ? Targets.ownRing() : List.of();
 
         for (long key : cells) {
             if (planned.size() >= budget) break;
 
             BlockPos pos = BlockPos.fromLong(key);
-            if (!interaction.canPlace(pos) || mc.world.getBlockState(pos).isOf(Blocks.COBWEB)) continue;
+            if (!interaction.canPlace(pos) || mc.world.getBlockState(pos).isOf(Blocks.COBWEB) || ownRing.contains(pos)) continue;
             if (self.intersects(new Box(pos)) || interaction.hit(pos, airplace.get()) == null) continue;
             planned.add(pos);
         }
