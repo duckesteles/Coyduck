@@ -140,10 +140,11 @@ public class AutoTotem extends Module {
         .build()
     );
 
-    private static final int MAIN_MISSING_TICKS = 2;
+    private static final int MAIN_MISSING_TICKS = 1;
 
     private final long[] sourceUsedAt = new long[InventoryManager.MAIN_END];
     private boolean gapple;
+    private long gappleAt;
     private int foodTicks;
     private int mainMissing;
     private boolean pending;
@@ -287,9 +288,13 @@ public class AutoTotem extends Module {
 
         boolean ambiguous = mask != 0 && (isTotem(main) || maskHoldsTotem(mask));
 
-        boolean mainPopped = mask == 0 && isTotem(main);
+        boolean mainPopped = isTotem(main) && (mask == 0 || !isTotem(mc.player.getOffHandStack()));
         if (mainPopped) main.decrement(1);
         else mc.player.getOffHandStack().decrement(1);
+        if (gapple && mainPopped && !hotbarTotem(server)) {
+            gapple = false;
+            mainMissing = 0;
+        }
 
         skipMask = ambiguous ? mask | (1 << server) : 0;
 
@@ -301,8 +306,16 @@ public class AutoTotem extends Module {
         attempts = 0;
         refill(!mainPopped);
         skipMask = 0;
-        if (!pending) verify();
+        if (!pending && !gapple) verify();
         if (mainPopped) updateMainhand();
+    }
+
+    private boolean hotbarTotem(int except) {
+        InventoryManager inventory = InventoryManager.get();
+        for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
+            if (i != except && isTotem(inventory.stack(i))) return true;
+        }
+        return false;
     }
 
     private boolean maskHoldsTotem(int mask) {
@@ -413,8 +426,9 @@ public class AutoTotem extends Module {
         if (gapple) {
             mainMissing = mainTotem ? 0 : mainMissing + 1;
             boolean eating = mc.player.isUsingItem() && mc.player.getActiveHand() == Hand.OFF_HAND;
-            boolean food = isGapple(mc.player.getOffHandStack());
-            if ((!eating && !mc.options.useKey.isPressed()) || !food || mainMissing > MAIN_MISSING_TICKS || !offhandGapple.get()) {
+            ItemStack offhand = mc.player.getOffHandStack();
+            boolean lost = !isGapple(offhand) && (!isTotem(offhand) || Util.getMeasuringTimeMs() - gappleAt >= LatencyManager.get().timeout());
+            if ((!eating && !mc.options.useKey.isPressed()) || lost || mainMissing > MAIN_MISSING_TICKS || !offhandGapple.get()) {
                 gapple = false;
                 mainMissing = 0;
                 refill(false);
@@ -431,6 +445,7 @@ public class AutoTotem extends Module {
 
         inventory.resync();
         sourceUsedAt[source] = Util.getMeasuringTimeMs();
+        gappleAt = Util.getMeasuringTimeMs();
         gapple = true;
         mainMissing = 0;
     }
@@ -521,7 +536,7 @@ public class AutoTotem extends Module {
             if (activelyBusy()) resumeTicks = Math.max(resumeTicks, resumeDelay.get());
             else foodTicks = resumeDelay.get();
         }
-        if ((!popped && (resumeTicks > 0 || foodTicks > 0)) || !isTotem(mc.player.getOffHandStack())) return;
+        if ((!popped && (resumeTicks > 0 || foodTicks > 0)) || (!gapple && !isTotem(mc.player.getOffHandStack()))) return;
 
         int hotbar = inventory.find(AutoTotem::isTotem, 0, InventoryManager.HOTBAR_END);
         if (hotbar == NONE) {
