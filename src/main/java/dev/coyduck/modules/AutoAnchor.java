@@ -386,7 +386,7 @@ public class AutoAnchor extends Module {
         }
 
         List<Target> targets = targets();
-        float health = AutoTotem.popInFlight() ? 1.0f : mc.player.getHealth() + mc.player.getAbsorptionAmount();
+        float health = AutoTotem.popInFlight() ? 1.0f + FIRE_MARGIN : mc.player.getHealth() + mc.player.getAbsorptionAmount();
         ownCrystals = ownCrystals();
         rejectedSelf = false;
         rejectedFriend = false;
