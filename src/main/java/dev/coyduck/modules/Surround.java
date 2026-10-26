@@ -431,7 +431,7 @@ public class Surround extends Module {
         float damage = HurtTracker.get().effectiveOnSelf(raw, arrival);
 
         float health = AutoTotem.popInFlight() ? 1.0f : mc.player.getHealth() + mc.player.getAbsorptionAmount();
-        if (damage < health) return Verdict.Safe;
+        if (damage < health && ExplosionDamage.mitigate(mc.player, raw) < health) return Verdict.Safe;
         return allowPop.get() && AutoTotem.canAffordPop() ? Verdict.Pop : Verdict.Unsafe;
     }
 

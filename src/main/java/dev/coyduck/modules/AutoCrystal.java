@@ -73,6 +73,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class AutoCrystal extends Module {
+    private static final long OPEN_TIME = 2_000;
     private static final int PLACE_PRIORITY = 100;
     private static final int GAP_PRIORITY = 105;
     private static final int DEFEND_PRIORITY = 106;
@@ -1174,12 +1175,17 @@ public class AutoCrystal extends Module {
         return false;
     }
 
+    private boolean open(BlockPos cell) {
+        MiningTracker mining = MiningTracker.get();
+        return mc.world.getBlockState(cell).isReplaceable() || mining.stage(cell) >= 0 || mining.wasBroken(cell, OPEN_TIME);
+    }
+
     private boolean overlapsOwnCells(BlockPos base) {
         if (ownCells.isEmpty()) return false;
 
         Box crystal = new Box(base.getX() - 0.5, base.getY() + 1, base.getZ() - 0.5, base.getX() + 1.5, base.getY() + 3, base.getZ() + 1.5);
         for (BlockPos cell : ownCells) {
-            if (mc.world.getBlockState(cell).isReplaceable() && crystal.intersects(new Box(cell))) return true;
+            if (open(cell) && crystal.intersects(new Box(cell))) return true;
         }
         return false;
     }
