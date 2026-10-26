@@ -8,6 +8,7 @@ import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.utils.ExplosionDamage;
 import meteordevelopment.meteorclient.events.entity.EntityAddedEvent;
+import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
@@ -29,6 +30,7 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
 import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
 import net.minecraft.network.packet.s2c.play.InventoryS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
@@ -38,6 +40,8 @@ import net.minecraft.screen.PlayerScreenHandler;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Util;
+import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.Arrays;
 import java.util.List;
@@ -126,6 +130,13 @@ public class AutoTotem extends Module {
         .build()
     );
 
+    private final Setting<Boolean> pearlGuard = sgGeneral.add(new BoolSetting.Builder()
+        .name("pearl-guard")
+        .description("Cancels an ender pearl throw whose first blocks of flight cross an end crystal. The pearl would explode it in your face and the blast counts as yours.")
+        .defaultValue(true)
+        .build()
+    );
+
     private final Setting<Boolean> closeContainers = sgGeneral.add(new BoolSetting.Builder()
         .name("close-containers")
         .description("Closes an open container when you pop. The server never reports the offhand while a container is open, so the refill could not be confirmed.")
@@ -141,6 +152,8 @@ public class AutoTotem extends Module {
     );
 
     private static final int MAIN_MISSING_TICKS = 1;
+    private static final double PEARL_GUARD_RANGE = 4.5;
+    private static final double PEARL_SIZE = 0.125;
 
     private final long[] sourceUsedAt = new long[InventoryManager.MAIN_END];
     private boolean gapple;
@@ -242,6 +255,23 @@ public class AutoTotem extends Module {
         else if (warn.get() && !warned) {
             warned = true;
             warning("Out of totems.");
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    private void onSend(PacketEvent.Send event) {
+        if (!pearlGuard.get() || !canAct() || !(event.packet instanceof PlayerInteractItemC2SPacket packet)) return;
+        if (!mc.player.getStackInHand(packet.getHand()).isOf(Items.ENDER_PEARL)) return;
+
+        Vec3d start = mc.player.getEyePos().subtract(0, 0.1, 0);
+        Vec3d end = start.add(Vec3d.fromPolar(packet.getPitch(), packet.getYaw()).multiply(PEARL_GUARD_RANGE));
+        Box sweep = new Box(start, end).expand(1.0);
+        for (Entity entity : mc.world.getOtherEntities(mc.player, sweep, entity -> entity instanceof EndCrystalEntity)) {
+            if (entity.getBoundingBox().expand(PEARL_SIZE).raycast(start, end).isPresent() || entity.getBoundingBox().expand(PEARL_SIZE).contains(start)) {
+                event.cancel();
+                warning("Pearl blocked, it would hit a crystal.");
+                return;
+            }
         }
     }
 
