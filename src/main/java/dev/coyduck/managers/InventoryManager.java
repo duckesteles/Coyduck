@@ -48,7 +48,6 @@ public final class InventoryManager {
     private static final long SELECT_MARGIN = 50;
 
     private final long[] heldAt = new long[HOTBAR_END];
-    private Hand burstHand = Hand.MAIN_HAND;
     private int burst;
     private int burstMask;
     private boolean burstAttacked;
@@ -229,7 +228,7 @@ public final class InventoryManager {
     }
 
     private void refill() {
-        if (homes.isEmpty() || mc.player == null || mc.interactionManager == null || mc.currentScreen instanceof HandledScreen<?>) return;
+        if (homes.isEmpty() || mc.player == null || mc.interactionManager == null || mc.currentScreen instanceof HandledScreen<?> || isEating()) return;
         if (!mc.player.currentScreenHandler.getCursorStack().isEmpty()) return;
 
         Iterator<Map.Entry<Item, Integer>> it = homes.entrySet().iterator();
@@ -253,10 +252,6 @@ public final class InventoryManager {
         refill();
     }
 
-    public Hand hand() {
-        return burstHand;
-    }
-
     private boolean switchedNow(int index, SwitchMode mode, Runnable action) {
         int selected = selectedSlot();
         if (index == selected) {
@@ -264,7 +259,7 @@ public final class InventoryManager {
             return true;
         }
 
-        if (isEating()) return withOffhand(index, action);
+        if (isEating()) return false;
 
         if (mode != SwitchMode.InvSwap && PlayerInventory.isValidHotbarIndex(index)) {
             selectNow(index);
@@ -277,31 +272,6 @@ public final class InventoryManager {
         action.run();
         swapWithHotbar(index, selected);
         return true;
-    }
-
-    private boolean withOffhand(int index, Runnable action) {
-        if (index == OFFHAND) return useOffhand(action);
-
-        ScreenHandler handler = mc.player.currentScreenHandler;
-        int id = handlerSlot(handler, index);
-        if (id == -1) return false;
-
-        mc.interactionManager.clickSlot(handler.syncId, id, OFFHAND, SlotActionType.SWAP, mc.player);
-        try {
-            return useOffhand(action);
-        } finally {
-            mc.interactionManager.clickSlot(handler.syncId, id, OFFHAND, SlotActionType.SWAP, mc.player);
-        }
-    }
-
-    private boolean useOffhand(Runnable action) {
-        burstHand = Hand.OFF_HAND;
-        try {
-            action.run();
-            return true;
-        } finally {
-            burstHand = Hand.MAIN_HAND;
-        }
     }
 
     @EventHandler
