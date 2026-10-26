@@ -108,7 +108,7 @@ public class SelfTrap extends Module {
     private final Setting<Boolean> airplace = sgGeneral.add(new BoolSetting.Builder()
         .name("airplace")
         .description("Places without a neighbouring block to click on.")
-        .defaultValue(false)
+        .defaultValue(true)
         .build()
     );
 

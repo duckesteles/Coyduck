@@ -86,7 +86,7 @@ public class AutoWeb extends Module {
     private final Setting<Boolean> airplace = sgGeneral.add(new BoolSetting.Builder()
         .name("airplace")
         .description("Places webs without a neighbouring block to click on, for targets in the air.")
-        .defaultValue(false)
+        .defaultValue(true)
         .build()
     );
 

@@ -339,7 +339,7 @@ public class AutoCrystal extends Module {
     private final Setting<Boolean> baseAirplace = sgBase.add(new BoolSetting.Builder()
         .name("airplace")
         .description("Places the base block without a neighbouring block to click on.")
-        .defaultValue(false)
+        .defaultValue(true)
         .visible(basePlace::get)
         .build()
     );
