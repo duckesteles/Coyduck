@@ -150,7 +150,7 @@ public class Surround extends Module {
     private final Setting<Boolean> allowPop = sgProtect.add(new BoolSetting.Builder()
         .name("allow-pop")
         .description("Also breaks a crystal in your surround that pops you, once Auto Totem+ has confirmed your offhand totem and you still have a spare. The enemy would explode it anyway, this way you pick the moment and close the gap.")
-        .defaultValue(true)
+        .defaultValue(false)
         .visible(breakCrystals::get)
         .build()
     );
