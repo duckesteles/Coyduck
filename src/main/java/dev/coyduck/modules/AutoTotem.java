@@ -149,7 +149,7 @@ public class AutoTotem extends Module {
     public static boolean canAffordPop() {
         AutoTotem module = Modules.get().get(AutoTotem.class);
         return module != null && module.isActive() && module.canAct() && !module.pending && module.confirmed
-            && !InventoryManager.get().isEating() && !popInFlight() && isTotem(module.mc.player.getOffHandStack()) && module.totems >= 2;
+            && !popInFlight() && isTotem(module.mc.player.getOffHandStack()) && module.totems >= 2;
     }
 
     public static boolean popInFlight() {
@@ -337,16 +337,8 @@ public class AutoTotem extends Module {
         }
 
         clearPending();
-        if (++attempts > MAX_ATTEMPTS + 2) {
-            attempts = 0;
-            return;
-        }
-        if (isTotem(mc.player.getOffHandStack())) {
-            pending = true;
-            pendingUntil = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
-            return;
-        }
-        refill(true);
+        if (++attempts <= MAX_ATTEMPTS + 2) refill(true);
+        else attempts = 0;
     }
 
     private void refill(boolean force) {
