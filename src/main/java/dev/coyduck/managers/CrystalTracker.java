@@ -212,6 +212,13 @@ public final class CrystalTracker {
             failedAt.put(key, now);
             expired.remove();
         }
+        var stale = failedAt.long2LongEntrySet().iterator();
+        while (stale.hasNext()) {
+            var entry = stale.next();
+            if (now - entry.getLongValue() < BLACKLIST_TIME) continue;
+            failures.remove(entry.getLongKey());
+            stale.remove();
+        }
         dead.values().removeIf(until -> now >= until);
         own.values().removeIf(time -> now - time > OWN_LIFETIME);
         removed.values().removeIf(entry -> now - entry.time > REMOVED_LIFETIME);

@@ -276,7 +276,7 @@ public class AutoCity extends Module {
     }
 
     private boolean stillValid(BlockPos pos, LongSet columns) {
-        if (!MiningManager.get().inRange(pos)) return false;
+        if (!MiningManager.get().inRange(pos) || Targets.ownRing().contains(pos)) return false;
 
         boolean partOfHole = columns.contains(pos.asLong()) || Targets.ring(columns, 0).contains(pos);
         if (!partOfHole) return false;

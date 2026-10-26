@@ -465,7 +465,7 @@ public class AutoCrystal extends Module {
     }
 
     public boolean wouldFillGap(BlockPos gap, PlayerEntity player) {
-        if (!isActive() || !antiSurround.get() || !canAct() || !InteractionManager.get().hasCrystals()) return false;
+        if (!isActive() || !antiSurround.get() || !canAct() || !InteractionManager.get().hasCrystals() || !InteractionManager.get().canAttack()) return false;
         if (pauseMining.get() && mc.interactionManager.isBreakingBlock()) return false;
         if (pauseEating.get() && mc.player.isUsingItem() || InventoryManager.get().isOffhandEating()) return false;
 
@@ -554,7 +554,7 @@ public class AutoCrystal extends Module {
         if (predictedAt != 0 && Util.getMeasuringTimeMs() - predictedAt > LatencyManager.get().timeout()) endPrediction();
         if (predictedAt != 0 && crystal.getBlockPos().down().asLong() == predictedBase) {
             if (predictedIds.contains(crystal.getId())) {
-                CrystalTracker.get().kill(crystal, LatencyManager.get().timeout());
+                CrystalTracker.get().explodeAt(crystal.getEntityPos());
                 if (predictedTarget != null) HurtTracker.get().confirmSpeculative(predictedTarget);
                 predictedAt = 0;
             } else {
@@ -604,7 +604,8 @@ public class AutoCrystal extends Module {
 
         for (int id : packet.getEntityIds()) {
             Entity entity = mc.world.getEntityById(id);
-            if ((entity instanceof EndCrystalEntity || entity instanceof ItemEntity || entity instanceof ExperienceOrbEntity) && near(entity.getEntityPos())) {
+            boolean expected = entity instanceof EndCrystalEntity && CrystalTracker.get().isDead(entity);
+            if ((expected || entity instanceof ItemEntity || entity instanceof ExperienceOrbEntity) && near(entity.getEntityPos())) {
                 destroyedCrystal = true;
                 return;
             }
@@ -797,7 +798,7 @@ public class AutoCrystal extends Module {
         return drops;
     }
 
-    private void breakClearing(float health) {
+    private void breakClearing(List<Target> targets, float health) {
         if (clearing.isEmpty()) return;
 
         CrystalTracker tracker = CrystalTracker.get();
@@ -817,6 +818,10 @@ public class AutoCrystal extends Module {
             if (!InteractionManager.get().attack(crystal, switchMode.get(), swing.get(), !pauseEating.get())) return;
 
             tracker.explodeAt(center);
+            for (Target target : targets) {
+                float hit = ExplosionDamage.crystalRaw(target.player, target.feet, target.box, center, mc.world);
+                if (hit > 0) HurtTracker.get().expect(target.player, hit);
+            }
             clearing.remove(base);
             breakBudget--;
         }
@@ -931,7 +936,7 @@ public class AutoCrystal extends Module {
         }
 
         releaseAt = release;
-        breakClearing(health);
+        breakClearing(targets, health);
         if (defend.get() && breakBudget > 0 && defend(targets, health)) broke = true;
         return held && !broke;
     }
@@ -1162,7 +1167,8 @@ public class AutoCrystal extends Module {
         for (Target target : targets) {
             float bound = ExplosionDamage.upperBound(target.player, target.feet, crystal);
             if (bound < target.minDamage && bound < target.health) continue;
-            float bonus = FOCUS_BONUS + (bound >= target.health ? LETHAL_BONUS : 0) + (antiSurround.get() && target.gaps.contains(key) ? GAP_BONUS : 0);
+            float bonus = FOCUS_BONUS + (bound >= target.health ? LETHAL_BONUS : 0) + (antiSurround.get() && target.gaps.contains(key) ? GAP_BONUS : 0)
+                + LOW_HEALTH_BONUS * Math.min(bound / Math.max(target.health, 1.0f), 1.0f);
             if (best != null && bound + bonus < best.score) continue;
 
             float raw;

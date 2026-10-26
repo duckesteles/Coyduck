@@ -184,7 +184,9 @@ public class AutoWeb extends Module {
         InteractionManager interaction = InteractionManager.get();
         List<BlockPos> planned = new ArrayList<>();
         Surround surround = Modules.get().get(Surround.class);
-        List<BlockPos> ownRing = surround != null && surround.isActive() ? Targets.ownRing() : List.of();
+        SelfTrap selfTrap = Modules.get().get(SelfTrap.class);
+        boolean walled = surround != null && surround.isActive() || selfTrap != null && selfTrap.isActive();
+        List<BlockPos> ownRing = walled ? Targets.ownRing() : List.of();
 
         for (long key : cells) {
             if (planned.size() >= budget) break;

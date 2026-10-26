@@ -126,7 +126,6 @@ public final class InteractionManager {
             BlockPos neighbor = pos.offset(direction);
             BlockState state = mc.world.getBlockState(neighbor);
             if (state.isReplaceable() || BlockRules.isInteractable(state.getBlock()) || isPending(neighbor)) continue;
-            support = true;
 
             double distance = new Box(neighbor).squaredMagnitude(eye);
             if (distance >= reachSquared) continue;
@@ -136,6 +135,7 @@ public final class InteractionManager {
             Vec3d center = Vec3d.ofCenter(neighbor).add(normal.multiply(0.5));
             boolean inside = new Box(neighbor).contains(eye);
             if (!inside && eye.subtract(center).dotProduct(normal) <= 0) continue;
+            support = true;
 
             if (distance < facingDistance) {
                 facing = new BlockHitResult(center, side, neighbor, false);

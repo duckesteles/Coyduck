@@ -181,7 +181,7 @@ public final class InventoryManager {
         if (!PlayerInventory.isValidHotbarIndex(index) || mc.player.isUsingItem()) return Swap.NONE;
 
         int selected = selectedSlot();
-        if (selected != index) selectNow(index);
+        selectNow(index);
         mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.SWAP_ITEM_WITH_OFFHAND, BlockPos.ORIGIN, Direction.DOWN));
         if (selected != index) selectNow(selected);
 
@@ -255,7 +255,7 @@ public final class InventoryManager {
     }
 
     private void refill() {
-        if (homes.isEmpty() || mc.player == null || mc.interactionManager == null || mc.currentScreen instanceof HandledScreen<?> || isEating()) return;
+        if (homes.isEmpty() || mc.player == null || mc.interactionManager == null || mc.currentScreen instanceof HandledScreen<?> || isEating() || isOffhandEating()) return;
         if (!mc.player.currentScreenHandler.getCursorStack().isEmpty()) return;
 
         Iterator<Map.Entry<Item, Integer>> it = homes.entrySet().iterator();

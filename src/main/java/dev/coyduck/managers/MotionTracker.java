@@ -65,6 +65,7 @@ public final class MotionTracker {
             Vec3d moved = Entity.adjustMovementForCollisions(player, velocity, box, mc.world, List.of());
             box = box.offset(moved);
 
+            if (player.isGliding()) continue;
             boolean landed = velocity.y < 0 && moved.y > velocity.y;
             velocity = new Vec3d(velocity.x, landed ? 0 : (velocity.y - GRAVITY) * DRAG, velocity.z);
         }

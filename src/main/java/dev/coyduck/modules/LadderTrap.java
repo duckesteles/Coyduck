@@ -175,6 +175,8 @@ public class LadderTrap extends Module {
             BlockState ladder = Blocks.LADDER.getDefaultState().with(LadderBlock.FACING, side);
             if (blocked(ladder, cell, box)) continue;
             if (new Box(wall).squaredMagnitude(eye) >= reach() * reach()) continue;
+            Vec3d face = Vec3d.ofCenter(wall).add(side.getOffsetX() * 0.5, 0, side.getOffsetZ() * 0.5);
+            if (eye.subtract(face).dotProduct(Vec3d.of(side.getVector())) <= 0) continue;
 
             double distance = eye.squaredDistanceTo(Vec3d.ofCenter(wall));
             if (distance > bestDistance) {
@@ -196,7 +198,7 @@ public class LadderTrap extends Module {
 
     private void placeScaffolding(BlockPos cell) {
         int slot = InventoryManager.get().find(stack -> stack.isOf(Items.SCAFFOLDING), 0, InventoryManager.MAIN_END);
-        if (slot == -1) return;
+        if (slot == -1 || !InteractionManager.get().canPlace(cell) || mc.player.getEyeY() <= cell.getY()) return;
 
         BlockPos floor = cell.down();
         BlockState floorState = mc.world.getBlockState(floor);

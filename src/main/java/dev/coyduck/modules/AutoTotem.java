@@ -328,7 +328,7 @@ public class AutoTotem extends Module {
         boolean mainPopped = isTotem(main) && (mask == 0 || !isTotem(mc.player.getOffHandStack()));
         if (mainPopped) main.decrement(1);
         else mc.player.getOffHandStack().decrement(1);
-        if (gapple && mainPopped && !hotbarTotem(server)) {
+        if (gapple && mainPopped && (mainhand.get() == Mainhand.Off || !hotbarTotem(server))) {
             gapple = false;
             mainMissing = 0;
         }

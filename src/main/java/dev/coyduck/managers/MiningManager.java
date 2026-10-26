@@ -14,6 +14,7 @@ import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.attribute.EntityAttributes;
@@ -191,7 +192,7 @@ public final class MiningManager {
     }
 
     private boolean stop(Object owner, BlockState state) {
-        if (!owns(owner) || !isReady(state) || lastStopTick == ticks) return false;
+        if (!owns(owner) || !isReady(state) || state.isOf(Blocks.COBWEB) || lastStopTick == ticks) return false;
 
         int tool = bestTool(state);
         Runnable action = () -> send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
