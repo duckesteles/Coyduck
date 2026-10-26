@@ -213,7 +213,7 @@ public class AutoCrystal extends Module {
     private final Setting<Double> minHealth = sgDamage.add(new DoubleSetting.Builder()
         .name("min-health")
         .description("Least health plus absorption you keep after a crystal's damage to you. Ones that would leave you lower are not used, so your own crystals never set you up for the next hit. Ones that can't hurt you are always allowed.")
-        .defaultValue(6)
+        .defaultValue(12)
         .range(0, 36)
         .sliderRange(0, 20)
         .build()

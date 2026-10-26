@@ -80,6 +80,14 @@ public class AutoTotem extends Module {
         .build()
     );
 
+    private final Setting<Boolean> overFood = sgGeneral.add(new BoolSetting.Builder()
+        .name("over-food")
+        .description("At or below the health setting, takes the main hand totem even while you hold food, as long as you are not eating or holding use. Otherwise food in your hand keeps it away.")
+        .defaultValue(true)
+        .visible(() -> mainhand.get() == Mainhand.Smart)
+        .build()
+    );
+
     private final Setting<Integer> resumeDelay = sgGeneral.add(new IntSetting.Builder()
         .name("resume-delay")
         .description("Ticks to wait after you switch away from the main hand totem, eat or hold food before taking it back.")
@@ -450,6 +458,7 @@ public class AutoTotem extends Module {
     private boolean busy(ItemStack held) {
         if (mc.player.isUsingItem() || mc.options.useKey.isPressed()) return true;
         if (mc.options.attackKey.isPressed() || mc.interactionManager.isBreakingBlock()) return true;
+        if (overFood.get() && mainhand.get() == Mainhand.Smart && mc.player.getHealth() + mc.player.getAbsorptionAmount() <= health.get()) return false;
         return held.contains(DataComponentTypes.FOOD) || held.contains(DataComponentTypes.CONSUMABLE);
     }
 
