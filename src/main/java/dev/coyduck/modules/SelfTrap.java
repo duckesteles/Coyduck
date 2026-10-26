@@ -394,7 +394,8 @@ public class SelfTrap extends Module {
             float damage = HurtTracker.get().effectiveOnSelf(raw, Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2);
             float health = AutoTotem.popInFlight() ? 1.0f : mc.player.getHealth() + mc.player.getAbsorptionAmount();
 
-            boolean pops = damage >= health || ExplosionDamage.mitigate(mc.player, raw) >= health;
+            float full = mc.player.isInsideWall() ? ExplosionDamage.upperBound(mc.player, mc.player.getEntityPos(), crystal.getEntityPos()) : ExplosionDamage.mitigate(mc.player, raw);
+            boolean pops = damage >= health || full >= health;
             if (pops && !(allowPop.get() && AutoTotem.canAffordPop())) continue;
             if (target == null || (pop && !pops)) {
                 target = crystal;
