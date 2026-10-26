@@ -80,7 +80,7 @@ public class LadderTrap extends Module {
 
     private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
         .name("rotate")
-        .description("Sends a look packet toward every block right before placing it, for servers whose anticheat checks where you look.")
+        .description("Turns your head toward each block before placing it and places only once the server sees you looking at it. Slower, but for servers whose anticheat checks where you look. Visible faces are always preferred.")
         .defaultValue(false)
         .build()
     );
@@ -188,7 +188,7 @@ public class LadderTrap extends Module {
         Vec3d point = Vec3d.ofCenter(wall).add(best.getOffsetX() * 0.5, 0, best.getOffsetZ() * 0.5);
         BlockHitResult hit = new BlockHitResult(point, best, wall, false);
 
-        InventoryManager.get().withItem(slot, switchMode.get(), () -> InteractionManager.get().place(cell, hit, swing.get(), rotate.get()));
+        InventoryManager.get().withItem(slot, switchMode.get(), () -> InteractionManager.get().place(cell, hit, swing.get(), rotate.get(), InteractionManager.TRAP_PRIORITY));
         return mc.world.getBlockState(cell).isOf(Blocks.LADDER);
     }
 
@@ -204,7 +204,7 @@ public class LadderTrap extends Module {
         if (new Box(floor).squaredMagnitude(mc.player.getEyePos()) >= reach() * reach()) return;
 
         BlockHitResult hit = new BlockHitResult(Vec3d.ofCenter(floor).add(0, 0.5, 0), Direction.UP, floor, false);
-        InventoryManager.get().withItem(slot, switchMode.get(), () -> InteractionManager.get().place(cell, hit, swing.get(), rotate.get()));
+        InventoryManager.get().withItem(slot, switchMode.get(), () -> InteractionManager.get().place(cell, hit, swing.get(), rotate.get(), InteractionManager.TRAP_PRIORITY));
     }
 
     private boolean usableWall(BlockPos wall, Direction side) {

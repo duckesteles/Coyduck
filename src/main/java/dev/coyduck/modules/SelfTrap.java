@@ -138,7 +138,7 @@ public class SelfTrap extends Module {
 
     private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
         .name("rotate")
-        .description("Sends a look packet toward every block right before placing it, for servers whose anticheat checks where you look.")
+        .description("Turns your head toward each block before placing it and places only once the server sees you looking at it. Slower, but for servers whose anticheat checks where you look. Visible faces are always preferred.")
         .defaultValue(false)
         .build()
     );
@@ -369,7 +369,10 @@ public class SelfTrap extends Module {
     }
 
     private void commit(BlockPos pos, BlockHitResult hit) {
-        InteractionManager.get().place(pos, hit, swing.get(), rotate.get());
+        if (!InteractionManager.get().place(pos, hit, swing.get(), rotate.get(), InteractionManager.DEFENSE_PRIORITY)) {
+            budget = 0;
+            return;
+        }
         rendered.put(pos.asLong(), Util.getMeasuringTimeMs());
         budget--;
     }

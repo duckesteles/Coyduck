@@ -34,14 +34,15 @@ import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.HandSwingC2SPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
-import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Util;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.RaycastContext;
 
 import java.util.ArrayDeque;
 import java.util.List;
@@ -49,6 +50,10 @@ import java.util.List;
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 public final class InteractionManager {
+    public static final int DEFENSE_PRIORITY = 120;
+    public static final int TRAP_PRIORITY = 90;
+    private static final float ROTATE_SPEED = 180;
+    private static final double[][] FACE_POINTS = {{0, 0}, {0.3, 0.3}, {-0.3, 0.3}, {0.3, -0.3}, {-0.3, -0.3}, {0.45, 0}, {-0.45, 0}, {0, 0.45}, {0, -0.45}};
     private static final InteractionManager INSTANCE = new InteractionManager();
 
     private static final double REACH_MARGIN = 0.05;
@@ -111,6 +116,8 @@ public final class InteractionManager {
 
         BlockHitResult best = null;
         double bestDistance = Double.MAX_VALUE;
+        BlockHitResult seen = null;
+        double seenDistance = Double.MAX_VALUE;
 
         for (Direction direction : Direction.values()) {
             BlockPos neighbor = pos.offset(direction);
@@ -118,48 +125,70 @@ public final class InteractionManager {
             if (state.isReplaceable() || BlockRules.isInteractable(state.getBlock())) continue;
 
             double distance = new Box(neighbor).squaredMagnitude(eye);
-            if (distance >= reachSquared || distance >= bestDistance) continue;
+            if (distance >= reachSquared) continue;
 
             Direction side = direction.getOpposite();
-            Vec3d point = Vec3d.ofCenter(neighbor).add(side.getOffsetX() * 0.5, side.getOffsetY() * 0.5, side.getOffsetZ() * 0.5);
-            best = new BlockHitResult(point, side, neighbor, false);
-            bestDistance = distance;
+            Vec3d center = Vec3d.ofCenter(neighbor).add(side.getOffsetX() * 0.5, side.getOffsetY() * 0.5, side.getOffsetZ() * 0.5);
+            if (distance < bestDistance) {
+                best = new BlockHitResult(center, side, neighbor, false);
+                bestDistance = distance;
+            }
+
+            if (distance >= seenDistance) continue;
+            Vec3d point = visiblePoint(neighbor, side, eye, reachSquared);
+            if (point != null) {
+                seen = new BlockHitResult(point, side, neighbor, false);
+                seenDistance = distance;
+            }
         }
 
+        if (seen != null) return seen;
         if (best != null || !airplace) return best;
         if (new Box(pos).squaredMagnitude(eye) >= reachSquared) return null;
         return new BlockHitResult(Vec3d.ofCenter(pos), Direction.UP, pos, false);
     }
 
-    public void place(BlockPos pos, BlockHitResult hit, SwingMode swing) {
-        place(pos, hit, swing, false);
+    public Vec3d visiblePoint(BlockPos block, Direction side, Vec3d eye, double reachSquared) {
+        Vec3d normal = Vec3d.of(side.getVector());
+        Vec3d center = Vec3d.ofCenter(block).add(normal.multiply(0.5));
+        if (eye.subtract(center).dotProduct(normal) <= 0) return null;
+
+        Direction.Axis axis = side.getAxis();
+        Vec3d u = axis == Direction.Axis.X ? new Vec3d(0, 1, 0) : new Vec3d(1, 0, 0);
+        Vec3d v = axis == Direction.Axis.Z ? new Vec3d(0, 1, 0) : new Vec3d(0, 0, 1);
+        for (double[] offset : FACE_POINTS) {
+            Vec3d point = center.add(u.multiply(offset[0])).add(v.multiply(offset[1]));
+            if (point.squaredDistanceTo(eye) >= reachSquared) continue;
+            if (sees(eye, point, block)) return point;
+        }
+        return null;
     }
 
-    public void place(BlockPos pos, BlockHitResult hit, SwingMode swing, boolean rotate) {
-        if (rotate) lookAt(hit.getPos());
+    private boolean sees(Vec3d eye, Vec3d point, BlockPos block) {
+        BlockHitResult ray = mc.world.raycast(new RaycastContext(eye, point, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player));
+        return ray.getType() == HitResult.Type.MISS || ray.getBlockPos().equals(block) || ray.getPos().squaredDistanceTo(point) < 1.0E-4;
+    }
+
+    public void place(BlockPos pos, BlockHitResult hit, SwingMode swing) {
+        place(pos, hit, swing, false, 0);
+    }
+
+    public boolean place(BlockPos pos, BlockHitResult hit, SwingMode swing, boolean rotate, int priority) {
+        if (rotate && !aimed(hit.getPos(), new Box(hit.getBlockPos()), priority)) return false;
         mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
         int sequence = ((ClientWorldAccessor) mc.world).coyduck$getPendingUpdateManager().getSequence();
         swing(swing);
-        if (rotate) lookBack();
         pending.put(pos.asLong(), new Pending(sequence, Util.getMeasuringTimeMs() + LatencyManager.get().timeout()));
+        return true;
     }
 
-    public void lookAt(Vec3d target) {
-        Vec3d eye = mc.player.getEyePos();
-        double dx = target.x - eye.x;
-        double dy = target.y - eye.y;
-        double dz = target.z - eye.z;
-        float yaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90.0f;
-        float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
-        mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(yaw, pitch, mc.player.isOnGround(), mc.player.horizontalCollision));
-    }
-
-    private void lookBack() {
+    public boolean aimed(Vec3d point, Box box, int priority) {
         RotationManager rotations = RotationManager.get();
-        float yaw = rotations.packetYaw(mc.player.getYaw());
-        float pitch = rotations.packetPitch(mc.player.getPitch());
-        mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(yaw, pitch, mc.player.isOnGround(), mc.player.horizontalCollision));
+        rotations.request(priority, point, ROTATE_SPEED, true);
+        return rotations.isLookingAt(box, mc.player.getBlockInteractionRange() + 1.0);
     }
+
+
 
     public boolean hasCrystals() {
         return mc.player.getOffHandStack().isOf(Items.END_CRYSTAL) || crystalSlot() != -1;
@@ -170,7 +199,9 @@ public final class InteractionManager {
     }
 
     public boolean placeCrystal(BlockPos base, InventoryManager.SwitchMode mode, SwingMode swing, Runnable after, boolean whileEating) {
-        BlockHitResult hit = new BlockHitResult(new Vec3d(base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5), Direction.UP, base, false);
+        Vec3d eye = mc.player.getEyePos();
+        Vec3d point = visiblePoint(base, Direction.UP, eye, Double.MAX_VALUE);
+        BlockHitResult hit = new BlockHitResult(point != null ? point : new Vec3d(base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5), Direction.UP, base, false);
 
         if (mc.player.getOffHandStack().isOf(Items.END_CRYSTAL)) {
             boolean[] done = {false};
@@ -210,11 +241,10 @@ public final class InteractionManager {
     }
 
     public boolean attack(Entity target, InventoryManager.SwitchMode mode, SwingMode swing, boolean whileEating, boolean rotate) {
+        if (rotate && !aimed(target.getBoundingBox().getCenter(), target.getBoundingBox(), DEFENSE_PRIORITY)) return false;
         Runnable hit = () -> {
-            if (rotate) lookAt(target.getBoundingBox().getCenter());
             mc.interactionManager.attackEntity(mc.player, target);
             swing(swing);
-            if (rotate) lookBack();
         };
 
         if (canHitWithHand()) {
