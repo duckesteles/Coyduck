@@ -53,6 +53,7 @@ public final class InventoryManager {
     private boolean burstAttacked;
     private int sentSlot = -1;
     private final Map<Item, Integer> homes = new HashMap<>();
+    private long stagedAt;
 
     public enum Swap {
         NONE,
@@ -222,7 +223,8 @@ public final class InventoryManager {
     }
 
     private int stage(int index, int selected) {
-        if (index == OFFHAND) return -1;
+        if (index == OFFHAND || MiningManager.get().isHolding()) return -1;
+        if (Util.getMeasuringTimeMs() - stagedAt < LatencyManager.get().timeout()) return -1;
 
         Item item = stack(index).getItem();
         Integer home = homes.get(item);
@@ -233,6 +235,7 @@ public final class InventoryManager {
         if (target == -1 || !swapWithHotbar(index, target)) return -1;
 
         remember(item, target);
+        stagedAt = Util.getMeasuringTimeMs();
         return target;
     }
 
