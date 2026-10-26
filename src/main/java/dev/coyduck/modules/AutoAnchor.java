@@ -118,7 +118,7 @@ public class AutoAnchor extends Module {
     private final Setting<Boolean> airplace = sgGeneral.add(new BoolSetting.Builder()
         .name("airplace")
         .description("Places anchors without a neighbouring block to click on.")
-        .defaultValue(true)
+        .defaultValue(false)
         .build()
     );
 
@@ -219,7 +219,7 @@ public class AutoAnchor extends Module {
     private final Setting<Boolean> rotate = sgRotate.add(new BoolSetting.Builder()
         .name("rotate")
         .description("Looks at every anchor before using it. Needed on servers with Grim.")
-        .defaultValue(false)
+        .defaultValue(true)
         .build()
     );
 

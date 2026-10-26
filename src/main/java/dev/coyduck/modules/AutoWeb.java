@@ -86,14 +86,14 @@ public class AutoWeb extends Module {
     private final Setting<Boolean> airplace = sgGeneral.add(new BoolSetting.Builder()
         .name("airplace")
         .description("Places webs without a neighbouring block to click on, for targets in the air.")
-        .defaultValue(true)
+        .defaultValue(false)
         .build()
     );
 
     private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
         .name("rotate")
         .description("Turns your head toward each block before placing it and places only once the server sees you looking at it. Slower, but for servers whose anticheat checks where you look. Visible faces are always preferred.")
-        .defaultValue(false)
+        .defaultValue(true)
         .build()
     );
 

@@ -116,28 +116,33 @@ public final class InteractionManager {
         double reach = mc.player.getBlockInteractionRange() + 1.0 - REACH_MARGIN;
         double reachSquared = reach * reach;
 
-        BlockHitResult best = null;
-        double bestDistance = Double.MAX_VALUE;
+        BlockHitResult facing = null;
+        double facingDistance = Double.MAX_VALUE;
         BlockHitResult seen = null;
         double seenDistance = Double.MAX_VALUE;
+        boolean support = false;
 
         for (Direction direction : Direction.values()) {
             BlockPos neighbor = pos.offset(direction);
             BlockState state = mc.world.getBlockState(neighbor);
-            if (state.isReplaceable() || BlockRules.isInteractable(state.getBlock())) continue;
+            if (state.isReplaceable() || BlockRules.isInteractable(state.getBlock()) || isPending(neighbor)) continue;
+            support = true;
 
             double distance = new Box(neighbor).squaredMagnitude(eye);
             if (distance >= reachSquared) continue;
 
             Direction side = direction.getOpposite();
-            Vec3d center = Vec3d.ofCenter(neighbor).add(side.getOffsetX() * 0.5, side.getOffsetY() * 0.5, side.getOffsetZ() * 0.5);
-            if (distance < bestDistance) {
-                best = new BlockHitResult(center, side, neighbor, false);
-                bestDistance = distance;
-            }
+            Vec3d normal = Vec3d.of(side.getVector());
+            Vec3d center = Vec3d.ofCenter(neighbor).add(normal.multiply(0.5));
+            boolean inside = new Box(neighbor).contains(eye);
+            if (!inside && eye.subtract(center).dotProduct(normal) <= 0) continue;
 
+            if (distance < facingDistance) {
+                facing = new BlockHitResult(center, side, neighbor, false);
+                facingDistance = distance;
+            }
             if (distance >= seenDistance) continue;
-            Vec3d point = new Box(neighbor).contains(eye) ? center : visiblePoint(neighbor, side, eye, reachSquared);
+            Vec3d point = inside ? center : visiblePoint(neighbor, side, eye, reachSquared);
             if (point != null) {
                 seen = new BlockHitResult(point, side, neighbor, false);
                 seenDistance = distance;
@@ -145,14 +150,12 @@ public final class InteractionManager {
         }
 
         if (seen != null) return seen;
-        if (airplace && new Box(pos).squaredMagnitude(eye) < reachSquared) {
-            for (Direction direction : Direction.values()) {
-                Vec3d point = visiblePoint(pos, direction, eye, reachSquared);
-                if (point != null) return new BlockHitResult(point, direction, pos, false);
-            }
-        }
-        if (best != null || !airplace) return best;
+        if (facing != null || support || !airplace) return facing;
         if (new Box(pos).squaredMagnitude(eye) >= reachSquared) return null;
+        for (Direction direction : Direction.values()) {
+            Vec3d point = visiblePoint(pos, direction, eye, reachSquared);
+            if (point != null) return new BlockHitResult(point, direction, pos, false);
+        }
         return new BlockHitResult(Vec3d.ofCenter(pos), Direction.UP, pos, false);
     }
 

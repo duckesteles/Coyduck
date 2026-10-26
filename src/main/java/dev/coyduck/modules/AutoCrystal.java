@@ -339,7 +339,7 @@ public class AutoCrystal extends Module {
     private final Setting<Boolean> baseAirplace = sgBase.add(new BoolSetting.Builder()
         .name("airplace")
         .description("Places the base block without a neighbouring block to click on.")
-        .defaultValue(true)
+        .defaultValue(false)
         .visible(basePlace::get)
         .build()
     );
@@ -347,7 +347,7 @@ public class AutoCrystal extends Module {
     private final Setting<Boolean> rotate = sgRotate.add(new BoolSetting.Builder()
         .name("rotate")
         .description("Looks at every crystal and block before using it. Needed on servers with Grim.")
-        .defaultValue(false)
+        .defaultValue(true)
         .build()
     );
 

@@ -165,10 +165,15 @@ public final class InventoryManager {
     }
 
     public Swap swapWithOffhand(int index) {
+        return swapWithOffhand(index, false);
+    }
+
+    public Swap swapWithOffhand(int index, boolean preferHands) {
         ScreenHandler handler = mc.player.currentScreenHandler;
         int id = handlerSlot(handler, index);
+        boolean hands = preferHands && PlayerInventory.isValidHotbarIndex(index) && !mc.player.isUsingItem() && mc.currentScreen == null;
 
-        if (id != -1) {
+        if (id != -1 && !hands) {
             mc.interactionManager.clickSlot(handler.syncId, id, OFFHAND, SlotActionType.SWAP, mc.player);
             return Swap.CLICK;
         }

@@ -130,6 +130,13 @@ public class AutoTotem extends Module {
         .build()
     );
 
+    private final Setting<Boolean> hotbarSwap = sgGeneral.add(new BoolSetting.Builder()
+        .name("hotbar-swap")
+        .description("Refills the offhand from a hotbar totem with the swap-hands key instead of an inventory click. Grim drops inventory clicks while you move, sprint or sneak, but not the swap-hands key. Keep a few spare totems in your hotbar.")
+        .defaultValue(true)
+        .build()
+    );
+
     private final Setting<Boolean> pearlGuard = sgGeneral.add(new BoolSetting.Builder()
         .name("pearl-guard")
         .description("Cancels an ender pearl throw that would hit an end crystal right in front of your face, since the blast would count as yours. Off by default.")
@@ -435,7 +442,7 @@ public class AutoTotem extends Module {
 
         int syncId = mc.player.currentScreenHandler.syncId;
         InventoryManager inventory = InventoryManager.get();
-        InventoryManager.Swap swap = inventory.swapWithOffhand(source);
+        InventoryManager.Swap swap = inventory.swapWithOffhand(source, hotbarSwap.get());
         if (swap == InventoryManager.Swap.NONE) return;
         sourceUsedAt[source] = Util.getMeasuringTimeMs();
 
@@ -471,9 +478,10 @@ public class AutoTotem extends Module {
 
         int source = gappleSource();
         if (source == NONE || inventory.handlerSlot(mc.player.currentScreenHandler, source) == -1) return;
-        if (inventory.swapWithOffhand(source) != InventoryManager.Swap.CLICK) return;
+        InventoryManager.Swap swap = inventory.swapWithOffhand(source, hotbarSwap.get());
+        if (swap == InventoryManager.Swap.NONE) return;
 
-        inventory.resync();
+        if (swap == InventoryManager.Swap.CLICK) inventory.resync();
         sourceUsedAt[source] = Util.getMeasuringTimeMs();
         gappleAt = Util.getMeasuringTimeMs();
         gapple = true;
@@ -484,6 +492,11 @@ public class AutoTotem extends Module {
         InventoryManager inventory = InventoryManager.get();
         int server = inventory.serverSlot();
         for (Item item : new Item[] {Items.ENCHANTED_GOLDEN_APPLE, Items.GOLDEN_APPLE}) {
+            if (hotbarSwap.get()) {
+                for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
+                    if (i != server && i != reserveSlot && inventory.stack(i).isOf(item) && !recentSource(i)) return i;
+                }
+            }
             for (int i = InventoryManager.HOTBAR_END; i < InventoryManager.MAIN_END; i++) {
                 if (inventory.stack(i).isOf(item) && !recentSource(i)) return i;
             }
@@ -506,6 +519,13 @@ public class AutoTotem extends Module {
     private int offhandSource(boolean avoidRecent) {
         InventoryManager inventory = InventoryManager.get();
         ScreenHandler handler = mc.player.currentScreenHandler;
+        if (hotbarSwap.get()) {
+            int server = inventory.serverSlot();
+            for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
+                if (avoidRecent && recentSource(i)) continue;
+                if (i != server && i != reserveSlot && (skipMask & (1 << i)) == 0 && isTotem(inventory.stack(i))) return i;
+            }
+        }
 
         for (int i = InventoryManager.HOTBAR_END; i < InventoryManager.MAIN_END; i++) {
             if (avoidRecent && recentSource(i)) continue;
