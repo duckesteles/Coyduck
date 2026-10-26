@@ -192,7 +192,7 @@ public class AutoWeb extends Module {
             planned.add(pos);
         }
 
-        if (planned.isEmpty()) return;
+        if (planned.isEmpty() || !interaction.ready(planned.get(0), airplace.get(), rotate.get(), InteractionManager.TRAP_PRIORITY)) return;
 
         InventoryManager.get().withItem(slot, switchMode.get(), () -> {
             for (BlockPos pos : planned) {

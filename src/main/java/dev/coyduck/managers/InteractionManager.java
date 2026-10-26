@@ -50,6 +50,7 @@ import java.util.List;
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 public final class InteractionManager {
+    public static final int SURROUND_PRIORITY = 121;
     public static final int DEFENSE_PRIORITY = 120;
     public static final int TRAP_PRIORITY = 90;
     private static final float ROTATE_SPEED = 180;
@@ -185,7 +186,19 @@ public final class InteractionManager {
     public boolean aimed(Vec3d point, Box box, int priority) {
         RotationManager rotations = RotationManager.get();
         rotations.request(priority, point, ROTATE_SPEED, true);
-        return rotations.isLookingAt(box, mc.player.getBlockInteractionRange() + 1.0);
+        double range = Math.max(mc.player.getBlockInteractionRange() + 1.0, mc.player.getEyePos().distanceTo(point) + 0.1);
+        return rotations.isLookingAt(box, range);
+    }
+
+    public boolean ready(BlockPos pos, boolean airplace, boolean rotate, int priority) {
+        if (!rotate) return true;
+        BlockHitResult hit = hit(pos, airplace);
+        return hit == null || aimed(hit.getPos(), new Box(hit.getBlockPos()), priority);
+    }
+
+    public Vec3d crystalAim(BlockPos base) {
+        Vec3d point = visiblePoint(base, Direction.UP, mc.player.getEyePos(), Double.MAX_VALUE);
+        return point != null ? point : new Vec3d(base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5);
     }
 
 
@@ -199,9 +212,7 @@ public final class InteractionManager {
     }
 
     public boolean placeCrystal(BlockPos base, InventoryManager.SwitchMode mode, SwingMode swing, Runnable after, boolean whileEating) {
-        Vec3d eye = mc.player.getEyePos();
-        Vec3d point = visiblePoint(base, Direction.UP, eye, Double.MAX_VALUE);
-        BlockHitResult hit = new BlockHitResult(point != null ? point : new Vec3d(base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5), Direction.UP, base, false);
+        BlockHitResult hit = new BlockHitResult(crystalAim(base), Direction.UP, base, false);
 
         if (mc.player.getOffHandStack().isOf(Items.END_CRYSTAL)) {
             boolean[] done = {false};

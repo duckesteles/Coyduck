@@ -144,6 +144,7 @@ public class AutoTotem extends Module {
 
     private final long[] sourceUsedAt = new long[InventoryManager.MAIN_END];
     private boolean gapple;
+    private int foodTicks;
     private int mainMissing;
     private boolean pending;
     private boolean verifying;
@@ -226,6 +227,7 @@ public class AutoTotem extends Module {
 
         disableConflicts();
         if (resumeTicks > 0) resumeTicks--;
+        if (foodTicks > 0) foodTicks--;
         if (dangerHold > 0) dangerHold--;
         if (pending && Util.getMeasuringTimeMs() >= pendingUntil) retry();
         refill(false);
@@ -514,8 +516,12 @@ public class AutoTotem extends Module {
         }
 
         boolean popped = selected == reserveSlot && inventory.stack(selected).isEmpty() && !inventory.isEating();
-        if (!popped && busy(inventory.stack(selected))) resumeTicks = Math.max(resumeTicks, resumeDelay.get());
-        if ((!popped && resumeTicks > 0) || !isTotem(mc.player.getOffHandStack())) return;
+        if (overFoodNow()) foodTicks = 0;
+        if (!popped && busy(inventory.stack(selected))) {
+            if (activelyBusy()) resumeTicks = Math.max(resumeTicks, resumeDelay.get());
+            else foodTicks = resumeDelay.get();
+        }
+        if ((!popped && (resumeTicks > 0 || foodTicks > 0)) || !isTotem(mc.player.getOffHandStack())) return;
 
         int hotbar = inventory.find(AutoTotem::isTotem, 0, InventoryManager.HOTBAR_END);
         if (hotbar == NONE) {
@@ -533,10 +539,17 @@ public class AutoTotem extends Module {
     }
 
     private boolean busy(ItemStack held) {
-        if (mc.player.isUsingItem() || mc.options.useKey.isPressed()) return true;
-        if (mc.options.attackKey.isPressed() || mc.interactionManager.isBreakingBlock()) return true;
-        if (overFood.get() && mainhand.get() == Mainhand.Smart && mc.player.getHealth() + mc.player.getAbsorptionAmount() <= health.get()) return false;
+        if (activelyBusy()) return true;
+        if (overFoodNow()) return false;
         return held.contains(DataComponentTypes.FOOD) || held.contains(DataComponentTypes.CONSUMABLE);
+    }
+
+    private boolean activelyBusy() {
+        return mc.player.isUsingItem() || mc.options.useKey.isPressed() || mc.options.attackKey.isPressed() || mc.interactionManager.isBreakingBlock();
+    }
+
+    private boolean overFoodNow() {
+        return overFood.get() && mainhand.get() == Mainhand.Smart && !activelyBusy() && mc.player.getHealth() + mc.player.getAbsorptionAmount() <= health.get();
     }
 
     private int reserveHotbar() {

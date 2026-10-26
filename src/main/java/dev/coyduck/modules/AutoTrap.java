@@ -246,6 +246,8 @@ public class AutoTrap extends Module {
 
         int slot = blockSlot();
         if (slot == -1) return;
+        BlockPos first = targets.stream().filter(pos -> placeable(pos) && interaction.hit(pos, airplace.get()) != null).findFirst().orElse(null);
+        if (first != null && !interaction.ready(first, airplace.get(), rotate.get(), InteractionManager.TRAP_PRIORITY)) return;
 
         InventoryManager.get().withItem(slot, switchMode.get(), () -> {
             for (int round = 0; round < 2 && budget > 0; round++) {

@@ -348,7 +348,7 @@ public class Surround extends Module {
             cost += needed;
         }
 
-        if (placeable.isEmpty()) return;
+        if (placeable.isEmpty() || !interaction.ready(placeable.get(0), airplace.get(), rotate.get(), InteractionManager.SURROUND_PRIORITY)) return;
 
         InventoryManager.get().withItemWhileEating(slot, switchMode.get(), () -> {
             for (BlockPos pos : placeable) {
@@ -394,7 +394,7 @@ public class Surround extends Module {
     }
 
     private void commit(BlockPos pos, BlockHitResult hit) {
-        if (!InteractionManager.get().place(pos, hit, swing.get(), rotate.get(), InteractionManager.DEFENSE_PRIORITY)) {
+        if (!InteractionManager.get().place(pos, hit, swing.get(), rotate.get(), InteractionManager.SURROUND_PRIORITY)) {
             budget = 0;
             return;
         }

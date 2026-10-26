@@ -187,6 +187,7 @@ public class LadderTrap extends Module {
         BlockPos wall = cell.offset(best.getOpposite());
         Vec3d point = Vec3d.ofCenter(wall).add(best.getOffsetX() * 0.5, 0, best.getOffsetZ() * 0.5);
         BlockHitResult hit = new BlockHitResult(point, best, wall, false);
+        if (rotate.get() && !InteractionManager.get().aimed(point, new Box(wall), InteractionManager.TRAP_PRIORITY)) return true;
 
         InventoryManager.get().withItem(slot, switchMode.get(), () -> InteractionManager.get().place(cell, hit, swing.get(), rotate.get(), InteractionManager.TRAP_PRIORITY));
         return mc.world.getBlockState(cell).isOf(Blocks.LADDER);
@@ -204,6 +205,7 @@ public class LadderTrap extends Module {
         if (new Box(floor).squaredMagnitude(mc.player.getEyePos()) >= reach() * reach()) return;
 
         BlockHitResult hit = new BlockHitResult(Vec3d.ofCenter(floor).add(0, 0.5, 0), Direction.UP, floor, false);
+        if (rotate.get() && !InteractionManager.get().aimed(hit.getPos(), new Box(floor), InteractionManager.TRAP_PRIORITY)) return;
         InventoryManager.get().withItem(slot, switchMode.get(), () -> InteractionManager.get().place(cell, hit, swing.get(), rotate.get(), InteractionManager.TRAP_PRIORITY));
     }
 

@@ -283,7 +283,7 @@ public class SelfTrap extends Module {
             cost += needed;
         }
 
-        if (placeable.isEmpty()) return;
+        if (placeable.isEmpty() || !interaction.ready(placeable.get(0), airplace.get(), rotate.get(), InteractionManager.DEFENSE_PRIORITY)) return;
 
         InventoryManager.get().withItemWhileEating(slot, switchMode.get(), () -> {
             for (BlockPos pos : placeable) {

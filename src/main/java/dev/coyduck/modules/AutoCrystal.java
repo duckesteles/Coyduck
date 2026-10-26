@@ -752,7 +752,7 @@ public class AutoCrystal extends Module {
         }
         if (best == null) return false;
 
-        if (!rotationReady(new Box(best), crystalCenter(best), placeRange.get() + 1, PLACE_PRIORITY)) return false;
+        if (!rotationReady(new Box(best), InteractionManager.get().crystalAim(best), placeRange.get() + 1, PLACE_PRIORITY)) return false;
         if (!InteractionManager.get().placeCrystal(best, switchMode.get(), swing.get(), null, !pauseEating.get())) return false;
 
         clearing.put(best.asLong(), Util.getMeasuringTimeMs() + 2L * LatencyManager.get().timeout());
@@ -822,7 +822,7 @@ public class AutoCrystal extends Module {
 
                 BlockPos base = gap.down();
                 Vec3d center = crystalCenter(base);
-                if (!rotationReady(new Box(base), center, placeRange.get() + 1, GAP_PRIORITY)) return;
+                if (!rotationReady(new Box(base), InteractionManager.get().crystalAim(base), placeRange.get() + 1, GAP_PRIORITY)) return;
 
                 if (!InteractionManager.get().placeCrystal(base, switchMode.get(), swing.get(), null, !pauseEating.get())) return;
                 gapBudget--;
@@ -959,7 +959,7 @@ public class AutoCrystal extends Module {
 
     private void placeCrystal(BlockPos base, Choice choice) {
         Box box = new Box(base);
-        Vec3d aim = new Vec3d(base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5);
+        Vec3d aim = InteractionManager.get().crystalAim(base);
         if (!rotationReady(box, aim, placeRange.get() + 1, PLACE_PRIORITY)) {
             status = "rotating";
             return;
