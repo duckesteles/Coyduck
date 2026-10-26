@@ -221,6 +221,21 @@ public final class InventoryManager {
         }
     }
 
+    private int stage(int index, int selected) {
+        if (index == OFFHAND) return -1;
+
+        Item item = stack(index).getItem();
+        Integer home = homes.get(item);
+        int target = home != null && home != selected && stack(home).isEmpty() ? home : -1;
+        for (int i = 0; target == -1 && i < HOTBAR_END; i++) {
+            if (i != selected && stack(i).isEmpty()) target = i;
+        }
+        if (target == -1 || !swapWithHotbar(index, target)) return -1;
+
+        remember(item, target);
+        return target;
+    }
+
     private void remember(Item item, int slot) {
         if (item == Items.AIR) return;
         homes.values().removeIf(home -> home == slot);
@@ -259,11 +274,14 @@ public final class InventoryManager {
             return true;
         }
 
-        if (mode == SwitchMode.Silent && PlayerInventory.isValidHotbarIndex(index) && !isEating()) {
-            selectNow(index);
-            action.run();
-            selectNow(selected);
-            return true;
+        if (mode == SwitchMode.Silent && !isEating()) {
+            int hotbar = PlayerInventory.isValidHotbarIndex(index) ? index : stage(index, selected);
+            if (hotbar != -1) {
+                selectNow(hotbar);
+                action.run();
+                selectNow(selected);
+                return true;
+            }
         }
 
         if (!swapWithHotbar(index, selected)) return false;
