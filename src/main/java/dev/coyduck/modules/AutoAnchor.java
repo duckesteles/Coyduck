@@ -513,7 +513,7 @@ public class AutoAnchor extends Module {
             status = "no spot";
             return;
         }
-        if (!rotationReady(pos)) {
+        if (!(placed ? rotationReady(pos) : rotationReady(placeHit))) {
             status = "rotating";
             return;
         }
@@ -753,18 +753,27 @@ public class AutoAnchor extends Module {
 
     private BlockHitResult face(BlockPos pos) {
         Vec3d center = Vec3d.ofCenter(pos);
-        Vec3d offset = mc.player.getEyePos().subtract(center);
+        Vec3d eye = mc.player.getEyePos();
+        for (Direction direction : Direction.values()) {
+            Vec3d seen = InteractionManager.get().visiblePoint(pos, direction, eye, Double.MAX_VALUE);
+            if (seen != null) return new BlockHitResult(seen, direction, pos, false);
+        }
+        Vec3d offset = eye.subtract(center);
         Direction side = Direction.getFacing(offset.x, offset.y, offset.z);
         Vec3d point = center.add(side.getOffsetX() * 0.5, side.getOffsetY() * 0.5, side.getOffsetZ() * 0.5);
         return new BlockHitResult(point, side, pos, false);
     }
 
     private boolean rotationReady(BlockPos pos) {
+        return rotationReady(face(pos));
+    }
+
+    private boolean rotationReady(BlockHitResult hit) {
         if (!rotate.get()) return true;
 
         RotationManager rotations = RotationManager.get();
-        rotations.request(PRIORITY, Vec3d.ofCenter(pos), rotateSpeed.get().floatValue(), true);
-        return rotations.isLookingAt(new Box(pos), placeRange.get() + RAY_SLACK);
+        rotations.request(PRIORITY, hit.getPos(), rotateSpeed.get().floatValue(), true);
+        return rotations.isLookingAt(new Box(hit.getBlockPos()), placeRange.get() + RAY_SLACK);
     }
 
     private boolean inRange(BlockPos pos) {
