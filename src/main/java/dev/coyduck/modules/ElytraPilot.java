@@ -38,6 +38,8 @@ import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
+import net.minecraft.network.packet.s2c.play.EntityTrackerUpdateS2CPacket;
+import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.screen.slot.SlotActionType;
@@ -78,6 +80,10 @@ public class ElytraPilot extends Module {
     private static final int MAX_SPOT_RADIUS = 48;
     private static final double WALL_LOOKAHEAD = 8;
     private static final double MIN_WALL_SPEED = 0.25;
+    private static final double WALL_MARGIN = 0.3;
+    private static final double ROUTE_MARGIN = 0.6;
+    private static final int SETBACK_PAUSE = 5;
+    private static final int UNCONFIRMED_TICKS = 12;
 
     private static final Set<net.minecraft.block.Block> DANGER = Set.of(
         Blocks.MAGMA_BLOCK, Blocks.CAMPFIRE, Blocks.SOUL_CAMPFIRE, Blocks.FIRE, Blocks.SOUL_FIRE, Blocks.CACTUS,
@@ -228,6 +234,9 @@ public class ElytraPilot extends Module {
     private boolean warnedCritical;
     private boolean warnedApples;
     private boolean eating;
+    private boolean serverGlide;
+    private int setbackTick = -1000;
+    private int unconfirmedTick = -1;
     private int eatTick;
     private int eatReturn = -1;
     private int spotSearches;
@@ -312,6 +321,8 @@ public class ElytraPilot extends Module {
         state = mc.player.isGliding() ? State.Cruise : State.Takeoff;
         takeoffTick = ticks;
         jumps = 0;
+        serverGlide = mc.player.isGliding();
+        unconfirmedTick = -1;
         spot = null;
         badSpots.clear();
         extraHeight = 0;
@@ -394,11 +405,13 @@ public class ElytraPilot extends Module {
     }
 
     private void cruise() {
+        if (ticks - setbackTick < SETBACK_PAUSE) return;
         if (!mc.player.isGliding()) {
-            if (mc.player.isOnGround()) state = State.Takeoff;
+            if (mc.player.isOnGround()) enterTakeoff();
             else deploy();
             return;
         }
+        if (!glideConfirmed()) return;
 
         if (needsMend() && !swapSpare()) {
             if (mend.get()) {
@@ -417,6 +430,30 @@ public class ElytraPilot extends Module {
 
         trackProgress(distance);
         ElytraFly.pilot(steer(nether() ? netherMove() : openMove()));
+    }
+
+    private void enterTakeoff() {
+        state = State.Takeoff;
+        takeoffTick = ticks;
+        jumps = 0;
+    }
+
+    /**
+     * The client starts gliding right away, the server confirms it a round trip later. If the server never does, flying
+     * on would only earn setback after setback, so stop gliding here and open the elytra again shortly.
+     */
+    private boolean glideConfirmed() {
+        if (serverGlide) {
+            unconfirmedTick = -1;
+            return true;
+        }
+        if (unconfirmedTick == -1) unconfirmedTick = ticks;
+        if (ticks - unconfirmedTick > UNCONFIRMED_TICKS) {
+            mc.player.stopGliding();
+            unconfirmedTick = -1;
+            deployTick = ticks + SETBACK_PAUSE;
+        }
+        return true;
     }
 
     private void beginLanding(boolean toMend) {
@@ -441,10 +478,12 @@ public class ElytraPilot extends Module {
             arrive();
             return;
         }
+        if (ticks - setbackTick < SETBACK_PAUSE) return;
         if (!mc.player.isGliding()) {
             deploy();
             return;
         }
+        glideConfirmed();
 
         Vec3d feet = mc.player.getEntityPos();
         if (spot != null && !standable(spot)) {
@@ -534,9 +573,7 @@ public class ElytraPilot extends Module {
         }
         if (!chest.isDamaged()) {
             info("Elytra repaired, flying on.");
-            state = State.Takeoff;
-            takeoffTick = ticks;
-            jumps = 0;
+            enterTakeoff();
             return;
         }
         if (!hasMending(chest)) {
@@ -587,7 +624,7 @@ public class ElytraPilot extends Module {
     }
 
     private void deploy() {
-        if (ticks - deployTick < 2 || !hasUsableElytra() || mc.player.hasVehicle() || mc.player.getAbilities().flying) return;
+        if (ticks < deployTick || ticks - deployTick < 2 || !hasUsableElytra() || mc.player.hasVehicle() || mc.player.getAbilities().flying) return;
         if (mc.player.checkGliding()) {
             mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
             deployTick = ticks;
@@ -845,16 +882,17 @@ public class ElytraPilot extends Module {
         if (length < 1.0E-3) return move;
 
         Vec3d direction = move.multiply(1 / length);
-        Box box = mc.player.getBoundingBox();
+        Box box = mc.player.getBoundingBox().expand(WALL_MARGIN, 0, WALL_MARGIN);
+        if (!mc.world.isSpaceEmpty(mc.player, box)) box = mc.player.getBoundingBox();
         double open = WALL_LOOKAHEAD;
-        for (double step = 0.5; step <= WALL_LOOKAHEAD; step += 0.5) {
+        for (double step = 0.25; step <= WALL_LOOKAHEAD; step += 0.25) {
             if (!mc.world.isSpaceEmpty(mc.player, box.offset(direction.multiply(step)))) {
-                open = step;
+                open = step - 0.25;
                 break;
             }
         }
 
-        double limit = Math.max(MIN_WALL_SPEED, (open - 0.8) / 2);
+        double limit = open < 0.5 ? open : Math.max(MIN_WALL_SPEED, (open - 0.5) / 2);
         return length > limit ? move.multiply(limit / length) : move;
     }
 
@@ -901,9 +939,13 @@ public class ElytraPilot extends Module {
     }
 
     private boolean free(Vec3d from, Vec3d to) {
+        return free(from, to, ROUTE_MARGIN);
+    }
+
+    private boolean free(Vec3d from, Vec3d to, double margin) {
         Vec3d delta = to.subtract(from);
         int steps = Math.max(1, MathHelper.ceil(delta.length() / 0.5));
-        Box box = mc.player.getBoundingBox();
+        Box box = mc.player.getBoundingBox().expand(margin, margin / 3, margin);
         for (int i = 1; i <= steps; i++) {
             Vec3d at = from.add(delta.multiply(i / (double) steps));
             if (!loaded(MathHelper.floor(at.x), MathHelper.floor(at.z))) return false;
@@ -982,6 +1024,14 @@ public class ElytraPilot extends Module {
 
     @EventHandler
     private void onPacket(PacketApplyEvent.Post event) {
+        if (mc.player != null) {
+            if (event.packet instanceof PlayerPositionLookS2CPacket) setbackTick = ticks;
+            if (event.packet instanceof EntityTrackerUpdateS2CPacket packet && packet.id() == mc.player.getId()) {
+                for (var entry : packet.trackedValues()) {
+                    if (entry.id() == 0 && entry.value() instanceof Byte flags) serverGlide = (flags & 0x80) != 0;
+                }
+            }
+        }
         if (route == null || mc.world == null || !nether()) return;
 
         switch (event.packet) {
@@ -1048,7 +1098,7 @@ public class ElytraPilot extends Module {
                     BlockPos stand = new BlockPos(x, y, z);
                     if (!badSpots.contains(stand.asLong()) && standable(stand)) {
                         double score = distance + (top - y) * 0.05;
-                        if (score < bestScore && free(feet, new Vec3d(x + 0.5, feet.y, z + 0.5))) {
+                        if (score < bestScore && free(feet, new Vec3d(x + 0.5, feet.y, z + 0.5), 0)) {
                             best = stand;
                             bestScore = score;
                         }
