@@ -31,6 +31,7 @@ import net.minecraft.block.Blocks;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -75,6 +76,8 @@ public class ElytraPilot extends Module {
     private static final double BACKTRACK_DISTANCE = 20;
     private static final int MAX_DEAD_ENDS = 3;
     private static final int MAX_SPOT_RADIUS = 48;
+    private static final double WALL_LOOKAHEAD = 8;
+    private static final double MIN_WALL_SPEED = 0.25;
 
     private static final Set<net.minecraft.block.Block> DANGER = Set.of(
         Blocks.MAGMA_BLOCK, Blocks.CAMPFIRE, Blocks.SOUL_CAMPFIRE, Blocks.FIRE, Blocks.SOUL_FIRE, Blocks.CACTUS,
@@ -115,6 +118,23 @@ public class ElytraPilot extends Module {
         .name("baritone-finish")
         .description("After landing, lets Baritone walk the last blocks to the exact destination.")
         .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> eat = sgGeneral.add(new BoolSetting.Builder()
+        .name("eat")
+        .description("Eats a golden apple from the hotbar when your health drops, enchanted ones first, so the regeneration fills it back up.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Integer> eatHealth = sgGeneral.add(new IntSetting.Builder()
+        .name("eat-health")
+        .description("Health at or below which it eats.")
+        .defaultValue(14)
+        .range(1, 19)
+        .sliderRange(1, 19)
+        .visible(eat::get)
         .build()
     );
 
@@ -206,6 +226,10 @@ public class ElytraPilot extends Module {
     private boolean warnedSpot;
     private boolean warnedStuck;
     private boolean warnedCritical;
+    private boolean warnedApples;
+    private boolean eating;
+    private int eatTick;
+    private int eatReturn = -1;
     private int spotSearches;
 
     private List<BlockPos> path = List.of();
@@ -270,6 +294,7 @@ public class ElytraPilot extends Module {
     @Override
     public void onDeactivate() {
         ElytraFly.pilot(null);
+        stopEating();
         closeRoute();
 
         ElytraFly fly = Modules.get().get(ElytraFly.class);
@@ -317,6 +342,7 @@ public class ElytraPilot extends Module {
         }
 
         feedChunks();
+        autoEat();
 
         switch (state) {
             case Takeoff -> takeoff();
@@ -345,7 +371,7 @@ public class ElytraPilot extends Module {
         }
 
         if (mc.player.isOnGround()) {
-            if (!mc.world.isSpaceEmpty(mc.player, mc.player.getBoundingBox().stretch(0, 1.5, 0))) {
+            if (!mc.world.isSpaceEmpty(mc.player, mc.player.getBoundingBox().stretch(0, 0.6, 0))) {
                 error("No room above you to take off.");
                 toggle();
                 return;
@@ -390,7 +416,7 @@ public class ElytraPilot extends Module {
         }
 
         trackProgress(distance);
-        ElytraFly.pilot(nether() ? netherMove() : openMove());
+        ElytraFly.pilot(steer(nether() ? netherMove() : openMove()));
     }
 
     private void beginLanding(boolean toMend) {
@@ -450,7 +476,7 @@ public class ElytraPilot extends Module {
             }
             if (landToMend && horizontalDistance() > ARRIVE_RADIUS) {
                 trackProgress(horizontalDistance());
-                ElytraFly.pilot(nether() ? netherMove() : openMove());
+                ElytraFly.pilot(steer(nether() ? netherMove() : openMove()));
             } else {
                 ElytraFly.pilot(Vec3d.ZERO);
             }
@@ -482,6 +508,9 @@ public class ElytraPilot extends Module {
             x = dx / horizontal * speed;
             z = dz / horizontal * speed;
             y = 0;
+            Vec3d slowed = steer(new Vec3d(x, 0, z));
+            x = slowed.x;
+            z = slowed.z;
         } else {
             x = dx;
             z = dz;
@@ -533,6 +562,7 @@ public class ElytraPilot extends Module {
         }
         warnedXp = false;
 
+        if (eating) return;
         RotationManager rotations = RotationManager.get();
         rotations.request(ROTATE_PRIORITY, mc.player.getYaw(), 90, 180, false);
         if (ticks - throwTick < THROW_TICKS) return;
@@ -807,6 +837,67 @@ public class ElytraPilot extends Module {
 
     private Vec3d point(int index) {
         return Vec3d.ofBottomCenter(path.get(index));
+    }
+
+    /** Slows a move down as it nears a wall, so it never brushes one at full speed and takes elytra crash damage. */
+    private Vec3d steer(Vec3d move) {
+        double length = move.length();
+        if (length < 1.0E-3) return move;
+
+        Vec3d direction = move.multiply(1 / length);
+        Box box = mc.player.getBoundingBox();
+        double open = WALL_LOOKAHEAD;
+        for (double step = 0.5; step <= WALL_LOOKAHEAD; step += 0.5) {
+            if (!mc.world.isSpaceEmpty(mc.player, box.offset(direction.multiply(step)))) {
+                open = step;
+                break;
+            }
+        }
+
+        double limit = Math.max(MIN_WALL_SPEED, (open - 0.8) / 2);
+        return length > limit ? move.multiply(limit / length) : move;
+    }
+
+    private void autoEat() {
+        if (eating) {
+            if (mc.player.isUsingItem() || ticks - eatTick < 5) {
+                if (ticks - eatTick < 80) return;
+            }
+            stopEating();
+            return;
+        }
+
+        if (!eat.get() || mc.player.getHealth() > eatHealth.get() || mc.player.hasStatusEffect(StatusEffects.REGENERATION) || mc.player.isUsingItem()) return;
+        if (mc.currentScreen != null) return;
+
+        InventoryManager inventory = InventoryManager.get();
+        int slot = inventory.find(stack -> stack.isOf(Items.ENCHANTED_GOLDEN_APPLE), 0, InventoryManager.HOTBAR_END);
+        if (slot == -1) slot = inventory.find(stack -> stack.isOf(Items.GOLDEN_APPLE), 0, InventoryManager.HOTBAR_END);
+        if (slot == -1) {
+            int stored = inventory.find(stack -> stack.isOf(Items.ENCHANTED_GOLDEN_APPLE) || stack.isOf(Items.GOLDEN_APPLE), InventoryManager.HOTBAR_END, InventoryManager.MAIN_END);
+            int empty = inventory.find(ItemStack::isEmpty, 0, InventoryManager.HOTBAR_END);
+            if (stored != -1 && empty != -1 && inventory.swapWithHotbar(stored, empty)) return;
+            if (!warnedApples) warning(stored == -1 ? "No golden apples to eat." : "No free hotbar slot for a golden apple.");
+            warnedApples = true;
+            return;
+        }
+        warnedApples = false;
+
+        int previous = inventory.selectedSlot();
+        if (!inventory.select(slot)) return;
+        eatReturn = previous == slot ? -1 : previous;
+        mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND);
+        mc.options.useKey.setPressed(true);
+        eating = true;
+        eatTick = ticks;
+    }
+
+    private void stopEating() {
+        if (!eating) return;
+        eating = false;
+        mc.options.useKey.setPressed(false);
+        if (eatReturn != -1 && mc.player != null) InventoryManager.get().select(eatReturn);
+        eatReturn = -1;
     }
 
     private boolean free(Vec3d from, Vec3d to) {
