@@ -1,5 +1,6 @@
 package dev.coyduck;
 
+import dev.coyduck.commands.PilotCommand;
 import dev.coyduck.managers.ConfigSaver;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
@@ -19,6 +20,7 @@ import dev.coyduck.modules.AutoTrap;
 import dev.coyduck.modules.AutoWeb;
 import dev.coyduck.modules.CustomFov;
 import dev.coyduck.modules.ElytraFly;
+import dev.coyduck.modules.ElytraPilot;
 import dev.coyduck.modules.HoleSnap;
 import dev.coyduck.modules.KillEffects;
 import dev.coyduck.modules.LadderTrap;
@@ -28,6 +30,7 @@ import dev.coyduck.modules.Surround;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
+import meteordevelopment.meteorclient.commands.Commands;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.item.Items;
@@ -62,12 +65,15 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new AutoWeb());
         Modules.get().add(new LadderTrap());
         Modules.get().add(new ElytraFly());
+        Modules.get().add(new ElytraPilot());
         Modules.get().add(new SelfTrap());
         Modules.get().add(new HoleSnap());
         Modules.get().add(new CustomFov());
         Modules.get().add(new AirMine());
         Modules.get().add(new PopCounter());
         Modules.get().add(new KillEffects());
+
+        Commands.add(new PilotCommand());
     }
 
     @Override

@@ -19,6 +19,7 @@ import net.minecraft.entity.MovementType;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.util.PlayerInput;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Vec3d;
 
 public class ElytraFly extends Module {
 
@@ -69,6 +70,8 @@ public class ElytraFly extends Module {
     private static final int TAKEOFF_TRIES = 5;
     private static final int TAKEOFF_WINDOW = 40;
 
+    private static Vec3d pilot;
+
     private boolean fluidFlight;
     private int takeoffTries;
     private int airTicks;
@@ -90,6 +93,23 @@ public class ElytraFly extends Module {
         wasGliding = false;
         takeoffTries = 0;
         airTicks = 0;
+    }
+
+    /** Overrides the keyboard for the next move with a world-space movement per tick, null to give it back. */
+    public static void pilot(Vec3d movement) {
+        pilot = movement;
+    }
+
+    public double horizontalSpeed() {
+        return horizontal.get();
+    }
+
+    public double upSpeed() {
+        return up.get();
+    }
+
+    public double downSpeed() {
+        return down.get();
     }
 
     @EventHandler
@@ -152,6 +172,12 @@ public class ElytraFly extends Module {
         double y = 0;
         if (input.jump() && !input.sneak()) y = up.get();
         else if (input.sneak() && !input.jump()) y = -down.get();
+
+        if (pilot != null) {
+            x = pilot.x;
+            y = pilot.y;
+            z = pilot.z;
+        }
 
         if (wallGuard.get() && (x != 0 || z != 0)) {
             x *= freeScale(x, 0, y);

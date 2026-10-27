@@ -7,12 +7,14 @@ yarn-mappings = "1.21.11+build.6"
 fabric-loader = "0.19.5"
 loom = "1.17.21"
 meteor = "1.21.11-SNAPSHOT"
+nether-pathfinder = "1.4.1"
 
 [libraries]
 minecraft = { module = "com.mojang:minecraft", version.ref = "minecraft" }
 yarn = { module = "net.fabricmc:yarn", version.ref = "yarn-mappings" }
 fabric-loader = { module = "net.fabricmc:fabric-loader", version.ref = "fabric-loader" }
 meteor-client = { module = "meteordevelopment:meteor-client", version.ref = "meteor" }
+nether-pathfinder = { module = "dev.babbaj:nether-pathfinder", version.ref = "nether-pathfinder" }
 
 [plugins]
 fabric-loom = { id = "net.fabricmc.fabric-loom-remap", version.ref = "loom" }

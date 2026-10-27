@@ -20,6 +20,11 @@ repositories {
         name = "meteor-maven-snapshots"
         url = uri("https://maven.meteordev.org/snapshots")
     }
+    maven {
+        name = "babbaj-maven"
+        url = uri("https://babbaj.github.io/maven/")
+        content { includeGroup("dev.babbaj") }
+    }
 }
 
 dependencies {
@@ -27,6 +32,7 @@ dependencies {
     mappings(variantOf(libs.yarn) { classifier("v2") })
     modImplementation(libs.fabric.loader)
     modImplementation(libs.meteor.client)
+    compileOnly(libs.nether.pathfinder)
 }
 
 java {
