@@ -44,6 +44,7 @@ public final class MiningManager {
     private static final int HOLD_TICKS = 2;
     private static final int MAX_HOLDS = 4;
     private static final float HOLD_MIN_HEALTH = 10;
+    private static final int MAX_STOPS = 2;
 
     private BlockPos background;
     private int backgroundStart;
@@ -68,6 +69,7 @@ public final class MiningManager {
     private int lastStopTick = -1;
     private boolean brokenSinceStop;
     private boolean broken;
+    private int stops;
     private boolean sending;
 
     private MiningManager() {}
@@ -115,6 +117,7 @@ public final class MiningManager {
         lastStopTick = -1;
         brokenSinceStop = false;
         broken = false;
+        stops = 0;
 
         send(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK);
         InteractionManager.get().swing(swing);
@@ -204,6 +207,7 @@ public final class MiningManager {
         lastStop = Util.getMeasuringTimeMs();
         lastStopTick = ticks;
         brokenSinceStop = false;
+        stops++;
 
         MeteorClient.EVENT_BUS.post(MineStopEvent.get(pos));
         return true;
@@ -282,7 +286,24 @@ public final class MiningManager {
             return;
         }
 
-        if (autoStop && (brokenSinceStop || Util.getMeasuringTimeMs() - lastStop > LatencyManager.get().timeout())) stop(owner);
+        boolean waited = Util.getMeasuringTimeMs() - lastStop > LatencyManager.get().timeout();
+        if (stops >= MAX_STOPS && waited && !mc.world.getBlockState(pos).isReplaceable()) {
+            restart();
+            return;
+        }
+        if (autoStop && (brokenSinceStop || waited)) stop(owner);
+    }
+
+    private void restart() {
+        side = facing(pos);
+        startTick = ticks;
+        lastStop = 0;
+        lastStopTick = -1;
+        brokenSinceStop = false;
+        stops = 0;
+
+        send(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK);
+        InteractionManager.get().swing(swing);
     }
 
     @EventHandler(priority = EventPriority.HIGH)
@@ -388,6 +409,7 @@ public final class MiningManager {
         if (state.isReplaceable()) {
             broken = true;
             brokenSinceStop = true;
+            stops = 0;
         } else if (autoStop && brokenSinceStop) {
             stop(owner, state);
         }
