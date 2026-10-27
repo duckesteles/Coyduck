@@ -69,12 +69,12 @@ public final class NetherRoute {
         });
     }
 
-    public CompletableFuture<Path> find(BlockPos from, BlockPos to) {
+    public CompletableFuture<Path> find(BlockPos from, BlockPos to, boolean tight) {
         int x1 = from.getX(), y1 = clampY(from.getY()), z1 = from.getZ();
         int x2 = to.getX(), y2 = clampY(to.getY()), z2 = to.getZ();
         return CompletableFuture.supplyAsync(() -> {
             if (context == 0) return null;
-            PathSegment segment = NetherPathfinder.pathFind(context, x1, y1, z1, x2, y2, z2, true, false, TIMEOUT_MS, true);
+            PathSegment segment = NetherPathfinder.pathFind(context, x1, y1, z1, x2, y2, z2, !tight, false, TIMEOUT_MS, true);
             if (segment == null) return null;
 
             List<BlockPos> points = new ArrayList<>(segment.packed.length);

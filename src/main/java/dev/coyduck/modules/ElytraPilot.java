@@ -50,6 +50,7 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.Heightmap;
 import net.minecraft.world.World;
 
+import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -207,6 +208,12 @@ public class ElytraPilot extends Module {
     private boolean pathFinished;
     private CompletableFuture<NetherRoute.Path> planning;
     private int planTick = -1000;
+    private int failures;
+    private int endTick = -1;
+    private final ArrayDeque<Vec3d> trail = new ArrayDeque<>();
+    private boolean backtracking;
+    private int backtrackSteps;
+    private String detail;
     private final LongArrayFIFOQueue chunkQueue = new LongArrayFIFOQueue();
     private final LongSet queued = new LongOpenHashSet();
     private int cullTick;
@@ -264,7 +271,8 @@ public class ElytraPilot extends Module {
 
     @Override
     public String getInfoString() {
-        return hasGoal ? state.name() : null;
+        if (!hasGoal) return null;
+        return detail != null && state == State.Cruise ? state.name() + " " + detail : state.name();
     }
 
     private void start() {
@@ -589,9 +597,27 @@ public class ElytraPilot extends Module {
     private Vec3d netherMove() {
         if (route == null) return Vec3d.ZERO;
         plan();
-        if (path.isEmpty()) return Vec3d.ZERO;
 
         Vec3d feet = mc.player.getEntityPos();
+        if (!backtracking && (trail.isEmpty() || trail.getLast().distanceTo(feet) > 3)) {
+            trail.addLast(feet);
+            if (trail.size() > 64) trail.removeFirst();
+        }
+
+        boolean atEnd = !path.isEmpty() && pathIndex >= path.size() - 1 && point(path.size() - 1).distanceTo(feet) < 2.5;
+        if (path.isEmpty() || atEnd) {
+            if (endTick == -1) endTick = ticks;
+        } else {
+            endTick = -1;
+        }
+        if (!backtracking && (failures >= 2 || endTick != -1 && ticks - endTick > 40)) {
+            backtracking = true;
+            backtrackSteps = 0;
+            detail = "backtrack";
+        }
+        if (backtracking) return backtrack(feet);
+        if (path.isEmpty()) return Vec3d.ZERO;
+
         while (pathIndex < path.size() - 1 && point(pathIndex).distanceTo(feet) < 2.5) pathIndex++;
 
         int target = pathIndex;
@@ -614,6 +640,28 @@ public class ElytraPilot extends Module {
         return new Vec3d(move.x, MathHelper.clamp(move.y, -fly.downSpeed(), fly.upSpeed()), move.z);
     }
 
+    /** Flies back along where it came from, out of a dead end, and plans again from there. */
+    private Vec3d backtrack(Vec3d feet) {
+        while (!trail.isEmpty() && trail.getLast().distanceTo(feet) < 1.5) {
+            trail.removeLast();
+            backtrackSteps++;
+        }
+        if (trail.isEmpty() || backtrackSteps >= 8) {
+            backtracking = false;
+            failures = 0;
+            endTick = -1;
+            planTick = -1000;
+            detail = "replanning";
+            return Vec3d.ZERO;
+        }
+
+        ElytraFly fly = Modules.get().get(ElytraFly.class);
+        Vec3d delta = trail.getLast().subtract(feet);
+        double length = delta.length();
+        Vec3d move = delta.multiply(Math.min(fly.horizontalSpeed(), length) / length);
+        return new Vec3d(move.x, MathHelper.clamp(move.y, -fly.downSpeed(), fly.upSpeed()), move.z);
+    }
+
     private void plan() {
         if (planning != null) {
             if (!planning.isDone()) return;
@@ -623,10 +671,20 @@ public class ElytraPilot extends Module {
             } catch (Exception ignored) {
             }
             planning = null;
-            if (result != null && !result.points().isEmpty()) {
+            if (result != null && result.points().size() > 1) {
                 path = result.points();
                 pathIndex = nearest(path, mc.player.getEntityPos());
-                pathFinished = result.finished();
+                BlockPos last = path.getLast();
+                double dx = last.getX() + 0.5 - goalX;
+                double dz = last.getZ() + 0.5 - goalZ;
+                pathFinished = result.finished() && dx * dx + dz * dz < 16 * 16;
+                failures = 0;
+                endTick = -1;
+                backtracking = false;
+                detail = null;
+            } else {
+                failures++;
+                detail = "no route";
             }
         }
 
@@ -635,8 +693,23 @@ public class ElytraPilot extends Module {
         if (!due || ticks - planTick < 10) return;
 
         planTick = ticks;
-        int y = goalY != null ? goalY : mc.player.getBlockY();
-        planning = route.find(mc.player.getBlockPos(), new BlockPos(MathHelper.floor(goalX), y, MathHelper.floor(goalZ)));
+        int x = MathHelper.floor(goalX);
+        int z = MathHelper.floor(goalZ);
+        planning = route.find(mc.player.getBlockPos(), new BlockPos(x, goalY != null ? goalY : openY(x, mc.player.getBlockY(), z), z), failures % 2 == 1);
+    }
+
+    /** An air height near the given one in the destination column, so the route doesn't end inside netherrack. */
+    private int openY(int x, int y, int z) {
+        if (!loaded(x, z)) return y;
+        BlockPos.Mutable pos = new BlockPos.Mutable();
+        for (int offset = 0; offset < NetherRoute.HEIGHT; offset++) {
+            for (int sign = 1; sign >= -1; sign -= 2) {
+                int at = y + offset * sign;
+                if (at < 1 || at > NetherRoute.HEIGHT - 3) continue;
+                if (passable(pos.set(x, at, z)) && passable(pos.set(x, at + 1, z))) return at;
+            }
+        }
+        return y;
     }
 
     private boolean blockedAhead() {
@@ -691,6 +764,11 @@ public class ElytraPilot extends Module {
         pathIndex = 0;
         planning = null;
         planTick = -1000;
+        failures = 0;
+        endTick = -1;
+        trail.clear();
+        backtracking = false;
+        detail = null;
         queued.clear();
         chunkQueue.clear();
 
