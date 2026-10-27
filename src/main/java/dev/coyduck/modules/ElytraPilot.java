@@ -72,6 +72,9 @@ public class ElytraPilot extends Module {
     private static final int THROW_TICKS = 2;
     private static final int CHUNKS_PER_TICK = 12;
     private static final double CRITICAL_WEAR = 0.03;
+    private static final double BACKTRACK_DISTANCE = 20;
+    private static final int MAX_DEAD_ENDS = 3;
+    private static final int MAX_SPOT_RADIUS = 48;
 
     private static final Set<net.minecraft.block.Block> DANGER = Set.of(
         Blocks.MAGMA_BLOCK, Blocks.CAMPFIRE, Blocks.SOUL_CAMPFIRE, Blocks.FIRE, Blocks.SOUL_FIRE, Blocks.CACTUS,
@@ -202,6 +205,8 @@ public class ElytraPilot extends Module {
     private boolean warnedPlayer;
     private boolean warnedSpot;
     private boolean warnedStuck;
+    private boolean warnedCritical;
+    private int spotSearches;
 
     private List<BlockPos> path = List.of();
     private int pathIndex;
@@ -212,7 +217,10 @@ public class ElytraPilot extends Module {
     private int endTick = -1;
     private final ArrayDeque<Vec3d> trail = new ArrayDeque<>();
     private boolean backtracking;
-    private int backtrackSteps;
+    private Vec3d deadEnd;
+    private int deadEnds;
+    private int crumbTick;
+    private double crumbBest;
     private String detail;
     private final LongArrayFIFOQueue chunkQueue = new LongArrayFIFOQueue();
     private final LongSet queued = new LongOpenHashSet();
@@ -390,6 +398,8 @@ public class ElytraPilot extends Module {
         state = State.Land;
         spot = null;
         spotTick = -100;
+        spotSearches = 0;
+        warnedCritical = false;
         badSpots.clear();
         warnedSpot = false;
     }
@@ -415,17 +425,30 @@ public class ElytraPilot extends Module {
             badSpots.add(spot.asLong());
             spot = null;
         }
-        if (spot == null && ticks - spotTick >= SPOT_SEARCH_TICKS) {
+        int radius = Math.min(SPOT_RADIUS * (1 + spotSearches / 2), MAX_SPOT_RADIUS);
+        if (wear() < CRITICAL_WEAR) radius = MAX_SPOT_RADIUS;
+        if (spot == null && ticks - spotTick >= (radius > SPOT_RADIUS ? SPOT_SEARCH_TICKS * 2 : SPOT_SEARCH_TICKS)) {
             spotTick = ticks;
-            spot = findSpot(landToMend ? feet : new Vec3d(goalX, feet.y, goalZ), wear() < CRITICAL_WEAR ? SPOT_RADIUS * 2 : SPOT_RADIUS);
+            spotSearches++;
+            spot = findSpot(landToMend ? feet : new Vec3d(goalX, feet.y, goalZ), radius);
             spotProgress = Double.MAX_VALUE;
             spotProgressTick = ticks;
         }
 
         if (spot == null) {
-            if (!warnedSpot) warning(landToMend ? "No safe ground below, flying on until there is some." : "No safe ground at the destination, hovering.");
+            boolean lastTry = radius >= MAX_SPOT_RADIUS && spotSearches > 6;
+            if (!landToMend && lastTry) {
+                error("No safe ground near the destination, take over.");
+                toggle();
+                return;
+            }
+            if (!warnedSpot) warning(landToMend ? "No safe ground below, flying on until there is some." : "No safe ground at the destination yet, looking wider.");
             warnedSpot = true;
-            if (landToMend) {
+            if (landToMend && wear() < CRITICAL_WEAR && !warnedCritical) {
+                warning("The elytra is almost broken and there is still no safe ground.");
+                warnedCritical = true;
+            }
+            if (landToMend && horizontalDistance() > ARRIVE_RADIUS) {
                 trackProgress(horizontalDistance());
                 ElytraFly.pilot(nether() ? netherMove() : openMove());
             } else {
@@ -515,7 +538,12 @@ public class ElytraPilot extends Module {
         if (ticks - throwTick < THROW_TICKS) return;
         if (!rotations.isLookingAt(new Box(mc.player.getBlockPos().down()), 3)) return;
 
-        InventoryManager.get().withItem(bottle, InventoryManager.SwitchMode.Silent, () -> mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND));
+        InventoryManager.get().withItem(bottle, InventoryManager.SwitchMode.Silent, () -> {
+            float pitch = mc.player.getPitch();
+            mc.player.setPitch(90);
+            mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND);
+            mc.player.setPitch(pitch);
+        });
         throwTick = ticks;
     }
 
@@ -542,6 +570,10 @@ public class ElytraPilot extends Module {
             bestTick = ticks;
             extraHeight = 0;
             warnedStuck = false;
+            if (deadEnd != null && mc.player.getEntityPos().distanceTo(deadEnd) > 48) {
+                deadEnd = null;
+                deadEnds = 0;
+            }
             return;
         }
         if (ticks - bestTick < STUCK_TICKS) return;
@@ -596,26 +628,30 @@ public class ElytraPilot extends Module {
 
     private Vec3d netherMove() {
         if (route == null) return Vec3d.ZERO;
-        plan();
 
         Vec3d feet = mc.player.getEntityPos();
-        if (!backtracking && (trail.isEmpty() || trail.getLast().distanceTo(feet) > 3)) {
+        if (backtracking) return backtrack(feet);
+
+        plan();
+        if (trail.isEmpty() || trail.getLast().distanceTo(feet) >= 1.2) {
             trail.addLast(feet);
-            if (trail.size() > 64) trail.removeFirst();
+            if (trail.size() > 256) trail.removeFirst();
         }
 
         boolean atEnd = !path.isEmpty() && pathIndex >= path.size() - 1 && point(path.size() - 1).distanceTo(feet) < 2.5;
+        if (atEnd && pathFinished) {
+            beginLanding(false);
+            return Vec3d.ZERO;
+        }
         if (path.isEmpty() || atEnd) {
             if (endTick == -1) endTick = ticks;
         } else {
             endTick = -1;
         }
-        if (!backtracking && (failures >= 2 || endTick != -1 && ticks - endTick > 40)) {
-            backtracking = true;
-            backtrackSteps = 0;
-            detail = "backtrack";
+        if (failures >= 2 || endTick != -1 && ticks - endTick > 40) {
+            startBacktrack(feet);
+            return Vec3d.ZERO;
         }
-        if (backtracking) return backtrack(feet);
         if (path.isEmpty()) return Vec3d.ZERO;
 
         while (pathIndex < path.size() - 1 && point(pathIndex).distanceTo(feet) < 2.5) pathIndex++;
@@ -640,25 +676,53 @@ public class ElytraPilot extends Module {
         return new Vec3d(move.x, MathHelper.clamp(move.y, -fly.downSpeed(), fly.upSpeed()), move.z);
     }
 
-    /** Flies back along where it came from, out of a dead end, and plans again from there. */
-    private Vec3d backtrack(Vec3d feet) {
-        while (!trail.isEmpty() && trail.getLast().distanceTo(feet) < 1.5) {
-            trail.removeLast();
-            backtrackSteps++;
+    private void startBacktrack(Vec3d feet) {
+        deadEnd = feet;
+        if (++deadEnds > MAX_DEAD_ENDS || trail.size() < 2) {
+            error("Can't find a way on from here, take over.");
+            toggle();
+            return;
         }
-        if (trail.isEmpty() || backtrackSteps >= 8) {
+
+        backtracking = true;
+        crumbTick = ticks;
+        crumbBest = Double.MAX_VALUE;
+        if (planning != null) planning.cancel(false);
+        planning = null;
+        detail = "backtrack";
+    }
+
+    /** Flies back along where it came from, out of a dead end, then plans again from there with tight routes allowed. */
+    private Vec3d backtrack(Vec3d feet) {
+        while (!trail.isEmpty() && trail.getLast().distanceTo(feet) < 1.0) {
+            trail.removeLast();
+            crumbBest = Double.MAX_VALUE;
+            crumbTick = ticks;
+        }
+        if (trail.isEmpty() || feet.distanceTo(deadEnd) >= BACKTRACK_DISTANCE) {
             backtracking = false;
-            failures = 0;
+            failures = 1;
             endTick = -1;
             planTick = -1000;
+            path = List.of();
             detail = "replanning";
             return Vec3d.ZERO;
         }
 
+        Vec3d crumb = trail.getLast();
+        double length = crumb.distanceTo(feet);
+        if (length < crumbBest - 0.3) {
+            crumbBest = length;
+            crumbTick = ticks;
+        } else if (ticks - crumbTick > 20) {
+            trail.removeLast();
+            crumbBest = Double.MAX_VALUE;
+            crumbTick = ticks;
+            return Vec3d.ZERO;
+        }
+
         ElytraFly fly = Modules.get().get(ElytraFly.class);
-        Vec3d delta = trail.getLast().subtract(feet);
-        double length = delta.length();
-        Vec3d move = delta.multiply(Math.min(fly.horizontalSpeed(), length) / length);
+        Vec3d move = crumb.subtract(feet).multiply(Math.min(fly.horizontalSpeed(), length) / length);
         return new Vec3d(move.x, MathHelper.clamp(move.y, -fly.downSpeed(), fly.upSpeed()), move.z);
     }
 
@@ -671,16 +735,24 @@ public class ElytraPilot extends Module {
             } catch (Exception ignored) {
             }
             planning = null;
-            if (result != null && result.points().size() > 1) {
+
+            boolean useful = result != null && result.points().size() > 1;
+            boolean atGoal = false;
+            if (useful) {
+                Vec3d last = Vec3d.ofBottomCenter(result.points().getLast());
+                double dx = last.x - goalX;
+                double dz = last.z - goalZ;
+                atGoal = dx * dx + dz * dz < 16 * 16;
+                boolean nowhere = last.distanceTo(mc.player.getEntityPos()) < 4 || deadEnd != null && last.distanceTo(deadEnd) < 4;
+                if (!atGoal && nowhere) useful = false;
+            }
+
+            if (useful) {
                 path = result.points();
                 pathIndex = nearest(path, mc.player.getEntityPos());
-                BlockPos last = path.getLast();
-                double dx = last.getX() + 0.5 - goalX;
-                double dz = last.getZ() + 0.5 - goalZ;
-                pathFinished = result.finished() && dx * dx + dz * dz < 16 * 16;
+                pathFinished = result.finished() && atGoal;
                 failures = 0;
                 endTick = -1;
-                backtracking = false;
                 detail = null;
             } else {
                 failures++;
@@ -768,6 +840,8 @@ public class ElytraPilot extends Module {
         endTick = -1;
         trail.clear();
         backtracking = false;
+        deadEnd = null;
+        deadEnds = 0;
         detail = null;
         queued.clear();
         chunkQueue.clear();
@@ -856,7 +930,8 @@ public class ElytraPilot extends Module {
     // Landing spots
 
     private BlockPos findSpot(Vec3d around, int radius) {
-        int top = MathHelper.floor(mc.player.getY());
+        Vec3d feet = mc.player.getEntityPos();
+        int top = MathHelper.floor(feet.y);
         int bottom = Math.max(mc.world.getBottomY() + 1, top - SPOT_DEPTH);
         int cx = MathHelper.floor(around.x);
         int cz = MathHelper.floor(around.z);
@@ -882,7 +957,7 @@ public class ElytraPilot extends Module {
                     BlockPos stand = new BlockPos(x, y, z);
                     if (!badSpots.contains(stand.asLong()) && standable(stand)) {
                         double score = distance + (top - y) * 0.05;
-                        if (score < bestScore) {
+                        if (score < bestScore && free(feet, new Vec3d(x + 0.5, feet.y, z + 0.5))) {
                             best = stand;
                             bestScore = score;
                         }
