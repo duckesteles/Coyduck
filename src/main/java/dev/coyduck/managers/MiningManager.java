@@ -37,7 +37,8 @@ import static meteordevelopment.meteorclient.MeteorClient.mc;
 public final class MiningManager {
     private static final MiningManager INSTANCE = new MiningManager();
 
-    private static final float SERVER_THRESHOLD = 0.7f;
+    // 6b6t's anti-cheat cancels a finish before full progress, though vanilla accepts 0.7.
+    private static final float SERVER_THRESHOLD = 1.0f;
     private static final double REACH_MARGIN = 0.05;
 
     private static final float BACKGROUND_THRESHOLD = 1.0f;

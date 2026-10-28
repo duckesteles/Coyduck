@@ -32,6 +32,7 @@ import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -104,7 +105,7 @@ public class AutoCity extends Module {
 
     private final Setting<Boolean> needCrystals = sgGeneral.add(new BoolSetting.Builder()
         .name("need-crystals")
-        .description("Only mines while you have crystals to use the gap with.")
+        .description("Only mines while you have crystals to use the gap with, or anchors and glowstone while auto-anchor is on outside the nether.")
         .defaultValue(true)
         .build()
     );
@@ -223,7 +224,7 @@ public class AutoCity extends Module {
         MiningManager mining = MiningManager.get();
         target = Targets.find(targetRange.get(), current != null ? target : null);
 
-        if (target == null || (needCrystals.get() && !InteractionManager.get().hasCrystals())) {
+        if (target == null || (needCrystals.get() && !hasAmmo())) {
             mining.release(this);
             current = null;
             return;
@@ -284,6 +285,16 @@ public class AutoCity extends Module {
         if (webbed(pos)) return false;
         if (Targets.isMinable(pos)) return true;
         return rebreak.get() && MiningManager.get().owns(this) && MiningManager.get().isMining(pos);
+    }
+
+    private boolean hasAmmo() {
+        if (InteractionManager.get().hasCrystals()) return true;
+
+        AutoAnchor anchor = Modules.get().get(AutoAnchor.class);
+        if (anchor == null || !anchor.isActive() || mc.world.getRegistryKey() == World.NETHER) return false;
+        InventoryManager inventory = InventoryManager.get();
+        return inventory.find(stack -> stack.isOf(Items.RESPAWN_ANCHOR), 0, InventoryManager.MAIN_END) != -1
+            && inventory.find(stack -> stack.isOf(Items.GLOWSTONE), 0, InventoryManager.MAIN_END) != -1;
     }
 
     private boolean webbed(BlockPos pos) {
