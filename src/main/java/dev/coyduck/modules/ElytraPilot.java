@@ -81,6 +81,8 @@ public class ElytraPilot extends Module {
     private static final double WALL_LOOKAHEAD = 8;
     private static final double MIN_WALL_SPEED = 0.25;
     private static final double WALL_MARGIN = 0.3;
+    private static final double REPEL_SPEED = 0.08;
+    private static final int FROZEN_TICKS = 40;
     private static final double ROUTE_MARGIN = 0.6;
     private static final int SETBACK_PAUSE = 5;
     private static final int UNCONFIRMED_TICKS = 12;
@@ -251,6 +253,8 @@ public class ElytraPilot extends Module {
     private final ArrayDeque<Vec3d> trail = new ArrayDeque<>();
     private boolean backtracking;
     private Vec3d deadEnd;
+    private Vec3d frozenAt;
+    private int frozenTick;
     private int deadEnds;
     private int crumbTick;
     private double crumbBest;
@@ -517,7 +521,7 @@ public class ElytraPilot extends Module {
                 trackProgress(horizontalDistance());
                 ElytraFly.pilot(steer(nether() ? netherMove() : openMove()));
             } else {
-                ElytraFly.pilot(Vec3d.ZERO);
+                ElytraFly.pilot(steer(Vec3d.ZERO));
             }
             return;
         }
@@ -700,6 +704,14 @@ public class ElytraPilot extends Module {
         if (backtracking) return backtrack(feet);
 
         plan();
+        if (frozenAt == null || frozenAt.distanceTo(feet) > 0.5) {
+            frozenAt = feet;
+            frozenTick = ticks;
+        } else if (ticks - frozenTick > FROZEN_TICKS && planning == null && !path.isEmpty()) {
+            frozenAt = null;
+            startBacktrack(feet);
+            return Vec3d.ZERO;
+        }
         if (trail.isEmpty() || trail.getLast().distanceTo(feet) >= 1.2) {
             trail.addLast(feet);
             if (trail.size() > 256) trail.removeFirst();
@@ -876,14 +888,18 @@ public class ElytraPilot extends Module {
         return Vec3d.ofBottomCenter(path.get(index));
     }
 
-    /** Slows a move down as it nears a wall, so it never brushes one at full speed and takes elytra crash damage. */
+    /**
+     * Shapes a move around walls. 6b6t runs elytra physics on the server, so even hovering against a wall deals crash
+     * damage: it slows down toward walls, slides along them instead of stopping, and drifts away from any wall that is
+     * closer than the margin.
+     */
     private Vec3d steer(Vec3d move) {
+        Box box = mc.player.getBoundingBox();
+        Vec3d away = repel(box);
         double length = move.length();
-        if (length < 1.0E-3) return move;
+        if (length < 1.0E-3) return away;
 
         Vec3d direction = move.multiply(1 / length);
-        Box box = mc.player.getBoundingBox().expand(WALL_MARGIN, 0, WALL_MARGIN);
-        if (!mc.world.isSpaceEmpty(mc.player, box)) box = mc.player.getBoundingBox();
         double open = WALL_LOOKAHEAD;
         for (double step = 0.25; step <= WALL_LOOKAHEAD; step += 0.25) {
             if (!mc.world.isSpaceEmpty(mc.player, box.offset(direction.multiply(step)))) {
@@ -891,9 +907,31 @@ public class ElytraPilot extends Module {
                 break;
             }
         }
+        double limit = Math.max(MIN_WALL_SPEED, (open - 0.5) / 2);
+        if (length > limit) move = move.multiply(limit / length);
 
-        double limit = open < 0.5 ? open : Math.max(MIN_WALL_SPEED, (open - 0.5) / 2);
-        return length > limit ? move.multiply(limit / length) : move;
+        if (!mc.world.isSpaceEmpty(mc.player, box.offset(move))) {
+            Vec3d best = Vec3d.ZERO;
+            for (Vec3d slide : new Vec3d[] {new Vec3d(0, move.y, move.z), new Vec3d(move.x, 0, move.z), new Vec3d(move.x, move.y, 0)}) {
+                if (slide.lengthSquared() > best.lengthSquared() && mc.world.isSpaceEmpty(mc.player, box.offset(slide))) best = slide;
+            }
+            move = best;
+        }
+        return move.add(away);
+    }
+
+    /** A small push away from walls within the margin, so the player never rests against one. */
+    private Vec3d repel(Box box) {
+        if (mc.world.isSpaceEmpty(mc.player, box.expand(WALL_MARGIN, 0, WALL_MARGIN))) return Vec3d.ZERO;
+
+        double x = 0;
+        double z = 0;
+        if (!mc.world.isSpaceEmpty(mc.player, box.offset(WALL_MARGIN, 0, 0))) x -= REPEL_SPEED;
+        if (!mc.world.isSpaceEmpty(mc.player, box.offset(-WALL_MARGIN, 0, 0))) x += REPEL_SPEED;
+        if (!mc.world.isSpaceEmpty(mc.player, box.offset(0, 0, WALL_MARGIN))) z -= REPEL_SPEED;
+        if (!mc.world.isSpaceEmpty(mc.player, box.offset(0, 0, -WALL_MARGIN))) z += REPEL_SPEED;
+        Vec3d push = new Vec3d(x, 0, z);
+        return mc.world.isSpaceEmpty(mc.player, box.offset(push)) ? push : Vec3d.ZERO;
     }
 
     private void autoEat() {
@@ -975,6 +1013,7 @@ public class ElytraPilot extends Module {
         backtracking = false;
         deadEnd = null;
         deadEnds = 0;
+        frozenAt = null;
         detail = null;
         queued.clear();
         chunkQueue.clear();
