@@ -76,6 +76,7 @@ public class Surround extends Module {
     private static final double NEAR = 5 * 5;
     // Slack for armor, exposure and position estimates, so a crystal judged safe never pops you by a fraction.
     private static final float POP_MARGIN = 1.5f;
+    private static final float LOW_HEALTH = 12;
     private static final double FACE_ENEMY_RANGE = 12;
     private static final float FACE_MIN_DAMAGE = 2;
 
@@ -450,7 +451,9 @@ public class Surround extends Module {
         float damage = HurtTracker.get().effectiveOnSelf(raw, arrival);
 
         float health = AutoTotem.popInFlight() ? 1.0f : mc.player.getHealth() + mc.player.getAbsorptionAmount();
-        float full = mc.player.isInsideWall() ? ExplosionDamage.upperBound(mc.player, mc.player.getEntityPos(), crystal.getEntityPos()) : ExplosionDamage.mitigate(mc.player, raw);
+        // When low, ignore the blocks in between: against rebreak they are often gone by the time it explodes.
+        boolean worst = mc.player.isInsideWall() || health <= LOW_HEALTH;
+        float full = worst ? ExplosionDamage.upperBound(mc.player, mc.player.getEntityPos(), crystal.getEntityPos()) : ExplosionDamage.mitigate(mc.player, raw);
         if (damage < health - POP_MARGIN && full < health - POP_MARGIN) return Verdict.Safe;
         return allowPop.get() && AutoTotem.canAffordPop() ? Verdict.Pop : Verdict.Unsafe;
     }

@@ -198,13 +198,17 @@ public final class MiningManager {
     private boolean stop(Object owner, BlockState state) {
         if (!owns(owner) || !isReady(state) || state.isOf(Blocks.COBWEB) || lastStopTick == ticks || InventoryManager.get().isOffhandEating()) return false;
 
+        // Grim rates the break by the best tool it saw held on a movement or swing packet, so swing while the tool is
+        // in hand. Without it, a tool switched in only for the finish looks like breaking obsidian by hand.
         int tool = bestTool(state);
-        Runnable action = () -> send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
+        Runnable action = () -> {
+            InteractionManager.get().swing(swing == InteractionManager.SwingMode.None ? InteractionManager.SwingMode.Packet : swing);
+            send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
+        };
 
         if (tool == -1) action.run();
         else if (!InventoryManager.get().withItem(tool, switchMode, action)) return false;
 
-        InteractionManager.get().swing(swing);
         lastStop = Util.getMeasuringTimeMs();
         lastStopTick = ticks;
         brokenSinceStop = false;

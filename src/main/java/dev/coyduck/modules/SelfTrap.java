@@ -53,6 +53,7 @@ import java.util.List;
 public class SelfTrap extends Module {
     // Slack for armor, exposure and position estimates, so a crystal judged safe never pops you by a fraction.
     private static final float POP_MARGIN = 1.5f;
+    private static final float LOW_HEALTH = 12;
     private static final long RENDER_TIME = 500;
     private static final double EDGE = 1.0E-4;
     private static final double NEAR = 4.0;
@@ -401,7 +402,9 @@ public class SelfTrap extends Module {
             float damage = HurtTracker.get().effectiveOnSelf(raw, Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2);
             float health = AutoTotem.popInFlight() ? 1.0f : mc.player.getHealth() + mc.player.getAbsorptionAmount();
 
-            float full = mc.player.isInsideWall() ? ExplosionDamage.upperBound(mc.player, mc.player.getEntityPos(), crystal.getEntityPos()) : ExplosionDamage.mitigate(mc.player, raw);
+            // When low, ignore the blocks in between: against rebreak they are often gone by the time it explodes.
+            boolean worst = mc.player.isInsideWall() || health <= LOW_HEALTH;
+            float full = worst ? ExplosionDamage.upperBound(mc.player, mc.player.getEntityPos(), crystal.getEntityPos()) : ExplosionDamage.mitigate(mc.player, raw);
             boolean pops = damage >= health - POP_MARGIN || full >= health - POP_MARGIN;
             if (pops && !(allowPop.get() && AutoTotem.canAffordPop())) continue;
             if (target == null || (pop && !pops)) {

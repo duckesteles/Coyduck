@@ -91,8 +91,8 @@ public class AutoCity extends Module {
 
     private final Setting<Boolean> doubleMine = sgGeneral.add(new BoolSetting.Builder()
         .name("double-mine")
-        .description("Mines the second best block in the background while mining the best one, so two gaps open in about the time of one. Briefly holds the pickaxe for the background break.")
-        .defaultValue(true)
+        .description("Mines the second best block in the background while mining the best one, so two gaps open in about the time of one. Briefly holds the pickaxe for the background break. Grim's fast-break check cancels the background finish, so it does not work on 6b6t.")
+        .defaultValue(false)
         .build()
     );
 
