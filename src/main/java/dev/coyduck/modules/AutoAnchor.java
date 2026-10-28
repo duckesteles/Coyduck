@@ -101,8 +101,8 @@ public class AutoAnchor extends Module {
 
     private final Setting<Double> placeRange = sgGeneral.add(new DoubleSetting.Builder()
         .name("place-range")
-        .description("Range from your eyes to the block an anchor is placed in. The server allows up to 5.5.")
-        .defaultValue(5)
+        .description("Range from your eyes to the block an anchor is placed in. 6b6t's anti-cheat lets a few places past 4.5 through, then cancels them for the rest of the session.")
+        .defaultValue(4.5)
         .range(1, 5.5)
         .sliderRange(1, 5.5)
         .build()
