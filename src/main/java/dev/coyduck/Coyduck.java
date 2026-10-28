@@ -18,7 +18,6 @@ import dev.coyduck.modules.AutoCrystal;
 import dev.coyduck.modules.AutoTotem;
 import dev.coyduck.modules.AutoTrap;
 import dev.coyduck.modules.AutoWeb;
-import dev.coyduck.modules.BoatFly;
 import dev.coyduck.modules.CustomFov;
 import dev.coyduck.modules.ElytraFly;
 import dev.coyduck.modules.ElytraPilot;
@@ -67,7 +66,6 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new LadderTrap());
         Modules.get().add(new ElytraFly());
         Modules.get().add(new ElytraPilot());
-        Modules.get().add(new BoatFly());
         Modules.get().add(new SelfTrap());
         Modules.get().add(new HoleSnap());
         Modules.get().add(new CustomFov());
