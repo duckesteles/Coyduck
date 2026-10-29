@@ -79,6 +79,7 @@ import java.util.List;
 public class AutoCrystal extends Module {
     private static final long OPEN_TIME = 2_000;
     private static final int PLACE_PRIORITY = 100;
+    private static final int HOLD_PRIORITY = 101;
     private static final int GAP_PRIORITY = 105;
     private static final int DEFEND_PRIORITY = 106;
     private static final int BREAK_PRIORITY = 110;
@@ -897,7 +898,8 @@ public class AutoCrystal extends Module {
                     if (hurtSync.get()) {
                         Choice ready = evaluate(targets, center, health, 0, mc.world);
                         if (ready != null) {
-                            if (rotate.get()) rotationReady(crystal.getBoundingBox(), breakAim(crystal), breakRange.get(), BREAK_PRIORITY);
+                            // Only pre-aim while held, below gap fill and defend, which still act this tick.
+                            if (rotate.get()) rotationReady(crystal.getBoundingBox(), breakAim(crystal), breakRange.get(), HOLD_PRIORITY);
                             held = true;
                             long time = HurtTracker.get().releaseTime(ready.target.player);
                             if (time > 0 && (release == 0 || time < release)) release = time;
@@ -1045,7 +1047,7 @@ public class AutoCrystal extends Module {
             }
         }
 
-        if (best == null || !rotationReady(new Box(best), bestHit.getPos(), placeRange.get() + 1, PLACE_PRIORITY)) return;
+        if (best == null || !rotationReady(new Box(bestHit.getBlockPos()), bestHit.getPos(), placeRange.get() + 1, PLACE_PRIORITY)) return;
 
         BlockPos base = best;
         BlockHitResult hit = bestHit;
@@ -1073,7 +1075,8 @@ public class AutoCrystal extends Module {
 
         if (kickGuard.get() && InteractionManager.get().dropRisk(crystalCenter(base))) return;
 
-        if (predictedAt != 0) endPrediction();
+        // One prediction at a time: the next id is only known once the previous crystal has spawned.
+        if (predictedAt != 0) return;
         predictedIds.clear();
         for (int i = 1; i <= idPredictCount.get(); i++) {
             int id = highest + i;

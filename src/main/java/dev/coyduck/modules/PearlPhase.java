@@ -38,13 +38,15 @@ public class PearlPhase extends Module {
     private static final int MAX_TICKS = 8;
     private static final int AIM_TICKS = 10;
     private static final int ROBUST_CANDIDATES = 40;
-    private static final float[][] SPREAD = {{0.5f, 0}, {-0.5f, 0}, {0, 0.5f}, {0, -0.5f}};
+    private static final float[][] SPREAD = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+    private static final double EYE_CLEARANCE = 0.54;
+    private static final float MIN_HEALTH = 3;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
     private final Setting<Double> depth = sgGeneral.add(new DoubleSetting.Builder()
         .name("depth")
-        .description("How far into each wall you end up. Your eyes always stay out of the wall, so you take no suffocation damage.")
+        .description("How far into each wall you end up. Walls at eye height only allow a sliver, so you take no suffocation damage.")
         .defaultValue(0.22)
         .range(0.05, 0.28)
         .sliderRange(0.05, 0.28)
@@ -71,6 +73,11 @@ public class PearlPhase extends Module {
     @Override
     public void onActivate() {
         if (mc.player == null || mc.world == null) {
+            toggle();
+            return;
+        }
+        if (mc.player.getHealth() + mc.player.getAbsorptionAmount() <= MIN_HEALTH) {
+            error("Too low for a pearl, it would hurt you.");
             toggle();
             return;
         }
@@ -107,8 +114,15 @@ public class PearlPhase extends Module {
             return;
         }
 
+        slot = InventoryManager.get().find(stack -> stack.isOf(Items.ENDER_PEARL), 0, InventoryManager.MAIN_END);
+        if (slot == -1) {
+            error("No ender pearls.");
+            toggle();
+            return;
+        }
+
         // The use packet carries the camera angles, and the server aims the pearl with those.
-        InventoryManager.get().withItem(slot, InventoryManager.SwitchMode.Silent, () -> {
+        boolean thrown = InventoryManager.get().withItem(slot, InventoryManager.SwitchMode.Silent, () -> {
             float yaw = mc.player.getYaw();
             float pitch = mc.player.getPitch();
             mc.player.setYaw(targetYaw);
@@ -117,6 +131,7 @@ public class PearlPhase extends Module {
             mc.player.setYaw(yaw);
             mc.player.setPitch(pitch);
         });
+        if (!thrown) error("Couldn't switch to the pearl while eating.");
         toggle();
     }
 
@@ -127,7 +142,7 @@ public class PearlPhase extends Module {
         Vec3d shooter = mc.player.isOnGround() ? new Vec3d(mc.player.getVelocity().x, 0, mc.player.getVelocity().z) : mc.player.getVelocity();
 
         List<float[]> candidates = new ArrayList<>();
-        for (float pitch = 50; pitch <= 90; pitch += 0.5f) {
+        for (float pitch = 50; pitch <= 90; pitch += 1) {
             for (float yaw = -180; yaw < 180; yaw += 2) {
                 double score = landingScore(spawn, shooter, feet, yaw, pitch);
                 if (score > 0) candidates.add(new float[] {yaw, pitch, (float) score});
@@ -192,6 +207,8 @@ public class PearlPhase extends Module {
         Box box = new Box(landing.x - WIDTH, landing.y, landing.z - WIDTH, landing.x + WIDTH, landing.y + 1.8, landing.z + WIDTH);
         Box middle = new Box(landing.x - 0.05, landing.y + 0.05, landing.z - 0.05, landing.x + 0.05, landing.y + 1.75, landing.z + 0.05);
         if (!mc.world.isSpaceEmpty(middle)) return 0;
+        // The game counts you in a wall when a box 0.8 of your width around your eyes touches one; keep that clear.
+        if (!mc.world.isSpaceEmpty(Box.of(landing.add(0, mc.player.getStandingEyeHeight(), 0), EYE_CLEARANCE, 1.0E-6, EYE_CLEARANCE))) return 0;
 
         double x = 0;
         double z = 0;

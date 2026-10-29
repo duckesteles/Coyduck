@@ -113,7 +113,8 @@ public final class InteractionManager {
 
     public BlockHitResult hit(BlockPos pos, boolean airplace) {
         Vec3d eye = mc.player.getEyePos();
-        double reach = mc.player.getBlockInteractionRange() + 1.0 - REACH_MARGIN;
+        // The clicked support counts against reach, and 6b6t holds clicks to 4.5; past that, airplace the cell itself.
+        double reach = mc.player.getBlockInteractionRange() - REACH_MARGIN;
         double reachSquared = reach * reach;
 
         BlockHitResult facing = null;

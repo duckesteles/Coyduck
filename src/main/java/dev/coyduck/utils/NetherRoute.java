@@ -28,7 +28,7 @@ public final class NetherRoute {
         thread.setDaemon(true);
         return thread;
     });
-    private long context;
+    private volatile long context;
 
     public static boolean available() {
         if (!FabricLoader.getInstance().isModLoaded("dev_babbaj_nether-pathfinder")) return false;
@@ -46,9 +46,11 @@ public final class NetherRoute {
     }
 
     public void close() {
+        // Cancel from here: the worker may be busy inside a search that would otherwise run to its timeout.
+        long running = context;
+        if (running != 0) NetherPathfinder.cancel(running);
         worker.execute(() -> {
             if (context == 0) return;
-            NetherPathfinder.cancel(context);
             NetherPathfinder.freeContext(context);
             context = 0;
         });

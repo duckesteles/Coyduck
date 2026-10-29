@@ -95,6 +95,8 @@ public final class HurtTracker {
         Hurt hurt = hurts.get(id);
         if (hurt != null && arrival >= hurt.start && arrival < hurt.start + window() + MARGIN) {
             if (!Float.isNaN(hurt.raw)) hurt.raw = Math.max(hurt.raw, raw);
+            // After melee or fall damage of unknown size, our hit sets the bar the next one has to beat.
+            else if (!hurt.explosion) hurt.raw = raw;
             return;
         }
 

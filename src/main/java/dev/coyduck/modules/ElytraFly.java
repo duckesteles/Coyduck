@@ -173,7 +173,7 @@ public class ElytraFly extends Module {
         if (input.jump() && !input.sneak()) y = up.get();
         else if (input.sneak() && !input.jump()) y = -down.get();
 
-        if (pilot != null) {
+        if (pilot != null && Modules.get().isActive(ElytraPilot.class)) {
             x = pilot.x;
             y = pilot.y;
             z = pilot.z;

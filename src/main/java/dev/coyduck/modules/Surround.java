@@ -9,6 +9,7 @@ import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
+import dev.coyduck.utils.BlockOverlay;
 import dev.coyduck.utils.DuckRender;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
@@ -56,6 +57,7 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 import net.minecraft.world.dimension.DimensionTypes;
 
@@ -521,21 +523,22 @@ public class Surround extends Module {
                 BlockPos cell = side.up();
                 if (faces.contains(cell)) continue;
                 // A crystal one cell further out at head level is shielded by a block in this cell.
-                if (faceThreat(cell, health) || mc.world.getBlockState(cell).isReplaceable() && crystalThreat(cell.offset(direction), health)) faces.add(cell);
+                if (faceThreat(cell, health) || mc.world.getBlockState(cell).isReplaceable() && crystalThreat(cell.offset(direction), health, mc.world)) faces.add(cell);
             }
 
             // A block on top of your head is a base for a crystal right above you; cover that spot.
             BlockPos top = column.up(3);
-            if (!mc.world.getBlockState(column.up(2)).isReplaceable() && mc.world.getBlockState(top).isReplaceable() && crystalThreat(top, health)) faces.add(top);
+            if (!mc.world.getBlockState(column.up(2)).isReplaceable() && mc.world.getBlockState(top).isReplaceable()
+                && crystalThreat(top, health, new BlockOverlay(mc.world).set(column.up(2), Blocks.AIR.getDefaultState()))) faces.add(top);
         }
         return faces;
     }
 
-    private boolean crystalThreat(BlockPos cell, float health) {
-        if (!mc.world.getBlockState(cell).isReplaceable() || !mc.world.getBlockState(cell.up()).isReplaceable()) return false;
-        if (!Targets.isBase(mc.world.getBlockState(cell.down()))) return false;
+    /** Whether a crystal that could sit in this cell threatens you; the view lets a block that will be mined count as gone. */
+    private boolean crystalThreat(BlockPos cell, float health, BlockView view) {
+        if (!Targets.canHoldCrystal(mc.world, cell.down())) return false;
         Vec3d crystal = new Vec3d(cell.getX() + 0.5, cell.getY(), cell.getZ() + 0.5);
-        return threatens(ExplosionDamage.crystal(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), crystal, mc.world), health);
+        return threatens(ExplosionDamage.crystal(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), crystal, view), health);
     }
 
     private boolean faceThreat(BlockPos cell, float health) {

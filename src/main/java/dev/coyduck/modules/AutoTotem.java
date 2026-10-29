@@ -53,6 +53,7 @@ public class AutoTotem extends Module {
         Always
     }
 
+    private static final int CRITICAL_GRACE = 6;
     private static final int NONE = -1;
     private static final int MAX_ATTEMPTS = 3;
     private static final int DANGER_HOLD = 40;
@@ -183,6 +184,7 @@ public class AutoTotem extends Module {
     private int reserveSlot = NONE;
     private int previousSlot = NONE;
     private int expectedSlot = NONE;
+    private int manualTicks = CRITICAL_GRACE;
     private int resumeTicks;
 
     private int totems;
@@ -248,6 +250,7 @@ public class AutoTotem extends Module {
 
         disableConflicts();
         if (resumeTicks > 0) resumeTicks--;
+        if (manualTicks < CRITICAL_GRACE) manualTicks++;
         if (foodTicks > 0) foodTicks--;
         if (dangerHold > 0) dangerHold--;
         if (pending && Util.getMeasuringTimeMs() >= pendingUntil) retry();
@@ -555,6 +558,7 @@ public class AutoTotem extends Module {
 
         if (expectedSlot != NONE && selected != expectedSlot) {
             resumeTicks = resumeDelay.get();
+            manualTicks = 0;
             reserveSlot = NONE;
             previousSlot = NONE;
         }
@@ -588,7 +592,9 @@ public class AutoTotem extends Module {
         }
         // Low and in danger, a hand you switched to yourself waits no longer: a pop then a full hit a tick later
         // lands before the offhand refill can arrive, and only a totem already in the main hand saves you.
+        // A short grace still lets you throw a pearl or eat from the slot you just picked.
         boolean critical = mainhand.get() == Mainhand.Smart && dangerHold > 0 && !inventory.isEating()
+            && manualTicks >= CRITICAL_GRACE && !mc.options.useKey.isPressed()
             && mc.player.getHealth() + mc.player.getAbsorptionAmount() <= health.get();
         if ((!popped && !critical && (resumeTicks > 0 || foodTicks > 0)) || (!gapple && !isTotem(mc.player.getOffHandStack()))) return;
 
