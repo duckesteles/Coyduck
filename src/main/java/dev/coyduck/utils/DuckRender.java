@@ -17,6 +17,9 @@ public final class DuckRender {
     public static final long FADE = 400;
     public static final long LIFETIME = HOLD + FADE;
     private static final double SLIDE = 18;
+    private static final double GLOW = 0.03;
+    private static final long POP = 180;
+    private static final double POP_FROM = 0.6;
 
     private static final Color TOP = new Color();
     private static final Color UPPER = new Color();
@@ -29,9 +32,9 @@ public final class DuckRender {
         if (alpha <= 0.01) return;
 
         if (mode != ShapeMode.Lines) {
-            shade(TOP, side, 0.35, 1.15, alpha);
-            shade(UPPER, side, 0, 1, alpha);
-            shade(LOWER, side, -0.45, 0.7, alpha);
+            shade(TOP, side, 0.45, 2.2, alpha);
+            shade(UPPER, side, 0, 1.5, alpha);
+            shade(LOWER, side, -0.5, 0.35, alpha);
 
             renderer.quadHorizontal(box.minX, box.maxY, box.minZ, box.maxX, box.maxZ, TOP);
             renderer.quadHorizontal(box.minX, box.minY, box.minZ, box.maxX, box.maxZ, LOWER);
@@ -43,6 +46,9 @@ public final class DuckRender {
         if (mode != ShapeMode.Sides) {
             shade(EDGE, line, 0, 1, alpha);
             renderer.boxLines(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ, EDGE, 0);
+            // A faint second outline just outside reads as a glow around the edges.
+            shade(EDGE, line, 0.2, 0.35, alpha);
+            renderer.boxLines(box.minX - GLOW, box.minY - GLOW, box.minZ - GLOW, box.maxX + GLOW, box.maxY + GLOW, box.maxZ + GLOW, EDGE, 0);
         }
     }
 
@@ -85,6 +91,7 @@ public final class DuckRender {
     public static final class Slide {
         private Box shown;
         private long lastFrame;
+        private long appearedAt;
 
         public void reset() {
             shown = null;
@@ -108,15 +115,27 @@ public final class DuckRender {
             }
 
             Box goal = new Box(target);
-            if (shown == null || shown.getCenter().squaredDistanceTo(goal.getCenter()) > 64) shown = goal;
+            if (shown == null || shown.getCenter().squaredDistanceTo(goal.getCenter()) > 64) {
+                shown = goal;
+                appearedAt = Util.getMeasuringTimeMs();
+            }
             double k = 1 - Math.exp(-SLIDE * dt);
             shown = new Box(
                 shown.minX + (goal.minX - shown.minX) * k, shown.minY + (goal.minY - shown.minY) * k, shown.minZ + (goal.minZ - shown.minZ) * k,
                 shown.maxX + (goal.maxX - shown.maxX) * k, shown.maxY + (goal.maxY - shown.maxY) * k, shown.maxZ + (goal.maxZ - shown.maxZ) * k
             );
 
-            box(renderer, shown, side, line, mode, DuckRender.alpha(age));
+            box(renderer, pop(shown, Util.getMeasuringTimeMs() - appearedAt), side, line, mode, DuckRender.alpha(age));
             return true;
+        }
+
+        /** A new box springs open from a smaller size with a slight overshoot. */
+        private static Box pop(Box box, long age) {
+            if (age >= POP) return box;
+            double x = age / (double) POP - 1;
+            double eased = 1 + 2.70158 * x * x * x + 1.70158 * x * x;
+            double scale = POP_FROM + (1 - POP_FROM) * eased;
+            return box.contract(box.getLengthX() * (1 - scale) / 2, box.getLengthY() * (1 - scale) / 2, box.getLengthZ() * (1 - scale) / 2);
         }
     }
 
