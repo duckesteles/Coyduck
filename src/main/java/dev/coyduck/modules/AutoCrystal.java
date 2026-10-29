@@ -13,6 +13,7 @@ import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.managers.MotionTracker;
 import dev.coyduck.managers.RotationManager;
+import dev.coyduck.utils.DuckRender;
 import dev.coyduck.utils.BlockOverlay;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
@@ -24,6 +25,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.entity.EntityAddedEvent;
+import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
@@ -39,6 +41,7 @@ import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.systems.modules.combat.CrystalAura;
+import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
@@ -86,7 +89,6 @@ public class AutoCrystal extends Module {
     private static final float LETHAL_BONUS = 100.0f;
     private static final float DEFENSE_THREAT = 4.0f;
     private static final float DEFENSE_FREE = 0.5f;
-    private static final long RENDER_TIME = 500;
     private static final double RAY_SLACK = 2.0;
     private static final double SERVER_BREAK_RANGE = 6.0;
     private static final double PREDICT_CLEAR_RANGE = 8.0;
@@ -403,6 +405,14 @@ public class AutoCrystal extends Module {
         .build()
     );
 
+    private final Setting<Boolean> text = sgRender.add(new BoolSetting.Builder()
+        .name("damage-text")
+        .description("Shows the damage the crystal deals to the target on its box.")
+        .defaultValue(true)
+        .visible(render::get)
+        .build()
+    );
+
     private boolean destroyedCrystal;
     private int placeBudget;
     private int gapBudget;
@@ -417,7 +427,9 @@ public class AutoCrystal extends Module {
     private final Long2ObjectOpenHashMap<Int2FloatOpenHashMap> rawCache = new Long2ObjectOpenHashMap<>();
     private List<BlockPos> ownCells = List.of();
     private BlockPos renderPos;
+    private final DuckRender.Slide slide = new DuckRender.Slide();
     private long renderTime;
+    private float renderDamage;
     private long cacheSignature;
     private final IntOpenHashSet predictedIds = new IntOpenHashSet();
     private long predictedBase;
@@ -636,12 +648,14 @@ public class AutoCrystal extends Module {
             pass();
         }
 
-        if (!render.get() || renderPos == null) return;
-        if (Util.getMeasuringTimeMs() - renderTime > RENDER_TIME) {
-            renderPos = null;
-            return;
-        }
-        event.renderer.box(renderPos, sideColor.get(), lineColor.get(), shapeMode.get(), 0);
+        if (!render.get()) return;
+        if (!slide.render(event.renderer, renderPos, renderTime, sideColor.get(), lineColor.get(), shapeMode.get())) renderPos = null;
+    }
+
+    @EventHandler
+    private void onRender2D(Render2DEvent event) {
+        if (!render.get() || !text.get() || renderPos == null || renderDamage <= 0) return;
+        DuckRender.label(slide.center(), String.format("%.1f", renderDamage), Color.WHITE, slide.alpha());
     }
 
     private void pass() {
@@ -782,6 +796,7 @@ public class AutoCrystal extends Module {
         placeBudget--;
         status = "clearing";
         renderPos = best;
+        renderDamage = 0;
         renderTime = Util.getMeasuringTimeMs();
         return true;
     }
@@ -858,6 +873,7 @@ public class AutoCrystal extends Module {
                 status = "gap";
                 lastTarget = target.player;
                 renderPos = base;
+                renderDamage = 0;
                 renderTime = Util.getMeasuringTimeMs();
             }
         }
@@ -1009,6 +1025,7 @@ public class AutoCrystal extends Module {
         status = String.format("%.1f dmg", choice.damage);
         lastTarget = choice.target.player;
         renderPos = base;
+        renderDamage = choice.damage;
         renderTime = Util.getMeasuringTimeMs();
     }
 
