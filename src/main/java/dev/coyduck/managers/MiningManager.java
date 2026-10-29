@@ -17,6 +17,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.enchantment.Enchantments;
+import net.minecraft.entity.EntityPose;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffectUtil;
@@ -45,7 +46,9 @@ public final class MiningManager {
     private static final int HOLD_TICKS = 2;
     private static final int MAX_HOLDS = 4;
     private static final float HOLD_MIN_HEALTH = 10;
-    private static final int MAX_STOPS = 2;
+    // Grim restarts its break timer on every finish packet, so a second finish right after a failed one always reads
+    // as breaking two seconds early. One finish, then a fresh start.
+    private static final int MAX_STOPS = 1;
 
     private BlockPos background;
     private int backgroundStart;
@@ -278,7 +281,13 @@ public final class MiningManager {
 
     public boolean inRange(BlockPos target) {
         double reach = mc.player.getBlockInteractionRange() + 1.0 - REACH_MARGIN;
-        return new Box(target).squaredMagnitude(mc.player.getEyePos()) < reach * reach;
+        Box box = new Box(target);
+        double distance = box.squaredMagnitude(mc.player.getEyePos());
+        // The server can end a glide a tick before we do and then measures from standing eyes, not the low gliding ones.
+        if (mc.player.isGliding()) {
+            distance = Math.max(distance, box.squaredMagnitude(mc.player.getEntityPos().add(0, mc.player.getEyeHeight(EntityPose.STANDING), 0)));
+        }
+        return distance < reach * reach;
     }
 
     @EventHandler(priority = EventPriority.HIGH)
