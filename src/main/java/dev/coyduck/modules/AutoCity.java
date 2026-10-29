@@ -10,7 +10,6 @@ import dev.coyduck.utils.BlockOverlay;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
@@ -166,22 +165,12 @@ public class AutoCity extends Module {
         .build()
     );
 
-    private final Setting<Boolean> text = sgRender.add(new BoolSetting.Builder()
-        .name("progress-text")
-        .description("Shows how far the block is mined, in percent, on the block.")
-        .defaultValue(true)
-        .visible(render::get)
-        .build()
-    );
-
     private static final Color PROGRESS_START = new Color(230, 60, 60);
     private static final Color PROGRESS_END = new Color(80, 220, 90);
 
     private final DuckRender.Smooth smoothProgress = new DuckRender.Smooth();
     private final Color sideShade = new Color();
     private final Color lineShade = new Color();
-    private final Color textShade = new Color();
-    private double shownProgress = -1;
 
     private PlayerEntity target;
     private BlockPos current;
@@ -236,7 +225,6 @@ public class AutoCity extends Module {
 
     @EventHandler
     private void onRender(Render3DEvent event) {
-        shownProgress = -1;
         if (!render.get() || current == null || !MiningManager.get().owns(this)) return;
 
         Box box = new Box(current);
@@ -250,14 +238,6 @@ public class AutoCity extends Module {
 
         if (shapeMode.get() != ShapeMode.Lines) DuckRender.box(event.renderer, box.contract((1 - progress) * 0.5), side, line, ShapeMode.Sides, 1);
         if (shapeMode.get() != ShapeMode.Sides) DuckRender.box(event.renderer, box, side, line, ShapeMode.Lines, 1);
-        shownProgress = progress;
-    }
-
-    @EventHandler
-    private void onRender2D(Render2DEvent event) {
-        if (!text.get() || shownProgress < 0 || current == null) return;
-        Color color = progressColor.get() ? DuckRender.lerp(textShade, PROGRESS_START.a(255), PROGRESS_END.a(255), shownProgress) : Color.WHITE;
-        DuckRender.label(Vec3d.ofCenter(current), (int) Math.round(shownProgress * 100) + "%", color, 1);
     }
 
     private void update() {

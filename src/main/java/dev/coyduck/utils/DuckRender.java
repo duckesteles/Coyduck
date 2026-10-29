@@ -2,15 +2,11 @@ package dev.coyduck.utils;
 
 import meteordevelopment.meteorclient.renderer.Renderer3D;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
-import meteordevelopment.meteorclient.renderer.text.TextRenderer;
-import meteordevelopment.meteorclient.utils.render.NametagUtils;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
-import org.joml.Vector3d;
 
 /**
  * Coyduck's shared render look, after the logo's isometric cubes: the top face lit, the sides shading darker toward
@@ -28,8 +24,6 @@ public final class DuckRender {
     private static final Color UPPER = new Color();
     private static final Color LOWER = new Color();
     private static final Color EDGE = new Color();
-    private static final Color TEXT = new Color();
-    private static final double TEXT_SCALE = 1.0;
 
     private DuckRender() {}
 
@@ -52,23 +46,6 @@ public final class DuckRender {
             shade(EDGE, line, 0, 1, alpha);
             renderer.boxLines(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ, EDGE, 0);
         }
-    }
-
-    /** Text centred over a point in the world, drawn from a Render2DEvent so it stays readable through walls. */
-    public static void label(Vec3d at, String text, Color color, double alpha) {
-        if (at == null || alpha <= 0.01) return;
-
-        Vector3d pos = new Vector3d(at.x, at.y, at.z);
-        if (!NametagUtils.to2D(pos, TEXT_SCALE)) return;
-
-        TEXT.set(color);
-        TEXT.a = (int) MathHelper.clamp(color.a * alpha, 0, 255);
-        TextRenderer text2d = TextRenderer.get();
-        NametagUtils.begin(pos);
-        text2d.beginBig();
-        text2d.render(text, -text2d.getWidth(text) / 2, -text2d.getHeight() / 2, TEXT, true);
-        text2d.end();
-        NametagUtils.end();
     }
 
     /** Full while fresh, then eases out. */
