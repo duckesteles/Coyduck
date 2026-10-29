@@ -70,6 +70,10 @@ public final class RotationManager {
         return known ? serverYaw : mc.player.getYaw();
     }
 
+    public float serverPitch() {
+        return known ? serverPitch : mc.player.getPitch();
+    }
+
     public float packetYaw(float original) {
         return active ? yaw : original;
     }
