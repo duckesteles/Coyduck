@@ -13,6 +13,7 @@ import dev.coyduck.utils.BlockOverlay;
 import dev.coyduck.utils.DuckRender;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.entity.EntityAddedEvent;
@@ -233,7 +234,7 @@ public class Surround extends Module {
 
     private record Side(BlockPos pos, Direction outward) {}
 
-    private final DuckRender.Fading rendered = new DuckRender.Fading();
+    private final Long2LongOpenHashMap rendered = new Long2LongOpenHashMap();
     private LongSet anchored = new LongOpenHashSet();
     private int anchorY;
     private int budget;
@@ -312,7 +313,11 @@ public class Surround extends Module {
     private void onRender(Render3DEvent event) {
         if (!render.get()) return;
 
-        rendered.render(event.renderer, sideColor.get(), lineColor.get(), shapeMode.get());
+        long now = Util.getMeasuringTimeMs();
+        rendered.long2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > DuckRender.LIFETIME);
+        for (var entry : rendered.long2LongEntrySet()) {
+            DuckRender.box(event.renderer, new Box(BlockPos.fromLong(entry.getLongKey())), sideColor.get(), lineColor.get(), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
+        }
     }
 
     private void pass() {
@@ -405,7 +410,7 @@ public class Surround extends Module {
             budget = 0;
             return;
         }
-        rendered.show(pos);
+        rendered.put(pos.asLong(), Util.getMeasuringTimeMs());
         budget--;
     }
 

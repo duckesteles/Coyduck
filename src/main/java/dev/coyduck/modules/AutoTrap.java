@@ -8,6 +8,7 @@ import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.utils.DuckRender;
 import dev.coyduck.utils.Targets;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -160,7 +161,7 @@ public class AutoTrap extends Module {
         .build()
     );
 
-    private final DuckRender.Fading rendered = new DuckRender.Fading();
+    private final Long2LongOpenHashMap rendered = new Long2LongOpenHashMap();
     private PlayerEntity target;
     private int budget;
     private boolean running;
@@ -211,7 +212,11 @@ public class AutoTrap extends Module {
     private void onRender(Render3DEvent event) {
         if (!render.get()) return;
 
-        rendered.render(event.renderer, sideColor.get(), lineColor.get(), shapeMode.get());
+        long now = Util.getMeasuringTimeMs();
+        rendered.long2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > DuckRender.LIFETIME);
+        for (var entry : rendered.long2LongEntrySet()) {
+            DuckRender.box(event.renderer, new Box(BlockPos.fromLong(entry.getLongKey())), sideColor.get(), lineColor.get(), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
+        }
     }
 
     private void pass() {
@@ -268,7 +273,7 @@ public class AutoTrap extends Module {
             budget = 0;
             return false;
         }
-        rendered.show(pos);
+        rendered.put(pos.asLong(), Util.getMeasuringTimeMs());
         budget--;
         return true;
     }
