@@ -19,7 +19,6 @@ import dev.coyduck.modules.AutoTotem;
 import dev.coyduck.modules.AutoTrap;
 import dev.coyduck.modules.AutoWeb;
 import dev.coyduck.modules.Burrow;
-import dev.coyduck.modules.CrystalChams;
 import dev.coyduck.modules.CustomFov;
 import dev.coyduck.modules.ElytraFly;
 import dev.coyduck.modules.Esp;
@@ -79,7 +78,6 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new PopCounter());
         Modules.get().add(new KillEffects());
         Modules.get().add(new Esp());
-        Modules.get().add(new CrystalChams());
 
         Commands.add(new PilotCommand());
     }

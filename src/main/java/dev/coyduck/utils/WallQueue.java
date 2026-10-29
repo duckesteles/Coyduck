@@ -45,35 +45,14 @@ public final class WallQueue implements OrderedRenderCommandQueue {
     private static final Map<RenderLayer, RenderLayer> LAYERS = new IdentityHashMap<>();
     private static final Map<RenderPipeline, RenderPipeline> PIPELINES = new IdentityHashMap<>();
 
-    public static final int KEEP = Integer.MIN_VALUE;
-
     private final RenderCommandQueue delegate;
-    private final boolean walls;
-    private final int color;
-    private final int light;
 
     public WallQueue(RenderCommandQueue delegate) {
-        this(delegate, true, KEEP, KEEP);
-    }
-
-    /** color is an ARGB tint and light a packed light value; KEEP leaves the model's own. */
-    public WallQueue(RenderCommandQueue delegate, boolean walls, int color, int light) {
         this.delegate = delegate;
-        this.walls = walls;
-        this.color = color;
-        this.light = light;
     }
 
-    private RenderLayer through(RenderLayer layer) {
-        return layer == null || !walls ? layer : LAYERS.computeIfAbsent(layer, WallQueue::copy);
-    }
-
-    private int color(int own) {
-        return color == KEEP ? own : color;
-    }
-
-    private int light(int own) {
-        return light == KEEP ? own : light;
+    private static RenderLayer through(RenderLayer layer) {
+        return layer == null ? null : LAYERS.computeIfAbsent(layer, WallQueue::copy);
     }
 
     private static RenderLayer copy(RenderLayer layer) {
@@ -95,7 +74,7 @@ public final class WallQueue implements OrderedRenderCommandQueue {
 
     @Override
     public RenderCommandQueue getBatchingQueue(int order) {
-        return delegate instanceof OrderedRenderCommandQueue ordered ? new WallQueue(ordered.getBatchingQueue(order), walls, color, light) : this;
+        return delegate instanceof OrderedRenderCommandQueue ordered ? new WallQueue(ordered.getBatchingQueue(order)) : this;
     }
 
     @Override
@@ -125,12 +104,12 @@ public final class WallQueue implements OrderedRenderCommandQueue {
 
     @Override
     public <S> void submitModel(Model<? super S> model, S state, MatrixStack matrices, RenderLayer layer, int light, int overlay, int color, Sprite sprite, int outlineColor, ModelCommandRenderer.CrumblingOverlayCommand crumbling) {
-        delegate.submitModel(model, state, matrices, through(layer), light(light), overlay, color(color), sprite, outlineColor, crumbling);
+        delegate.submitModel(model, state, matrices, through(layer), light, overlay, color, sprite, outlineColor, crumbling);
     }
 
     @Override
     public void submitModelPart(ModelPart part, MatrixStack matrices, RenderLayer layer, int light, int overlay, Sprite sprite, boolean sheeted, boolean hasGlint, int color, ModelCommandRenderer.CrumblingOverlayCommand crumbling, int outlineColor) {
-        delegate.submitModelPart(part, matrices, through(layer), light(light), overlay, sprite, sheeted, hasGlint, color(color), crumbling, outlineColor);
+        delegate.submitModelPart(part, matrices, through(layer), light, overlay, sprite, sheeted, hasGlint, color, crumbling, outlineColor);
     }
 
     @Override
