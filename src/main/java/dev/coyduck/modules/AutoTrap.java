@@ -6,6 +6,7 @@ import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.MiningManager;
+import dev.coyduck.utils.DuckRender;
 import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
@@ -49,7 +50,6 @@ public class AutoTrap extends Module {
         Off
     }
 
-    private static final long RENDER_TIME = 500;
     private static final double STILL_SPEED = 0.05;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -213,9 +213,9 @@ public class AutoTrap extends Module {
         if (!render.get()) return;
 
         long now = Util.getMeasuringTimeMs();
-        rendered.long2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > RENDER_TIME);
-        for (long key : rendered.keySet()) {
-            event.renderer.box(BlockPos.fromLong(key), sideColor.get(), lineColor.get(), shapeMode.get(), 0);
+        rendered.long2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > DuckRender.LIFETIME);
+        for (var entry : rendered.long2LongEntrySet()) {
+            DuckRender.box(event.renderer, new Box(BlockPos.fromLong(entry.getLongKey())), sideColor.get(), lineColor.get(), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
         }
     }
 

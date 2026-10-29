@@ -11,6 +11,7 @@ import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MotionTracker;
 import dev.coyduck.managers.RotationManager;
+import dev.coyduck.utils.DuckRender;
 import dev.coyduck.utils.BlockOverlay;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.PacketBatch;
@@ -71,7 +72,6 @@ public class AutoAnchor extends Module {
     private static final float DEFENSE_THREAT = 4.0f;
     private static final float DEFENSE_FREE = 0.5f;
     private static final double RAY_SLACK = 2.0;
-    private static final long RENDER_TIME = 500;
     private static final float FIRE_MARGIN = 1.0f;
 
     private record Target(PlayerEntity player, Box box, Vec3d feet, float health, float minDamage) {}
@@ -274,6 +274,7 @@ public class AutoAnchor extends Module {
     private List<Vec3d> ownCrystals;
     private PlayerEntity focus;
     private BlockPos renderPos;
+    private final DuckRender.Slide slide = new DuckRender.Slide();
     private long renderTime;
 
     public AutoAnchor() {
@@ -344,12 +345,8 @@ public class AutoAnchor extends Module {
             pass();
         }
 
-        if (!render.get() || renderPos == null) return;
-        if (Util.getMeasuringTimeMs() - renderTime > RENDER_TIME) {
-            renderPos = null;
-            return;
-        }
-        event.renderer.box(renderPos, sideColor.get(), lineColor.get(), shapeMode.get(), 0);
+        if (!render.get()) return;
+        if (!slide.render(event.renderer, renderPos, renderTime, sideColor.get(), lineColor.get(), shapeMode.get())) renderPos = null;
     }
 
     private static boolean matters(BlockState state) {
