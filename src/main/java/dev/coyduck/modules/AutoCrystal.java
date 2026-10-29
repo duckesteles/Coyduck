@@ -25,7 +25,6 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.entity.EntityAddedEvent;
-import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
@@ -41,7 +40,6 @@ import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.systems.modules.combat.CrystalAura;
-import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
@@ -405,14 +403,6 @@ public class AutoCrystal extends Module {
         .build()
     );
 
-    private final Setting<Boolean> text = sgRender.add(new BoolSetting.Builder()
-        .name("damage-text")
-        .description("Shows the damage the crystal deals to the target on its box.")
-        .defaultValue(true)
-        .visible(render::get)
-        .build()
-    );
-
     private boolean destroyedCrystal;
     private int placeBudget;
     private int gapBudget;
@@ -426,10 +416,7 @@ public class AutoCrystal extends Module {
     private final Long2FloatOpenHashMap selfCache = new Long2FloatOpenHashMap();
     private final Long2ObjectOpenHashMap<Int2FloatOpenHashMap> rawCache = new Long2ObjectOpenHashMap<>();
     private List<BlockPos> ownCells = List.of();
-    private BlockPos renderPos;
     private final DuckRender.Slide slide = new DuckRender.Slide();
-    private long renderTime;
-    private float renderDamage;
     private long cacheSignature;
     private final IntOpenHashSet predictedIds = new IntOpenHashSet();
     private long predictedBase;
@@ -460,7 +447,7 @@ public class AutoCrystal extends Module {
         focus = null;
         challengeTicks = 0;
         releaseAt = 0;
-        renderPos = null;
+        slide.reset();
     }
 
     @Override
@@ -523,7 +510,7 @@ public class AutoCrystal extends Module {
         predictedAt = 0;
         predictedTarget = null;
         clearing.clear();
-        renderPos = null;
+        slide.reset();
         releaseAt = 0;
     }
 
@@ -649,13 +636,7 @@ public class AutoCrystal extends Module {
         }
 
         if (!render.get()) return;
-        if (!slide.render(event.renderer, renderPos, renderTime, sideColor.get(), lineColor.get(), shapeMode.get())) renderPos = null;
-    }
-
-    @EventHandler
-    private void onRender2D(Render2DEvent event) {
-        if (!render.get() || !text.get() || renderPos == null || renderDamage <= 0) return;
-        DuckRender.label(slide.center(), String.format("%.1f", renderDamage), Color.WHITE, slide.alpha());
+        slide.render(event.renderer, sideColor.get(), lineColor.get(), shapeMode.get());
     }
 
     private void pass() {
@@ -795,9 +776,7 @@ public class AutoCrystal extends Module {
         clearing.put(best.asLong(), Util.getMeasuringTimeMs() + 2L * LatencyManager.get().timeout());
         placeBudget--;
         status = "clearing";
-        renderPos = best;
-        renderDamage = 0;
-        renderTime = Util.getMeasuringTimeMs();
+        slide.show(best);
         return true;
     }
 
@@ -872,9 +851,7 @@ public class AutoCrystal extends Module {
                 gapBudget--;
                 status = "gap";
                 lastTarget = target.player;
-                renderPos = base;
-                renderDamage = 0;
-                renderTime = Util.getMeasuringTimeMs();
+                slide.show(base);
             }
         }
     }
@@ -1024,9 +1001,7 @@ public class AutoCrystal extends Module {
         placeBudget--;
         status = String.format("%.1f dmg", choice.damage);
         lastTarget = choice.target.player;
-        renderPos = base;
-        renderDamage = choice.damage;
-        renderTime = Util.getMeasuringTimeMs();
+        slide.show(base);
     }
 
     private void placeBase(List<Target> targets, float health) {

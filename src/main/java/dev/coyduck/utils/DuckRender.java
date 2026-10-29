@@ -18,9 +18,11 @@ import org.joml.Vector3d;
  */
 public final class DuckRender {
     public static final long HOLD = 300;
-    public static final long FADE = 400;
+    public static final long FADE = 500;
     public static final long LIFETIME = HOLD + FADE;
-    private static final double SLIDE = 18;
+    private static final long FADE_IN = 120;
+    private static final long SWITCH_HOLD = 150;
+    private static final double SLIDE = 12;
 
     private static final Color TOP = new Color();
     private static final Color UPPER = new Color();
@@ -69,10 +71,16 @@ public final class DuckRender {
         NametagUtils.end();
     }
 
-    /** Full while fresh, then fades out. */
+    /** Full while fresh, then eases out. */
     public static double alpha(long age) {
         if (age < HOLD) return 1;
-        return Math.max(0, 1 - (age - HOLD) / (double) FADE);
+        return 1 - ease((age - HOLD) / (double) FADE);
+    }
+
+    /** Smoothstep: starts and ends gently, so fades and motion have no hard edges. */
+    private static double ease(double t) {
+        t = MathHelper.clamp(t, 0, 1);
+        return t * t * (3 - 2 * t);
     }
 
     public static Color lerp(Color into, Color from, Color to, double t) {
@@ -104,53 +112,50 @@ public final class DuckRender {
         into.a = (int) MathHelper.clamp(base.a * alphaScale * alpha, 0, 255);
     }
 
-    /** One box that slides from spot to spot and fades out once the module stops refreshing it. */
+    /** One box that glides from spot to spot, fades in when it appears and fades out once nothing refreshes it. */
     public static final class Slide {
+        private BlockPos target;
+        private long refreshedAt;
         private Box shown;
+        private long appearedAt;
         private long lastFrame;
-        private double shownAlpha;
+
+        /** Points the box at a spot. A spot that flickers against the current one within a tick or two is ignored, so the box stays calm. */
+        public void show(BlockPos pos) {
+            long now = Util.getMeasuringTimeMs();
+            if (target == null || target.equals(pos) || now - refreshedAt > SWITCH_HOLD) target = pos.toImmutable();
+            if (target.equals(pos)) refreshedAt = now;
+        }
 
         public void reset() {
+            target = null;
             shown = null;
         }
 
-        /** Where the box is drawn right now, for a label that follows it; null when nothing is shown. */
-        public Vec3d center() {
-            return shown == null ? null : shown.getCenter();
-        }
+        public void render(Renderer3D renderer, Color side, Color line, ShapeMode mode) {
+            long frame = System.nanoTime();
+            double dt = lastFrame == 0 ? 0 : Math.min((frame - lastFrame) / 1.0E9, 0.1);
+            lastFrame = frame;
 
-        public double alpha() {
-            return shown == null ? 0 : shownAlpha;
-        }
-
-        /** Returns false once the box has faded out completely. */
-        public boolean render(Renderer3D renderer, BlockPos target, long setAt, Color side, Color line, ShapeMode mode) {
-            long now = System.nanoTime();
-            double dt = lastFrame == 0 ? 0 : Math.min((now - lastFrame) / 1.0E9, 0.1);
-            lastFrame = now;
-
-            if (target == null) {
-                shown = null;
-                return false;
-            }
-
-            long age = Util.getMeasuringTimeMs() - setAt;
-            if (age > LIFETIME) {
-                shown = null;
-                return false;
+            long now = Util.getMeasuringTimeMs();
+            if (target == null || now - refreshedAt > LIFETIME) {
+                reset();
+                return;
             }
 
             Box goal = new Box(target);
-            if (shown == null || shown.getCenter().squaredDistanceTo(goal.getCenter()) > 64) shown = goal;
+            if (shown == null || shown.getCenter().squaredDistanceTo(goal.getCenter()) > 64) {
+                shown = goal;
+                appearedAt = now;
+            }
             double k = 1 - Math.exp(-SLIDE * dt);
             shown = new Box(
                 shown.minX + (goal.minX - shown.minX) * k, shown.minY + (goal.minY - shown.minY) * k, shown.minZ + (goal.minZ - shown.minZ) * k,
                 shown.maxX + (goal.maxX - shown.maxX) * k, shown.maxY + (goal.maxY - shown.maxY) * k, shown.maxZ + (goal.maxZ - shown.maxZ) * k
             );
 
-            shownAlpha = DuckRender.alpha(age);
-            box(renderer, shown, side, line, mode, shownAlpha);
-            return true;
+            double fadeIn = ease((now - appearedAt) / (double) FADE_IN);
+            box(renderer, shown, side, line, mode, fadeIn * DuckRender.alpha(now - refreshedAt));
         }
     }
 
