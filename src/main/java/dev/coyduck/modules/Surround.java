@@ -10,7 +10,6 @@ import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.utils.BlockOverlay;
-import dev.coyduck.utils.DuckRender;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
@@ -73,6 +72,7 @@ public class Surround extends Module {
     }
 
     private static final long HOT_TIME = 2_000;
+    private static final long RENDER_TIME = 500;
     private static final double EDGE = 1.0E-4;
     private static final double CENTER_SPEED = 0.2;
     private static final double NEAR = 5 * 5;
@@ -314,9 +314,9 @@ public class Surround extends Module {
         if (!render.get()) return;
 
         long now = Util.getMeasuringTimeMs();
-        rendered.long2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > DuckRender.LIFETIME);
-        for (var entry : rendered.long2LongEntrySet()) {
-            DuckRender.box(event.renderer, new Box(BlockPos.fromLong(entry.getLongKey())), sideColor.get(), lineColor.get(), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
+        rendered.long2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > RENDER_TIME);
+        for (long key : rendered.keySet()) {
+            event.renderer.box(BlockPos.fromLong(key), sideColor.get(), lineColor.get(), shapeMode.get(), 0);
         }
     }
 

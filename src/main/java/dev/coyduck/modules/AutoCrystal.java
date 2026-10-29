@@ -13,7 +13,6 @@ import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.managers.MotionTracker;
 import dev.coyduck.managers.RotationManager;
-import dev.coyduck.utils.DuckRender;
 import dev.coyduck.utils.BlockOverlay;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
@@ -87,6 +86,7 @@ public class AutoCrystal extends Module {
     private static final float LETHAL_BONUS = 100.0f;
     private static final float DEFENSE_THREAT = 4.0f;
     private static final float DEFENSE_FREE = 0.5f;
+    private static final long RENDER_TIME = 500;
     private static final double RAY_SLACK = 2.0;
     private static final double SERVER_BREAK_RANGE = 6.0;
     private static final double PREDICT_CLEAR_RANGE = 8.0;
@@ -417,7 +417,6 @@ public class AutoCrystal extends Module {
     private final Long2ObjectOpenHashMap<Int2FloatOpenHashMap> rawCache = new Long2ObjectOpenHashMap<>();
     private List<BlockPos> ownCells = List.of();
     private BlockPos renderPos;
-    private final DuckRender.Slide slide = new DuckRender.Slide();
     private long renderTime;
     private long cacheSignature;
     private final IntOpenHashSet predictedIds = new IntOpenHashSet();
@@ -637,8 +636,12 @@ public class AutoCrystal extends Module {
             pass();
         }
 
-        if (!render.get()) return;
-        if (!slide.render(event.renderer, renderPos, renderTime, sideColor.get(), lineColor.get(), shapeMode.get())) renderPos = null;
+        if (!render.get() || renderPos == null) return;
+        if (Util.getMeasuringTimeMs() - renderTime > RENDER_TIME) {
+            renderPos = null;
+            return;
+        }
+        event.renderer.box(renderPos, sideColor.get(), lineColor.get(), shapeMode.get(), 0);
     }
 
     private void pass() {
