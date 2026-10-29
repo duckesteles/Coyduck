@@ -57,7 +57,6 @@ public class SelfTrap extends Module {
     private static final float LOW_HEALTH = 12;
     private static final double EDGE = 1.0E-4;
     private static final double NEAR = 4.0;
-    private static final double STILL_SPEED = 0.05;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgRender = settings.createGroup("Render");
@@ -263,7 +262,8 @@ public class SelfTrap extends Module {
     private void run() {
         if (budget <= 0 || HoleSnap.snapping()) return;
         if (smart.get() && Targets.find(enemyRange.get()) == null) return;
-        if (onlyStill.get() && (!mc.player.isOnGround() || mc.player.getVelocity().horizontalLengthSquared() > STILL_SPEED * STILL_SPEED)) return;
+        // Blasts knock you about without your input; only your own movement pauses it.
+        if (onlyStill.get() && (mc.player.input.getMovementInput().lengthSquared() > 1.0E-4f || mc.player.input.playerInput.jump())) return;
 
         LongSet columns = columns();
         placeAll(blockSlot(false), ring(columns));

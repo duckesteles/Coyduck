@@ -34,6 +34,8 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 
+import java.util.List;
+
 public class LadderTrap extends Module {
     public enum Mode {
         Smart,
@@ -166,12 +168,13 @@ public class LadderTrap extends Module {
 
         InteractionManager interaction = InteractionManager.get();
 
+        List<BlockPos> own = Targets.ownRing();
         for (long key : columns) {
             BlockPos cell = BlockPos.fromLong(key);
             BlockState state = mc.world.getBlockState(cell);
             if (state.isIn(BlockTags.CLIMBABLE)) continue;
             if (!interaction.canPlace(cell) || mc.player.getBoundingBox().intersects(new Box(cell))) continue;
-            if (Util.getMeasuringTimeMs() - rejectedAt.getOrDefault(cell.asLong(), 0L) < REJECT_TIME) continue;
+            if (Util.getMeasuringTimeMs() - rejectedAt.getOrDefault(cell.asLong(), 0L) < REJECT_TIME || own.contains(cell)) continue;
 
             if (item.get() != Item.Scaffolding && placeLadder(cell, box)) continue;
             if (item.get() != Item.Ladder) placeScaffolding(cell);
@@ -250,7 +253,7 @@ public class LadderTrap extends Module {
     }
 
     private double reach() {
-        return mc.player.getBlockInteractionRange() + 1.0 - 0.05;
+        return mc.player.getBlockInteractionRange() - 0.05;
     }
 
     private boolean canAct() {

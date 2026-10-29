@@ -49,6 +49,7 @@ public final class MiningManager {
 
     private BlockPos background;
     private int backgroundStart;
+    private long backgroundStartTime;
     private int holdTicks;
     private int holdSource = -1;
     private int holdHotbar = -1;
@@ -66,6 +67,7 @@ public final class MiningManager {
 
     private int ticks;
     private int startTick;
+    private long startTime;
     private long lastStop;
     private int lastStopTick = -1;
     private boolean brokenSinceStop;
@@ -114,6 +116,7 @@ public final class MiningManager {
         pos = target.toImmutable();
         side = facing(pos);
         startTick = ticks;
+        startTime = Util.getMeasuringTimeMs();
         lastStop = 0;
         lastStopTick = -1;
         brokenSinceStop = false;
@@ -141,6 +144,7 @@ public final class MiningManager {
         send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK, pos, side, false);
         background = pos;
         backgroundStart = startTick;
+        backgroundStartTime = startTime;
         holdAttempts = 0;
         nextHold = 0;
 
@@ -302,6 +306,7 @@ public final class MiningManager {
     private void restart() {
         side = facing(pos);
         startTick = ticks;
+        startTime = Util.getMeasuringTimeMs();
         lastStop = 0;
         lastStopTick = -1;
         brokenSinceStop = false;
@@ -376,7 +381,7 @@ public final class MiningManager {
         float delta = delta(state, background, tool == -1 ? mc.player.getMainHandStack() : InventoryManager.get().stack(tool), mc.player.isOnGround());
         float margin = (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
         float rate = Math.min(TickRate.INSTANCE.getTickRate() / 20.0f, 1.0f);
-        return delta * ((ticks - backgroundStart) * rate - margin) >= BACKGROUND_THRESHOLD;
+        return delta * ((Util.getMeasuringTimeMs() - backgroundStartTime) / 50.0f * rate - margin) >= BACKGROUND_THRESHOLD;
     }
 
     private void hold(BlockState state) {
@@ -448,9 +453,10 @@ public final class MiningManager {
         return delta(state, pos, tool == -1 ? mc.player.getMainHandStack() : InventoryManager.get().stack(tool));
     }
 
+    // Server ticks since START, from the wall clock: a client timer (HoleSnap) runs client ticks faster than the server.
     private float elapsed() {
         float rate = Math.min(TickRate.INSTANCE.getTickRate() / 20.0f, 1.0f);
-        return (ticks - startTick) * rate;
+        return (Util.getMeasuringTimeMs() - startTime) / 50.0f * rate;
     }
 
     private void reset() {

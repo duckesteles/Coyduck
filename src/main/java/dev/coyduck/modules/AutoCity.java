@@ -295,12 +295,13 @@ public class AutoCity extends Module {
 
         MiningManager mining = MiningManager.get();
         if (!mining.owns(this) || !mining.isMining(current)) return true;
-        if (mining.wasBroken()) return best.score > currentScore + SWITCH_GAIN;
+        // A broken burrow held for rebreak no longer outranks everything: its score was the burrow bonus.
+        if (mining.wasBroken()) return best.score > (currentScore >= BURROW_SCORE ? 0 : currentScore) + SWITCH_GAIN;
         return mining.progress() < SWITCH_PROGRESS && best.score > currentScore + SWITCH_GAIN;
     }
 
     private boolean stillValid(BlockPos pos, LongSet columns) {
-        if (!MiningManager.get().inRange(pos) || Targets.ownRing().contains(pos)) return false;
+        if (!MiningManager.get().inRange(pos) || Targets.ownRing().contains(pos) || mine(pos)) return false;
 
         boolean partOfHole = columns.contains(pos.asLong()) || Targets.ring(columns, 0).contains(pos);
         if (!partOfHole) return false;
@@ -320,6 +321,11 @@ public class AutoCity extends Module {
             && inventory.find(stack -> stack.isOf(Items.GLOWSTONE), 0, InventoryManager.MAIN_END) != -1;
     }
 
+    /** Your own burrow block, which an enemy phasing into it can make look like theirs. */
+    private boolean mine(BlockPos pos) {
+        return mc.player.getBoundingBox().intersects(new Box(pos));
+    }
+
     private boolean webbed(BlockPos pos) {
         return mc.world.getBlockState(pos).isOf(Blocks.COBWEB);
     }
@@ -335,7 +341,7 @@ public class AutoCity extends Module {
         if (burrow.get()) {
             for (long key : columns) {
                 BlockPos pos = BlockPos.fromLong(key);
-                if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || own.contains(pos) || !mining.inRange(pos) || !Targets.isBurrowedIn(box, pos)) continue;
+                if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || own.contains(pos) || mine(pos) || !mining.inRange(pos) || !Targets.isBurrowedIn(box, pos)) continue;
                 if (mc.world.getBlockState(pos).isOf(Blocks.BEDROCK)) continue;
 
                 choices.add(new Choice(pos, BURROW_SCORE + mining.delta(mc.world.getBlockState(pos), pos, mc.player.getMainHandStack()), null));
@@ -365,6 +371,8 @@ public class AutoCity extends Module {
 
     private boolean supportable(BlockPos support, List<BlockPos> own) {
         if (!placeSupport.get() || own.contains(support)) return false;
+        double reach = mc.player.getBlockInteractionRange() - 0.05;
+        if (new Box(support).squaredMagnitude(mc.player.getEyePos()) >= reach * reach) return false;
         if (InventoryManager.get().find(stack -> stack.isOf(Items.OBSIDIAN), 0, InventoryManager.MAIN_END) == -1) return false;
 
         BlockState state = mc.world.getBlockState(support);

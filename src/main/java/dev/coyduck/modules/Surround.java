@@ -585,7 +585,13 @@ public class Surround extends Module {
             return true;
         }
 
-        if (ground && level > anchorY) return leave(level);
+        // Knocked or lifted up without walking (scaffolding pushed into your cell, a blast): follow, don't leave.
+        if (ground && level > anchorY) {
+            if (hasInput()) return leave(level);
+            anchorY = level;
+            anchored = columns(level);
+            return true;
+        }
 
         LongSet current = columns(anchorY);
         if (current.longStream().noneMatch(anchored::contains)) {
