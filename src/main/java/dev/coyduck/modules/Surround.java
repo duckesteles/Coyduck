@@ -519,10 +519,23 @@ public class Surround extends Module {
                 if (anchored.contains(side.asLong())) continue;
 
                 BlockPos cell = side.up();
-                if (!faces.contains(cell) && faceThreat(cell, health)) faces.add(cell);
+                if (faces.contains(cell)) continue;
+                // A crystal one cell further out at head level is shielded by a block in this cell.
+                if (faceThreat(cell, health) || mc.world.getBlockState(cell).isReplaceable() && crystalThreat(cell.offset(direction), health)) faces.add(cell);
             }
+
+            // A block on top of your head is a base for a crystal right above you; cover that spot.
+            BlockPos top = column.up(3);
+            if (!mc.world.getBlockState(column.up(2)).isReplaceable() && mc.world.getBlockState(top).isReplaceable() && crystalThreat(top, health)) faces.add(top);
         }
         return faces;
+    }
+
+    private boolean crystalThreat(BlockPos cell, float health) {
+        if (!mc.world.getBlockState(cell).isReplaceable() || !mc.world.getBlockState(cell.up()).isReplaceable()) return false;
+        if (!Targets.isBase(mc.world.getBlockState(cell.down()))) return false;
+        Vec3d crystal = new Vec3d(cell.getX() + 0.5, cell.getY(), cell.getZ() + 0.5);
+        return threatens(ExplosionDamage.crystal(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), crystal, mc.world), health);
     }
 
     private boolean faceThreat(BlockPos cell, float health) {
