@@ -15,9 +15,13 @@
 - AutoCity
 - LadderTrap
 - ElytraFly
+- ElytraPilot
 - SelfTrap
 - HoleSnap
 - CustomFov
 - AirMine
 - PopCounter
 - KillEffects
+- PearlPhase
+- Burrow
+- ESP
