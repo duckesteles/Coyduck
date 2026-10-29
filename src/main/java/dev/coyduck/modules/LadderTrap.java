@@ -153,7 +153,7 @@ public class LadderTrap extends Module {
             BlockPos cell = BlockPos.fromLong(key);
             BlockState state = mc.world.getBlockState(cell);
             if (state.isIn(BlockTags.CLIMBABLE)) continue;
-            if (!interaction.canPlace(cell)) continue;
+            if (!interaction.canPlace(cell) || mc.player.getBoundingBox().intersects(new Box(cell))) continue;
 
             if (item.get() != Item.Scaffolding && placeLadder(cell, box)) continue;
             if (item.get() != Item.Ladder) placeScaffolding(cell);
