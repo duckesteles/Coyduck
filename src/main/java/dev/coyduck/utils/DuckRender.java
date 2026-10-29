@@ -2,15 +2,11 @@ package dev.coyduck.utils;
 
 import meteordevelopment.meteorclient.renderer.Renderer3D;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
-import dev.coyduck.modules.CustomFov;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
-
-import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 /**
  * Coyduck's shared render look, after the logo's isometric cubes: the top face lit, the sides shading darker toward
@@ -23,8 +19,6 @@ public final class DuckRender {
     private static final long FADE_IN = 120;
     private static final long SWITCH_HOLD = 150;
     private static final double SLIDE = 12;
-    // Edge thickness on screen. Vanilla GL lines are a hairline at any distance, which reads as cheap.
-    private static final double EDGE_PIXELS = 2.2;
 
     private static final Color TOP = new Color();
     private static final Color UPPER = new Color();
@@ -50,47 +44,8 @@ public final class DuckRender {
         }
         if (mode != ShapeMode.Sides) {
             shade(EDGE, line, 0, 1, alpha);
-            edges(renderer, box, EDGE);
+            renderer.boxLines(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ, EDGE, 0);
         }
-    }
-
-    /** The twelve edges as thin strips turned toward the camera, the same width on screen near and far. */
-    private static void edges(Renderer3D renderer, Box box, Color color) {
-        Vec3d camera = mc.gameRenderer.getCamera().getCameraPos();
-        double fov = Math.toRadians(CustomFov.world(mc.options.getFov().getValue()));
-        double perUnit = EDGE_PIXELS * Math.tan(fov / 2) / Math.max(mc.getWindow().getFramebufferHeight(), 1);
-
-        double[] xs = {box.minX, box.maxX};
-        double[] ys = {box.minY, box.maxY};
-        double[] zs = {box.minZ, box.maxZ};
-        for (double y : ys) for (double z : zs) edge(renderer, camera, perUnit, new Vec3d(box.minX, y, z), new Vec3d(box.maxX, y, z), color);
-        for (double x : xs) for (double z : zs) edge(renderer, camera, perUnit, new Vec3d(x, box.minY, z), new Vec3d(x, box.maxY, z), color);
-        for (double x : xs) for (double y : ys) edge(renderer, camera, perUnit, new Vec3d(x, y, box.minZ), new Vec3d(x, y, box.maxZ), color);
-    }
-
-    private static void edge(Renderer3D renderer, Vec3d camera, double perUnit, Vec3d a, Vec3d b, Color color) {
-        Vec3d dir = b.subtract(a).normalize();
-        Vec3d toA = a.subtract(camera);
-        Vec3d toB = b.subtract(camera);
-        Vec3d sideA = dir.crossProduct(toA);
-        Vec3d sideB = dir.crossProduct(toB);
-        if (sideA.lengthSquared() < 1.0E-8 || sideB.lengthSquared() < 1.0E-8) return;
-
-        double halfA = perUnit * toA.length();
-        double halfB = perUnit * toB.length();
-        sideA = sideA.normalize().multiply(halfA);
-        sideB = sideB.normalize().multiply(halfB);
-        // Run each strip a half width past its corners so neighbouring edges meet without a notch.
-        a = a.subtract(dir.multiply(halfA));
-        b = b.add(dir.multiply(halfB));
-
-        renderer.quad(
-            a.x - sideA.x, a.y - sideA.y, a.z - sideA.z,
-            a.x + sideA.x, a.y + sideA.y, a.z + sideA.z,
-            b.x + sideB.x, b.y + sideB.y, b.z + sideB.z,
-            b.x - sideB.x, b.y - sideB.y, b.z - sideB.z,
-            color
-        );
     }
 
     /** Full while fresh, then eases out. */
