@@ -13,8 +13,12 @@
     "GameRendererMixin",
     "KeyboardInputMixin",
     "LivingEntityMixin",
+    "LivingEntityRendererMixin",
     "PacketApplyBatcherEntryMixin",
-    "PlayerEntityMixin"
+    "PlayerEntityMixin",
+    "RenderLayerAccessor",
+    "RenderSetupAccessor",
+    "SodiumWorldRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

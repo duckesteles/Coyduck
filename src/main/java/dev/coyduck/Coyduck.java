@@ -21,6 +21,7 @@ import dev.coyduck.modules.AutoWeb;
 import dev.coyduck.modules.Burrow;
 import dev.coyduck.modules.CustomFov;
 import dev.coyduck.modules.ElytraFly;
+import dev.coyduck.modules.Esp;
 import dev.coyduck.modules.ElytraPilot;
 import dev.coyduck.modules.HoleSnap;
 import dev.coyduck.modules.KillEffects;
@@ -76,6 +77,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new AirMine());
         Modules.get().add(new PopCounter());
         Modules.get().add(new KillEffects());
+        Modules.get().add(new Esp());
 
         Commands.add(new PilotCommand());
     }
