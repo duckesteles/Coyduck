@@ -8,6 +8,7 @@ import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.utils.BlockRules;
 import dev.coyduck.utils.Targets;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
@@ -26,6 +27,7 @@ import net.minecraft.item.Items;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.registry.tag.BlockTags;
+import net.minecraft.util.Util;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -45,6 +47,10 @@ public class LadderTrap extends Module {
     }
 
     private static final long BROKEN_TIME = 2_000;
+    private static final long REJECT_TIME = 1_500;
+    private static final long CONFIRM_TIME = 700;
+    // The target's box on the server is a little off the one we track while they move, and a ladder is only 3/16 thick.
+    private static final double BOX_MARGIN = 0.15;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -94,6 +100,8 @@ public class LadderTrap extends Module {
 
     private PlayerEntity target;
     private boolean running;
+    private final Long2LongOpenHashMap placedAt = new Long2LongOpenHashMap();
+    private final Long2LongOpenHashMap rejectedAt = new Long2LongOpenHashMap();
 
     public LadderTrap() {
         super(Coyduck.CATEGORY, "ladder-trap", "Puts a ladder or scaffolding in the cell the target stands in, so they climb instead of moving and float up out of their hole.");
@@ -116,6 +124,7 @@ public class LadderTrap extends Module {
 
     @EventHandler
     private void onPacket(PacketApplyEvent.Post event) {
+        if (event.packet instanceof BlockUpdateS2CPacket packet && packet.getState().isAir()) noteReverted(packet.getPos());
         if (target == null) return;
 
         boolean relevant = switch (event.packet) {
@@ -125,6 +134,13 @@ public class LadderTrap extends Module {
         };
 
         if (relevant) pass();
+    }
+
+    /** A ladder we just placed that the server turns back into air was refused; leave that cell alone for a while. */
+    private void noteReverted(BlockPos pos) {
+        long key = pos.asLong();
+        long now = Util.getMeasuringTimeMs();
+        if (now - placedAt.getOrDefault(key, 0L) < CONFIRM_TIME) rejectedAt.put(key, now);
     }
 
     private void pass() {
@@ -154,6 +170,7 @@ public class LadderTrap extends Module {
             BlockState state = mc.world.getBlockState(cell);
             if (state.isIn(BlockTags.CLIMBABLE)) continue;
             if (!interaction.canPlace(cell) || mc.player.getBoundingBox().intersects(new Box(cell))) continue;
+            if (Util.getMeasuringTimeMs() - rejectedAt.getOrDefault(cell.asLong(), 0L) < REJECT_TIME) continue;
 
             if (item.get() != Item.Scaffolding && placeLadder(cell, box)) continue;
             if (item.get() != Item.Ladder) placeScaffolding(cell);
@@ -193,6 +210,10 @@ public class LadderTrap extends Module {
         if (rotate.get() && !InteractionManager.get().aimed(point, new Box(wall), InteractionManager.TRAP_PRIORITY)) return true;
 
         InventoryManager.get().withItem(slot, switchMode.get(), () -> InteractionManager.get().place(cell, hit, swing.get(), rotate.get(), InteractionManager.TRAP_PRIORITY));
+        long now = Util.getMeasuringTimeMs();
+        placedAt.long2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > CONFIRM_TIME);
+        rejectedAt.long2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > REJECT_TIME);
+        placedAt.put(cell.asLong(), now);
         return mc.world.getBlockState(cell).isOf(Blocks.LADDER);
     }
 
@@ -221,7 +242,7 @@ public class LadderTrap extends Module {
 
     private boolean blocked(BlockState state, BlockPos cell, Box box) {
         Box shape = state.getCollisionShape(mc.world, cell).offset(cell.getX(), cell.getY(), cell.getZ()).getBoundingBox();
-        if (shape.intersects(box)) return true;
+        if (shape.intersects(box.expand(BOX_MARGIN, 0, BOX_MARGIN))) return true;
         return !mc.world.getOtherEntities(target, shape, entity -> !entity.isRemoved() && entity.intersectionChecked).isEmpty();
     }
 
