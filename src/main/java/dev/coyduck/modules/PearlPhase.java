@@ -10,6 +10,7 @@ import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.entity.Entity;
 import net.minecraft.item.Items;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.HitResult;
@@ -19,6 +20,9 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.RaycastContext;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Throws an ender pearl at your feet so it lands you half inside the walls of your hole. A pearl teleports you to
@@ -33,6 +37,8 @@ public class PearlPhase extends Module {
     private static final double WIDTH = 0.3;
     private static final int MAX_TICKS = 8;
     private static final int AIM_TICKS = 10;
+    private static final int ROBUST_CANDIDATES = 40;
+    private static final float[][] SPREAD = {{0.5f, 0}, {-0.5f, 0}, {0, 0.5f}, {0, -0.5f}};
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -80,7 +86,7 @@ public class PearlPhase extends Module {
             return;
         }
         if (!plan()) {
-            error("No wall next to you to phase into.");
+            error("No throw lands you in a wall: no wall next to you, or a crystal or player is in the way.");
             toggle();
             return;
         }
@@ -120,21 +126,37 @@ public class PearlPhase extends Module {
         Vec3d spawn = new Vec3d(feet.x, mc.player.getEyeY() - 0.1, feet.z);
         Vec3d shooter = mc.player.isOnGround() ? new Vec3d(mc.player.getVelocity().x, 0, mc.player.getVelocity().z) : mc.player.getVelocity();
 
-        double best = 0;
+        List<float[]> candidates = new ArrayList<>();
         for (float pitch = 50; pitch <= 90; pitch += 0.5f) {
             for (float yaw = -180; yaw < 180; yaw += 2) {
-                Vec3d landing = simulate(spawn, shooter, yaw, pitch);
-                if (landing == null || landing.y < feet.y - 0.5 || landing.y > feet.y + 2 || landing.squaredDistanceTo(feet) > 1.5) continue;
+                double score = landingScore(spawn, shooter, feet, yaw, pitch);
+                if (score > 0) candidates.add(new float[] {yaw, pitch, (float) score});
+            }
+        }
+        candidates.sort((a, b) -> Float.compare(b[2], a[2]));
 
-                double score = score(landing);
-                if (score > best) {
-                    best = score;
-                    targetYaw = yaw;
-                    targetPitch = pitch;
-                }
+        // A pearl leaves with a small random spread, about half a degree; keep the throw whose neighbours also work.
+        double best = 0;
+        for (int i = 0; i < Math.min(candidates.size(), ROBUST_CANDIDATES); i++) {
+            float[] candidate = candidates.get(i);
+            double worst = candidate[2];
+            for (float[] offset : SPREAD) {
+                worst = Math.min(worst, landingScore(spawn, shooter, feet, candidate[0] + offset[0], candidate[1] + offset[1]));
+                if (worst <= best) break;
+            }
+            if (worst > best) {
+                best = worst;
+                targetYaw = candidate[0];
+                targetPitch = candidate[1];
             }
         }
         return best > 0;
+    }
+
+    private double landingScore(Vec3d spawn, Vec3d shooter, Vec3d feet, float yaw, float pitch) {
+        Vec3d landing = simulate(spawn, shooter, yaw, MathHelper.clamp(pitch, -90, 90));
+        if (landing == null || landing.y < feet.y - 0.5 || landing.y > feet.y + 2 || landing.squaredDistanceTo(feet) > 1.5) return 0;
+        return score(landing);
     }
 
     /** Where the pearl puts you: its position at the start of the tick in which it hits something. */
@@ -148,10 +170,21 @@ public class PearlPhase extends Module {
             velocity = new Vec3d(velocity.x, velocity.y - GRAVITY, velocity.z).multiply(DRAG);
             Vec3d next = position.add(velocity);
             HitResult hit = mc.world.raycast(new RaycastContext(position, next, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player));
+            // A crystal or player in the way catches the pearl first and teleports you somewhere else.
+            Vec3d end = hit.getType() != HitResult.Type.MISS ? hit.getPos() : next;
+            if (blockedByEntity(position, end)) return null;
             if (hit.getType() != HitResult.Type.MISS) return position;
             position = next;
         }
         return null;
+    }
+
+    private boolean blockedByEntity(Vec3d from, Vec3d to) {
+        Box path = new Box(from, to).expand(1);
+        for (Entity entity : mc.world.getOtherEntities(mc.player, path, entity -> entity.isAlive() && entity.canBeHitByProjectile())) {
+            if (entity.getBoundingBox().expand(0.3).raycast(from, to).isPresent()) return true;
+        }
+        return false;
     }
 
     /** How well a landing tucks you into the walls: depth into each wall, zero if your eyes or middle end up inside one. */
