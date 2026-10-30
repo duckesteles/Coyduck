@@ -17,7 +17,6 @@ public interface RenderSetupAccessor {
     @Accessor("pipeline")
     RenderPipeline coyduck$getPipeline();
 
-    // Map<String, RenderSetup.TextureSpec>, but TextureSpec is not visible from here.
     @Accessor("textures")
     Map coyduck$getTextures();
 

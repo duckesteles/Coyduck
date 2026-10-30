@@ -17,11 +17,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 
-/**
- * Experimental. Fakes a jump with packets, places a block where you stood, then sends an impossible move so the server
- * sets you back. Whether the setback lands you inside the block depends on the server's anti-cheat; on stock Grim it
- * usually puts you on top. The fake jump carries a downward look so the place passes rotation checks.
- */
 public class Burrow extends Module {
     private static final double[] JUMP = {0.42, 0.7532, 1.0013, 1.1661};
 

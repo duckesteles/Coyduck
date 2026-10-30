@@ -38,7 +38,6 @@ import static meteordevelopment.meteorclient.MeteorClient.mc;
 public final class MiningManager {
     private static final MiningManager INSTANCE = new MiningManager();
 
-    // 6b6t's anti-cheat cancels a finish before full progress, though vanilla accepts 0.7.
     private static final float SERVER_THRESHOLD = 1.0f;
     private static final double REACH_MARGIN = 0.05;
 
@@ -46,8 +45,6 @@ public final class MiningManager {
     private static final int HOLD_TICKS = 2;
     private static final int MAX_HOLDS = 4;
     private static final float HOLD_MIN_HEALTH = 10;
-    // Grim restarts its break timer on every finish packet, so a second finish right after a failed one always reads
-    // as breaking two seconds early. One finish, then a fresh start.
     private static final int MAX_STOPS = 1;
 
     private BlockPos background;
@@ -205,8 +202,6 @@ public final class MiningManager {
     private boolean stop(Object owner, BlockState state) {
         if (!owns(owner) || !isReady(state) || state.isOf(Blocks.COBWEB) || lastStopTick == ticks || InventoryManager.get().isOffhandEating()) return false;
 
-        // Grim rates the break by the best tool it saw held on a movement or swing packet, so swing while the tool is
-        // in hand. Without it, a tool switched in only for the finish looks like breaking obsidian by hand.
         int tool = bestTool(state);
         Runnable action = () -> {
             InteractionManager.get().swing(swing == InteractionManager.SwingMode.None ? InteractionManager.SwingMode.Packet : swing);
@@ -283,7 +278,6 @@ public final class MiningManager {
         double reach = mc.player.getBlockInteractionRange() + 1.0 - REACH_MARGIN;
         Box box = new Box(target);
         double distance = box.squaredMagnitude(mc.player.getEyePos());
-        // The server can end a glide a tick before we do and then measures from standing eyes, not the low gliding ones.
         if (mc.player.isGliding()) {
             distance = Math.max(distance, box.squaredMagnitude(mc.player.getEntityPos().add(0, mc.player.getEyeHeight(EntityPose.STANDING), 0)));
         }
@@ -462,7 +456,6 @@ public final class MiningManager {
         return delta(state, pos, tool == -1 ? mc.player.getMainHandStack() : InventoryManager.get().stack(tool));
     }
 
-    // Server ticks since START, from the wall clock: a client timer (HoleSnap) runs client ticks faster than the server.
     private float elapsed() {
         float rate = Math.min(TickRate.INSTANCE.getTickRate() / 20.0f, 1.0f);
         return (Util.getMeasuringTimeMs() - startTime) / 50.0f * rate;

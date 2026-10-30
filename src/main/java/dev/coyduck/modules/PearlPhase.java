@@ -24,11 +24,6 @@ import net.minecraft.world.RaycastContext;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Throws an ender pearl at your feet so it lands you half inside the walls of your hole. A pearl teleports you to
- * where it was one tick before it hit, so the throw is solved by simulating the pearl's flight, not by aiming at a
- * block. It is a plain pearl teleport, nothing the server has to be fooled about.
- */
 public class PearlPhase extends Module {
     private static final int ROTATE_PRIORITY = 115;
     private static final double SPEED = 1.5;
@@ -121,7 +116,6 @@ public class PearlPhase extends Module {
             return;
         }
 
-        // The use packet carries the camera angles, and the server aims the pearl with those.
         boolean thrown = InventoryManager.get().withItem(slot, InventoryManager.SwitchMode.Silent, () -> {
             float yaw = mc.player.getYaw();
             float pitch = mc.player.getPitch();
@@ -150,7 +144,6 @@ public class PearlPhase extends Module {
         }
         candidates.sort((a, b) -> Float.compare(b[2], a[2]));
 
-        // A pearl leaves with a small random spread, about half a degree; keep the throw whose neighbours also work.
         double best = 0;
         for (int i = 0; i < Math.min(candidates.size(), ROBUST_CANDIDATES); i++) {
             float[] candidate = candidates.get(i);
@@ -174,7 +167,6 @@ public class PearlPhase extends Module {
         return score(landing);
     }
 
-    /** Where the pearl puts you: its position at the start of the tick in which it hits something. */
     private Vec3d simulate(Vec3d start, Vec3d shooter, float yaw, float pitch) {
         double radYaw = Math.toRadians(yaw);
         double radPitch = Math.toRadians(pitch);
@@ -185,7 +177,6 @@ public class PearlPhase extends Module {
             velocity = new Vec3d(velocity.x, velocity.y - GRAVITY, velocity.z).multiply(DRAG);
             Vec3d next = position.add(velocity);
             HitResult hit = mc.world.raycast(new RaycastContext(position, next, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player));
-            // A crystal or player in the way catches the pearl first and teleports you somewhere else.
             Vec3d end = hit.getType() != HitResult.Type.MISS ? hit.getPos() : next;
             if (blockedByEntity(position, end)) return null;
             if (hit.getType() != HitResult.Type.MISS) return position;
@@ -202,12 +193,10 @@ public class PearlPhase extends Module {
         return false;
     }
 
-    /** How well a landing tucks you into the walls: depth into each wall, zero if your eyes or middle end up inside one. */
     private double score(Vec3d landing) {
         Box box = new Box(landing.x - WIDTH, landing.y, landing.z - WIDTH, landing.x + WIDTH, landing.y + 1.8, landing.z + WIDTH);
         Box middle = new Box(landing.x - 0.05, landing.y + 0.05, landing.z - 0.05, landing.x + 0.05, landing.y + 1.75, landing.z + 0.05);
         if (!mc.world.isSpaceEmpty(middle)) return 0;
-        // The game counts you in a wall when a box 0.8 of your width around your eyes touches one; keep that clear.
         if (!mc.world.isSpaceEmpty(Box.of(landing.add(0, mc.player.getStandingEyeHeight(), 0), EYE_CLEARANCE, 1.0E-6, EYE_CLEARANCE))) return 0;
 
         double x = 0;

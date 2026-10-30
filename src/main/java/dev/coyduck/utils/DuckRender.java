@@ -8,10 +8,6 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 
-/**
- * Coyduck's shared render look, after the logo's isometric cubes: the top face lit, the sides shading darker toward
- * the bottom, crisp edges. Motion runs on real time, so it looks the same at any frame rate.
- */
 public final class DuckRender {
     public static final long HOLD = 250;
     public static final long FADE = 300;
@@ -48,13 +44,11 @@ public final class DuckRender {
         }
     }
 
-    /** Full while fresh, then eases out. */
     public static double alpha(long age) {
         if (age < HOLD) return 1;
         return 1 - ease((age - HOLD) / (double) FADE);
     }
 
-    /** Smoothstep: starts and ends gently, so fades and motion have no hard edges. */
     private static double ease(double t) {
         t = MathHelper.clamp(t, 0, 1);
         return t * t * (3 - 2 * t);
@@ -69,7 +63,6 @@ public final class DuckRender {
         return into;
     }
 
-    /** light > 0 mixes toward white, light < 0 toward black; alphaScale changes the face's opacity. */
     private static void shade(Color into, Color base, double light, double alphaScale, double alpha) {
         double r = base.r;
         double g = base.g;
@@ -89,7 +82,6 @@ public final class DuckRender {
         into.a = (int) MathHelper.clamp(base.a * alphaScale * alpha, 0, 255);
     }
 
-    /** One box that glides from spot to spot, fades in when it appears and fades out once nothing refreshes it. */
     public static final class Slide {
         private BlockPos target;
         private long refreshedAt;
@@ -97,7 +89,6 @@ public final class DuckRender {
         private long appearedAt;
         private long lastFrame;
 
-        /** Points the box at a spot. A spot that flickers against the current one within a tick or two is ignored, so the box stays calm. */
         public void show(BlockPos pos) {
             long now = Util.getMeasuringTimeMs();
             if (target == null || target.equals(pos) || now - refreshedAt > SWITCH_HOLD) target = pos.toImmutable();
@@ -136,7 +127,6 @@ public final class DuckRender {
         }
     }
 
-    /** Smooths a value that changes once per tick, such as mining progress, across frames. */
     public static final class Smooth {
         private double value;
         private long lastFrame;

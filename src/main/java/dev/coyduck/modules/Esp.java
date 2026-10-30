@@ -15,11 +15,6 @@ import net.minecraft.entity.player.PlayerEntity;
 
 import java.lang.reflect.Method;
 
-
-/**
- * Shows other players through blocks as they are: their skin, armour, held items and every animation, drawn in front
- * of the walls instead of as an outline or a box.
- */
 public class Esp extends Module {
     private static final String CULLABLE = "dev.tr7zw.entityculling.access.Cullable";
 
@@ -57,7 +52,6 @@ public class Esp extends Module {
         return module.invisible.get() || !player.isInvisible();
     }
 
-    // The EntityCulling mod stops drawing entities it cannot see; its own timeout keeps one drawn for a second.
     @EventHandler
     private void onTick(TickEvent.Post event) {
         if (mc.world == null) return;

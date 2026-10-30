@@ -367,8 +367,6 @@ public class ElytraPilot extends Module {
         }
     }
 
-    // Flight phases
-
     private void takeoff() {
         if (mc.player.isOnGround() && needsMend() && mend.get()) {
             state = State.Mend;
@@ -442,10 +440,6 @@ public class ElytraPilot extends Module {
         jumps = 0;
     }
 
-    /**
-     * The client starts gliding right away, the server confirms it a round trip later. If the server never does, flying
-     * on would only earn setback after setback, so stop gliding here and open the elytra again shortly.
-     */
     private boolean glideConfirmed() {
         if (serverGlide) {
             unconfirmedTick = -1;
@@ -656,8 +650,6 @@ public class ElytraPilot extends Module {
         warnedStuck = true;
     }
 
-    // Open dimensions: cruise above the terrain ahead
-
     private Vec3d openMove() {
         ElytraFly fly = Modules.get().get(ElytraFly.class);
         Vec3d feet = mc.player.getEntityPos();
@@ -694,8 +686,6 @@ public class ElytraPilot extends Module {
         double y = MathHelper.clamp(below, -fly.downSpeed(), fly.upSpeed());
         return new Vec3d(ux * horizontal, y, uz * horizontal);
     }
-
-    // Nether: follow the nether-pathfinder route
 
     private Vec3d netherMove() {
         if (route == null) return Vec3d.ZERO;
@@ -771,7 +761,6 @@ public class ElytraPilot extends Module {
         detail = "backtrack";
     }
 
-    /** Flies back along where it came from, out of a dead end, then plans again from there with tight routes allowed. */
     private Vec3d backtrack(Vec3d feet) {
         while (!trail.isEmpty() && trail.getLast().distanceTo(feet) < 1.0) {
             trail.removeLast();
@@ -849,7 +838,6 @@ public class ElytraPilot extends Module {
         planning = route.find(mc.player.getBlockPos(), new BlockPos(x, goalY != null ? goalY : openY(x, mc.player.getBlockY(), z), z), failures % 2 == 1);
     }
 
-    /** An air height near the given one in the destination column, so the route doesn't end inside netherrack. */
     private int openY(int x, int y, int z) {
         if (!loaded(x, z)) return y;
         BlockPos.Mutable pos = new BlockPos.Mutable();
@@ -888,11 +876,6 @@ public class ElytraPilot extends Module {
         return Vec3d.ofBottomCenter(path.get(index));
     }
 
-    /**
-     * Shapes a move around walls. 6b6t runs elytra physics on the server, so even hovering against a wall deals crash
-     * damage: it slows down toward walls, slides along them instead of stopping, and drifts away from any wall that is
-     * closer than the margin.
-     */
     private Vec3d steer(Vec3d move) {
         Box box = mc.player.getBoundingBox();
         Vec3d away = repel(box);
@@ -920,7 +903,6 @@ public class ElytraPilot extends Module {
         return move.add(away);
     }
 
-    /** A small push away from walls within the margin, so the player never rests against one. */
     private Vec3d repel(Box box) {
         if (mc.world.isSpaceEmpty(mc.player, box.expand(WALL_MARGIN, 0, WALL_MARGIN))) return Vec3d.ZERO;
 
@@ -1107,8 +1089,6 @@ public class ElytraPilot extends Module {
         if (spot != null && state == State.Land) event.renderer.box(spot, color.get(), color.get(), ShapeMode.Lines, 0);
     }
 
-    // Landing spots
-
     private BlockPos findSpot(Vec3d around, int radius) {
         Vec3d feet = mc.player.getEntityPos();
         int top = MathHelper.floor(feet.y);
@@ -1173,8 +1153,6 @@ public class ElytraPilot extends Module {
         return true;
     }
 
-    // Elytra
-
     private boolean hasUsableElytra() {
         return LivingEntity.canGlideWith(mc.player.getEquippedStack(EquipmentSlot.CHEST), EquipmentSlot.CHEST);
     }
@@ -1227,8 +1205,6 @@ public class ElytraPilot extends Module {
         return false;
     }
 
-    // Helpers
-
     private static boolean routesAvailable() {
         return FabricLoader.getInstance().isModLoaded("dev_babbaj_nether-pathfinder") && NetherRoute.available();
     }
@@ -1248,7 +1224,6 @@ public class ElytraPilot extends Module {
         return mc.world.getChunkManager().isChunkLoaded(x >> 4, z >> 4);
     }
 
-    /** Talks to Baritone by reflection, so the addon still runs without it. */
     private static final class BaritoneGoal {
         static boolean walk(BlockPos pos, boolean exactY) {
             try {

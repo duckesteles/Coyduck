@@ -295,7 +295,6 @@ public class AutoCity extends Module {
 
         MiningManager mining = MiningManager.get();
         if (!mining.owns(this) || !mining.isMining(current)) return true;
-        // A broken burrow held for rebreak no longer outranks everything: its score was the burrow bonus.
         if (mining.wasBroken()) return best.score > (currentScore >= BURROW_SCORE ? 0 : currentScore) + SWITCH_GAIN;
         return mining.progress() < SWITCH_PROGRESS && best.score > currentScore + SWITCH_GAIN;
     }
@@ -321,7 +320,6 @@ public class AutoCity extends Module {
             && inventory.find(stack -> stack.isOf(Items.GLOWSTONE), 0, InventoryManager.MAIN_END) != -1;
     }
 
-    /** Your own burrow block, which an enemy phasing into it can make look like theirs. */
     private boolean mine(BlockPos pos) {
         return mc.player.getBoundingBox().intersects(new Box(pos));
     }

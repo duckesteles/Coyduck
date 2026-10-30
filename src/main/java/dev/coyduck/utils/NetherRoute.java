@@ -13,10 +13,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * Nether routes from Baritone's bundled nether-pathfinder. Every native call runs on one worker thread,
- * because the library is not thread safe. Only touch this class after {@link #available()} returned true.
- */
 public final class NetherRoute {
     public static final int HEIGHT = 128;
     private static final int TIMEOUT_MS = 3000;
@@ -46,7 +42,6 @@ public final class NetherRoute {
     }
 
     public void close() {
-        // Cancel from here: the worker may be busy inside a search that would otherwise run to its timeout.
         long running = context;
         if (running != 0) NetherPathfinder.cancel(running);
         worker.execute(() -> {
@@ -89,7 +84,6 @@ public final class NetherRoute {
         return Math.clamp(y, 1, HEIGHT - 2);
     }
 
-    // The library packs positions in the pre-1.14 layout: x 26 bits, y 12 bits, z 26 bits.
     private static BlockPos unpack(long packed) {
         return new BlockPos((int) (packed >> 38), (int) ((packed << 26) >> 52), (int) ((packed << 38) >> 38));
     }

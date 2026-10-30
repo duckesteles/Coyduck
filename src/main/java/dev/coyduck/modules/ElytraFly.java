@@ -99,7 +99,6 @@ public class ElytraFly extends Module {
         airTicks = 0;
     }
 
-    /** Overrides the keyboard for the next move with a world-space movement per tick, null to give it back. */
     public static void pilot(Vec3d movement) {
         pilot = movement;
         pilotAt = Util.getMeasuringTimeMs();

@@ -113,7 +113,6 @@ public final class InteractionManager {
 
     public BlockHitResult hit(BlockPos pos, boolean airplace) {
         Vec3d eye = mc.player.getEyePos();
-        // The clicked support counts against reach, and 6b6t holds clicks to 4.5; past that, airplace the cell itself.
         double reach = mc.player.getBlockInteractionRange() - REACH_MARGIN;
         double reachSquared = reach * reach;
 
@@ -222,8 +221,6 @@ public final class InteractionManager {
         Vec3d point = visiblePoint(base, Direction.UP, mc.player.getEyePos(), Double.MAX_VALUE);
         return point != null ? point : new Vec3d(base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5);
     }
-
-
 
     public boolean hasCrystals() {
         return mc.player.getOffHandStack().isOf(Items.END_CRYSTAL) || crystalSlot() != -1;

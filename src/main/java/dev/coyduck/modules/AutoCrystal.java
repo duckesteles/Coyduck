@@ -894,7 +894,6 @@ public class AutoCrystal extends Module {
                     if (hurtSync.get()) {
                         Choice ready = evaluate(targets, center, health, 0, mc.world);
                         if (ready != null) {
-                            // Only pre-aim while held, below gap fill and defend, which still act this tick.
                             if (rotate.get()) rotationReady(crystal.getBoundingBox(), breakAim(crystal), breakRange.get(), HOLD_PRIORITY);
                             held = true;
                             long time = HurtTracker.get().releaseTime(ready.target.player);
@@ -918,7 +917,6 @@ public class AutoCrystal extends Module {
             }
             if (!rotationReady(best.getBoundingBox(), breakAim(best), breakRange.get(), BREAK_PRIORITY)) break;
             if (!InteractionManager.get().attack(best, switchMode.get(), swing.get(), !pauseEating.get())) break;
-
 
             tracker.explodeAt(best.getEntityPos());
             for (Target target : targets) {
@@ -1070,7 +1068,6 @@ public class AutoCrystal extends Module {
 
         if (kickGuard.get() && InteractionManager.get().dropRisk(crystalCenter(base))) return;
 
-        // One prediction at a time: the next id is only known once the previous crystal has spawned.
         if (predictedAt != 0) return;
         predictedIds.clear();
         for (int i = 1; i <= idPredictCount.get(); i++) {

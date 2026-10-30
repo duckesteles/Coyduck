@@ -31,17 +31,10 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Passes a player's render commands on with every layer swapped for a copy whose depth is pulled far toward the
- * camera. The whole model then wins against walls, but its own parts still sort against each other, so it looks like
- * the real player standing in front of the blocks, not a flat silhouette.
- */
 public final class WallQueue implements OrderedRenderCommandQueue {
-    // GL polygon offset units; enough to clear any wall in render distance while staying above the near plane.
     private static final float BIAS_SCALE = 1.0f;
     private static final float BIAS_CONSTANT = -1_100_000.0f;
 
-    // Render thread only.
     private static final Map<RenderLayer, RenderLayer> LAYERS = new IdentityHashMap<>();
     private static final Map<RenderPipeline, RenderPipeline> PIPELINES = new IdentityHashMap<>();
 

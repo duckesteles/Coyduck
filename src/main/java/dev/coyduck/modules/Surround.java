@@ -76,7 +76,6 @@ public class Surround extends Module {
     private static final double EDGE = 1.0E-4;
     private static final double CENTER_SPEED = 0.2;
     private static final double NEAR = 5 * 5;
-    // Slack for armor, exposure and position estimates, so a crystal judged safe never pops you by a fraction.
     private static final float POP_MARGIN = 1.5f;
     private static final float LOW_HEALTH = 12;
     private static final double FACE_ENEMY_RANGE = 12;
@@ -453,7 +452,6 @@ public class Surround extends Module {
         float damage = HurtTracker.get().effectiveOnSelf(raw, arrival);
 
         float health = AutoTotem.popInFlight() ? 1.0f : mc.player.getHealth() + mc.player.getAbsorptionAmount();
-        // When low, ignore the blocks in between: against rebreak they are often gone by the time it explodes.
         boolean worst = mc.player.isInsideWall() || health <= LOW_HEALTH;
         float full = worst ? ExplosionDamage.upperBound(mc.player, mc.player.getEntityPos(), crystal.getEntityPos()) : ExplosionDamage.mitigate(mc.player, raw);
         if (damage < health - POP_MARGIN && full < health - POP_MARGIN) return Verdict.Safe;
@@ -522,11 +520,9 @@ public class Surround extends Module {
 
                 BlockPos cell = side.up();
                 if (faces.contains(cell)) continue;
-                // A crystal one cell further out at head level is shielded by a block in this cell.
                 if (faceThreat(cell, health) || mc.world.getBlockState(cell).isReplaceable() && crystalThreat(cell.offset(direction), health, mc.world)) faces.add(cell);
             }
 
-            // A block on top of your head is a base for a crystal right above you; cover that spot.
             BlockPos top = column.up(3);
             if (!mc.world.getBlockState(column.up(2)).isReplaceable() && mc.world.getBlockState(top).isReplaceable()
                 && crystalThreat(top, health, new BlockOverlay(mc.world).set(column.up(2), Blocks.AIR.getDefaultState()))) faces.add(top);
@@ -534,7 +530,6 @@ public class Surround extends Module {
         return faces;
     }
 
-    /** Whether a crystal that could sit in this cell threatens you; the view lets a block that will be mined count as gone. */
     private boolean crystalThreat(BlockPos cell, float health, BlockView view) {
         if (!Targets.canHoldCrystal(mc.world, cell.down())) return false;
         Vec3d crystal = new Vec3d(cell.getX() + 0.5, cell.getY(), cell.getZ() + 0.5);
@@ -585,7 +580,6 @@ public class Surround extends Module {
             return true;
         }
 
-        // Knocked or lifted up without walking (scaffolding pushed into your cell, a blast): follow, don't leave.
         if (ground && level > anchorY) {
             if (hasInput()) return leave(level);
             anchorY = level;

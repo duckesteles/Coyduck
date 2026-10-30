@@ -52,7 +52,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SelfTrap extends Module {
-    // Slack for armor, exposure and position estimates, so a crystal judged safe never pops you by a fraction.
     private static final float POP_MARGIN = 1.5f;
     private static final float LOW_HEALTH = 12;
     private static final double EDGE = 1.0E-4;
@@ -262,7 +261,6 @@ public class SelfTrap extends Module {
     private void run() {
         if (budget <= 0 || HoleSnap.snapping()) return;
         if (smart.get() && Targets.find(enemyRange.get()) == null) return;
-        // Blasts knock you about without your input; only your own movement pauses it.
         if (onlyStill.get() && (mc.player.input.getMovementInput().lengthSquared() > 1.0E-4f || mc.player.input.playerInput.jump())) return;
 
         LongSet columns = columns();
@@ -402,7 +400,6 @@ public class SelfTrap extends Module {
             float damage = HurtTracker.get().effectiveOnSelf(raw, Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2);
             float health = AutoTotem.popInFlight() ? 1.0f : mc.player.getHealth() + mc.player.getAbsorptionAmount();
 
-            // When low, ignore the blocks in between: against rebreak they are often gone by the time it explodes.
             boolean worst = mc.player.isInsideWall() || health <= LOW_HEALTH;
             float full = worst ? ExplosionDamage.upperBound(mc.player, mc.player.getEntityPos(), crystal.getEntityPos()) : ExplosionDamage.mitigate(mc.player, raw);
             boolean pops = damage >= health - POP_MARGIN || full >= health - POP_MARGIN;

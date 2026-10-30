@@ -590,9 +590,6 @@ public class AutoTotem extends Module {
             if (activelyBusy()) resumeTicks = Math.max(resumeTicks, resumeDelay.get());
             else foodTicks = resumeDelay.get();
         }
-        // Low and in danger, a hand you switched to yourself waits no longer: a pop then a full hit a tick later
-        // lands before the offhand refill can arrive, and only a totem already in the main hand saves you.
-        // A short grace still lets you throw a pearl or eat from the slot you just picked.
         boolean critical = mainhand.get() == Mainhand.Smart && dangerHold > 0 && !inventory.isEating()
             && manualTicks >= CRITICAL_GRACE && !mc.options.useKey.isPressed()
             && mc.player.getHealth() + mc.player.getAbsorptionAmount() <= health.get();

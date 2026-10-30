@@ -51,7 +51,6 @@ public class LadderTrap extends Module {
     private static final long BROKEN_TIME = 2_000;
     private static final long REJECT_TIME = 1_500;
     private static final long CONFIRM_TIME = 700;
-    // The target's box on the server is a little off the one we track while they move, and a ladder is only 3/16 thick.
     private static final double BOX_MARGIN = 0.15;
     private static final double MOVING = 0.03;
 
@@ -139,7 +138,6 @@ public class LadderTrap extends Module {
         if (relevant) pass();
     }
 
-    /** A ladder we just placed that the server turns back into air was refused; leave that cell alone for a while. */
     private void noteReverted(BlockPos pos) {
         long key = pos.asLong();
         long now = Util.getMeasuringTimeMs();
@@ -246,7 +244,6 @@ public class LadderTrap extends Module {
 
     private boolean blocked(BlockState state, BlockPos cell, Box box) {
         Box shape = state.getCollisionShape(mc.world, cell).offset(cell.getX(), cell.getY(), cell.getZ()).getBoundingBox();
-        // The margin covers a moving target's lag, but a centred target leaves only 1/80 of a block beside a ladder.
         double margin = target.getEntityPos().subtract(target.getLastRenderPos()).horizontalLengthSquared() > MOVING * MOVING ? BOX_MARGIN : 0;
         if (shape.intersects(box.expand(margin, 0, margin))) return true;
         return !mc.world.getOtherEntities(target, shape, entity -> !entity.isRemoved() && entity.intersectionChecked).isEmpty();
