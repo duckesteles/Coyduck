@@ -178,7 +178,6 @@ public class ElytraFly extends Module {
         if (input.jump() && !input.sneak()) y = up.get();
         else if (input.sneak() && !input.jump()) y = -down.get();
 
-        // ElytraPilot holds the flight while it runs; anything else steers only while it keeps sending input.
         if (pilot != null && (Modules.get().isActive(ElytraPilot.class) || Util.getMeasuringTimeMs() - pilotAt < PILOT_FRESH)) {
             x = pilot.x;
             y = pilot.y;

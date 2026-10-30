@@ -7,10 +7,6 @@ import net.minecraft.util.math.Vec3d;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
-/**
- * Lets a module walk the player in a world direction without turning the camera: each tick it presses whichever of
- * the eight key combinations moves closest to that direction. It lapses on its own once the module stops asking.
- */
 public final class MoveInput {
     private static final long FRESH = 120;
 
@@ -20,7 +16,6 @@ public final class MoveInput {
 
     private MoveInput() {}
 
-    /** Walks toward a horizontal world direction this tick; a zero vector stands still. */
     public static void walk(Vec3d worldDirection, boolean sneaking) {
         direction = worldDirection;
         sneak = sneaking;
@@ -31,7 +26,6 @@ public final class MoveInput {
         direction = null;
     }
 
-    /** The keys to press instead of the keyboard's, or null to leave the player's own input alone. */
     public static PlayerInput input() {
         if (direction == null || mc.player == null || Util.getMeasuringTimeMs() - at > FRESH) return null;
         if (direction.horizontalLengthSquared() < 1.0E-6) return new PlayerInput(false, false, false, false, false, sneak, false);
