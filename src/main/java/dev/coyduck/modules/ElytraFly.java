@@ -18,6 +18,7 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.MovementType;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.util.PlayerInput;
+import net.minecraft.util.Util;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
@@ -70,7 +71,10 @@ public class ElytraFly extends Module {
     private static final int TAKEOFF_TRIES = 5;
     private static final int TAKEOFF_WINDOW = 40;
 
+    private static final long PILOT_FRESH = 150;
+
     private static Vec3d pilot;
+    private static long pilotAt;
 
     private boolean fluidFlight;
     private int takeoffTries;
@@ -98,6 +102,7 @@ public class ElytraFly extends Module {
     /** Overrides the keyboard for the next move with a world-space movement per tick, null to give it back. */
     public static void pilot(Vec3d movement) {
         pilot = movement;
+        pilotAt = Util.getMeasuringTimeMs();
     }
 
     public double horizontalSpeed() {
@@ -173,7 +178,8 @@ public class ElytraFly extends Module {
         if (input.jump() && !input.sneak()) y = up.get();
         else if (input.sneak() && !input.jump()) y = -down.get();
 
-        if (pilot != null && Modules.get().isActive(ElytraPilot.class)) {
+        // ElytraPilot holds the flight while it runs; anything else steers only while it keeps sending input.
+        if (pilot != null && (Modules.get().isActive(ElytraPilot.class) || Util.getMeasuringTimeMs() - pilotAt < PILOT_FRESH)) {
             x = pilot.x;
             y = pilot.y;
             z = pilot.z;
