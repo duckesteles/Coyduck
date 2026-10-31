@@ -39,7 +39,7 @@ public class ClickGui extends Module {
     );
 
     public ClickGui() {
-        super(Coyduck.CATEGORY, "click-gui+", "Replaces the module menu with an airy, see-through column layout.");
+        super(Coyduck.CATEGORY, "click-gui+", "Replaces the module menu with compact, smooth columns. Right click a module for its settings.");
     }
 
     @EventHandler
