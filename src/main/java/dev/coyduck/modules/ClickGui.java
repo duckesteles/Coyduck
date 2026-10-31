@@ -49,7 +49,7 @@ public class ClickGui extends Module {
 
     private final Setting<Boolean> minecraftFont = sgGeneral.add(new BoolSetting.Builder()
         .name("minecraft-font")
-        .description("Uses the sharp Minecraft font in every menu and the HUD while this is on.")
+        .description("Uses the Minecraft font in every menu while this is on. The HUD keeps its own font.")
         .defaultValue(true)
         .onChanged(value -> {
             if (isActive()) apply();
@@ -120,7 +120,11 @@ public class ClickGui extends Module {
         }
 
         font(Config.get().customFont, previousFont);
-        if (Hud.get().settings.get("custom-font") instanceof BoolSetting hudFont) font(hudFont, previousHudFont);
+        restoreHudFont();
+    }
+
+    private void restoreHudFont() {
+        restoreHudFont();
     }
 
     private void font(Setting<Boolean> custom, Setting<String> previous) {
