@@ -2,103 +2,118 @@ package dev.coyduck.gui;
 
 import dev.coyduck.Coyduck;
 import dev.coyduck.modules.ClickGui;
-import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.GuiThemes;
-import meteordevelopment.meteorclient.gui.WidgetScreen;
-import meteordevelopment.meteorclient.gui.renderer.GuiRenderer;
-import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.tabs.Tab;
+import meteordevelopment.meteorclient.gui.tabs.Tabs;
+import meteordevelopment.meteorclient.settings.BoolSetting;
+import meteordevelopment.meteorclient.settings.ColorSetting;
+import meteordevelopment.meteorclient.settings.DoubleSetting;
+import meteordevelopment.meteorclient.settings.EnumSetting;
+import meteordevelopment.meteorclient.settings.IntSetting;
+import meteordevelopment.meteorclient.settings.KeybindSetting;
+import meteordevelopment.meteorclient.settings.Setting;
+import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.utils.Utils;
-import meteordevelopment.meteorclient.utils.render.color.Color;
+import meteordevelopment.meteorclient.utils.misc.Keybind;
 import net.minecraft.client.gui.Click;
+import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.input.CharInput;
 import net.minecraft.client.input.KeyInput;
+import net.minecraft.text.Text;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.MathHelper;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+public class CoyGuiScreen extends Screen {
+    private static final int WIDTH = 116;
+    private static final int HEADER = 17;
+    private static final int ROW = 14;
+    private static final int SETTING = 13;
+    private static final int GAP = 7;
+    private static final int TOP = 34;
+    private static final int PAD = 6;
+    private static final int MARGIN = 12;
 
-public class CoyGuiScreen extends WidgetScreen {
+    private static final int PANEL = 0xA60F0F14;
+    private static final int HEAD = 0xCC16161D;
+    private static final int OUTLINE = 0x22FFFFFF;
+    private static final int HOVER = 0x16FFFFFF;
+    private static final int INSET = 0x46000000;
+    private static final int TITLE = 0xFFEDEDF3;
+    private static final int TEXT = 0xFFA4A4B0;
+    private static final int BRIGHT = 0xFFFFFFFF;
+    private static final int MUTED = 0xFF6E6E7A;
+    private static final int LABEL = 0xFF9696A2;
+    private static final int VALUE = 0xFFDADAE2;
+    private static final int TRACK = 0x30FFFFFF;
+
+    private enum Kind { HEADER, MODULE, BOOL, SLIDER, ENUM, BIND, MODULE_BIND, MORE, TAB, PANEL }
+
+    private record Hit(int x, int y, int w, int h, Kind kind, Object target, Object extra) {
+        boolean contains(double mx, double my) {
+            return mx >= x && mx < x + w && my >= y && my < y + h;
+        }
+    }
+
+    private static final class Panel {
+        final Category category;
+        final List<Module> modules;
+        int x;
+        int y;
+        boolean collapsed;
+        float scroll;
+        float scrollTarget;
+        int contentHeight;
+        int viewHeight;
+        int maxView;
+
+        Panel(Category category, List<Module> modules) {
+            this.category = category;
+            this.modules = modules;
+        }
+    }
+
     private final ClickGui owner;
+    private final List<Panel> panels = new ArrayList<>();
+    private final List<Hit> hits = new ArrayList<>();
+    private final Set<Module> expanded = new HashSet<>();
+    private final Map<Object, Float> hover = new HashMap<>();
+    private final Map<Object, Float> on = new HashMap<>();
+    private final Map<Module, Float> open = new HashMap<>();
+
+    private String search = "";
+    private Panel dragging;
+    private int dragX;
+    private int dragY;
+    private Setting<?> sliding;
+    private Hit slidingHit;
+    private Object binding;
+    private String hint;
+    private float hintAlpha;
+    private long lastFrame;
+    private final long openedAt;
+    private boolean custom;
 
     public CoyGuiScreen(ClickGui owner) {
-        super(GuiThemes.get(), "Coyduck");
+        super(Text.literal("Coyduck"));
         this.owner = owner;
+        this.openedAt = Util.getMeasuringTimeMs();
     }
 
     @Override
-    public void initWidgets() {
-        add(new Board(owner, theme));
-        add(theme.topBar()).top().centerX();
-    }
-
-    private static final class Board extends WWidget {
-        private static final int PANEL = 0xDC111118;
-        private static final int HEAD = 0xF018181F;
-        private static final int HOVER = 0x10FFFFFF;
-        private static final int ON = 0xFFF5F5FA;
-        private static final int OFF = 0xFFA5A5B2;
-        private static final int MUTED = 0xFF74747F;
-        private static final int SHADOW = 0x24000000;
-
-        private record Hit(double x, double y, double w, double h, Object target, boolean header) {
-            boolean contains(double mx, double my) {
-                return mx >= x && mx < x + w && my >= y && my < y + h;
-            }
-        }
-
-        private static final class Panel {
-            final Category category;
-            final List<Module> modules;
-            final int index;
-            double x;
-            double y;
-            boolean collapsed;
-            double scroll;
-            double scrollTarget;
-            double content;
-            double view;
-            boolean placed;
-
-            Panel(Category category, List<Module> modules, int index) {
-                this.category = category;
-                this.modules = modules;
-                this.index = index;
-            }
-        }
-
-        private final ClickGui owner;
-        private final List<Panel> panels = new ArrayList<>();
-        private final List<Hit> hits = new ArrayList<>();
-        private final Map<Object, Float> hover = new HashMap<>();
-        private final Map<Object, Float> lit = new HashMap<>();
-        private final long openedAt = Util.getMeasuringTimeMs();
-
-        private String search = "";
-        private Panel dragging;
-        private double dragX;
-        private double dragY;
-        private double mouseX;
-        private double mouseY;
-        private String hint;
-        private String shownHint = "";
-        private float hintAlpha;
-        private long lastFrame;
-        private float fade = 1;
-
-        Board(ClickGui owner, GuiTheme theme) {
-            this.owner = owner;
-            this.theme = theme;
-            int index = 0;
+    protected void init() {
+        if (panels.isEmpty()) {
             List<Category> categories = new ArrayList<>();
             for (Category category : Modules.loopCategories()) {
                 if (category == Coyduck.CATEGORY) categories.addFirst(category);
@@ -108,342 +123,598 @@ public class CoyGuiScreen extends WidgetScreen {
                 List<Module> modules = new ArrayList<>(Modules.get().getGroup(category));
                 if (modules.isEmpty()) continue;
                 modules.sort((a, b) -> a.title.compareToIgnoreCase(b.title));
-                panels.add(new Panel(category, modules, index++));
-            }
-        }
-
-        private double u(double value) {
-            return theme.scale(value);
-        }
-
-        private double panelWidth() {
-            double widest = 0;
-            for (Panel panel : panels) {
-                widest = Math.max(widest, theme.textWidth(panel.category.name, panel.category.name.length(), true) + u(30));
-                for (Module module : panel.modules) widest = Math.max(widest, theme.textWidth(module.title));
-            }
-            return Math.max(u(96), widest + u(26));
-        }
-
-        @Override
-        protected void onCalculateSize() {
-            width = Utils.getWindowWidth();
-            height = Utils.getWindowHeight();
-        }
-
-        private void place() {
-            double w = panelWidth();
-            double gap = u(8);
-            double x = u(12);
-            double y = u(42);
-            for (Panel panel : panels) {
-                if (x + w > width - u(12) && x > u(12)) {
-                    x = u(12);
-                    y += u(230);
-                }
-                panel.x = x;
-                panel.y = y;
-                panel.placed = true;
-                x += w + gap;
+                panels.add(new Panel(category, modules));
             }
             loadLayout();
         }
+        if (!custom) arrange();
+        for (Panel panel : panels) {
+            panel.x = MathHelper.clamp(panel.x, 0, Math.max(0, width - WIDTH));
+            panel.y = MathHelper.clamp(panel.y, 0, Math.max(0, height - HEADER));
+        }
+    }
 
-        @Override
-        protected void onRender(GuiRenderer renderer, double mx, double my, double delta) {
-            if (panels.isEmpty()) return;
-            if (!panels.getFirst().placed) place();
+    private void arrange() {
+        int count = panels.size();
+        if (count == 0) return;
+        int columns = MathHelper.clamp((width - MARGIN * 2 + GAP) / (WIDTH + GAP), 1, count);
+        int rows = (count + columns - 1) / columns;
+        int available = height - TOP - MARGIN;
+        int cap = rows > 1 ? Math.max(ROW * 4, available / rows - HEADER - GAP) : available - HEADER - 26;
+        int total = columns * WIDTH + (columns - 1) * GAP;
+        int start = Math.max(MARGIN, (width - total) / 2);
+        int[] stack = new int[columns];
+        java.util.Arrays.fill(stack, TOP);
+        for (Panel panel : panels) {
+            int column = 0;
+            for (int i = 1; i < columns; i++) if (stack[i] < stack[column]) column = i;
+            panel.x = start + column * (WIDTH + GAP);
+            panel.y = stack[column];
+            panel.maxView = cap;
+            stack[column] += HEADER + (panel.collapsed ? 0 : Math.min(panel.modules.size() * ROW, cap) + 2) + GAP;
+        }
+    }
 
-            mouseX = mx;
-            mouseY = my;
-            long now = Util.getMeasuringTimeMs();
-            float dt = lastFrame == 0 ? 0 : Math.min((now - lastFrame) / 1000f, 0.1f);
-            lastFrame = now;
-            hits.clear();
-            hint = null;
+    @Override
+    public boolean shouldPause() {
+        return false;
+    }
 
-            double w = panelWidth();
-            for (Panel panel : panels) {
-                fade = appear(panel.index * 22L);
-                drawPanel(renderer, panel, w, dt);
-            }
-            fade = appear(0);
-            drawSearch(renderer, now);
-            fade = 1;
-            drawHint(renderer, dt);
+    @Override
+    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
+        if (!owner.dim.get()) return;
+        float in = appear();
+        context.fill(0, 0, width, height, alpha(0x9A06060A, in));
+    }
+
+    @Override
+    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        long now = Util.getMeasuringTimeMs();
+        float dt = lastFrame == 0 ? 0 : Math.min((now - lastFrame) / 1000f, 0.1f);
+        lastFrame = now;
+
+        hits.clear();
+        hint = null;
+        int lift = Math.round((1 - ease(appear())) * 8);
+
+        drawSearch(context, now);
+        drawTabs(context, mouseX, mouseY);
+
+        for (Panel panel : panels) {
+            context.createNewRootLayer();
+            drawPanel(context, panel, mouseX, mouseY, dt, lift);
         }
 
-        private void drawPanel(GuiRenderer r, Panel panel, double w, float dt) {
-            List<Module> shown = new ArrayList<>();
-            String query = search.toLowerCase(Locale.ROOT);
-            for (Module module : panel.modules) {
-                if (query.isEmpty() || module.title.toLowerCase(Locale.ROOT).contains(query)) shown.add(module);
-            }
-            if (!query.isEmpty() && shown.isEmpty()) return;
+        context.createNewRootLayer();
+        drawHint(context, dt);
+    }
 
-            double header = u(21);
-            double row = u(15);
-            double pad = u(8);
-            double x = panel.x;
-            double y = panel.y + (1 - fade) * u(6);
-
-            panel.content = panel.collapsed ? 0 : shown.size() * row + u(4);
-            panel.view = panel.collapsed ? 0 : Math.min(panel.content, height - y - header - u(30));
-            panel.scrollTarget = MathHelper.clamp(panel.scrollTarget, 0, Math.max(0, panel.content - panel.view));
-            panel.scroll += (panel.scrollTarget - panel.scroll) * Math.min(1, dt * 16);
-
-            double total = header + panel.view;
-            round(r, x - 1, y + 1, w + 2, total + 2, u(4), SHADOW);
-            round(r, x, y, w, total, u(4), PANEL);
-            round(r, x, y, w, header, u(4), HEAD);
-            if (!panel.collapsed) r.quad(x, y + header - u(4), w, u(4), color(HEAD));
-            r.quad(x + pad, y + header - 1, w - pad * 2, 1, color(alpha(accent(), panel.collapsed ? 0.3f : 0.75f)));
-
-            int active = 0;
-            for (Module module : panel.modules) if (module.isActive()) active++;
-            double titleY = y + (header - theme.textHeight(true)) / 2;
-            r.text(panel.category.name, x + pad, titleY, color(ON), true);
-            String count = String.valueOf(active);
-            r.text(count, x + w - pad - theme.textWidth(count), y + (header - theme.textHeight()) / 2, color(active > 0 ? lighten(accent()) : MUTED), false);
-            hits.add(new Hit(x, y, w, header, panel, true));
-            if (panel.collapsed) return;
-
-            double top = y + header;
-            double bottom = top + panel.view;
-            r.scissorStart(x, top, w, panel.view);
-            double rowY = top + u(2) - panel.scroll;
-            for (Module module : shown) {
-                if (rowY + row > top && rowY < bottom) drawModule(r, module, x, rowY, w, row, pad, top, bottom, dt);
-                rowY += row;
-            }
-            r.scissorEnd();
-
-            if (panel.content > panel.view + 1) {
-                double track = panel.view - u(6);
-                double bar = Math.max(u(10), track * panel.view / panel.content);
-                double barY = top + u(3) + (track - bar) * (panel.scroll / Math.max(1, panel.content - panel.view));
-                r.quad(x + w - u(3), barY, u(1.5), bar, color(0x50FFFFFF));
-            }
+    private void drawSearch(DrawContext context, long now) {
+        int w = 170;
+        int x = (width - w) / 2;
+        int y = 8;
+        context.fill(x, y, x + w, y + 15, PANEL);
+        context.drawStrokedRectangle(x, y, w, 15, search.isEmpty() ? OUTLINE : alpha(accent(), 0.8f));
+        String shown = search.isEmpty() ? "Search" : search;
+        context.drawText(textRenderer, shown, x + 6, y + 4, search.isEmpty() ? MUTED : VALUE, false);
+        if ((now / 500) % 2 == 0) {
+            int cx = x + 6 + (search.isEmpty() ? 0 : textRenderer.getWidth(search) + 1);
+            context.fill(cx, y + 3, cx + 1, y + 12, search.isEmpty() ? MUTED : VALUE);
         }
+    }
 
-        private void drawModule(GuiRenderer r, Module module, double x, double y, double w, double h, double pad, double top, double bottom, float dt) {
-            double clipTop = Math.max(y, top);
-            double clipBottom = Math.min(y + h, bottom);
-            boolean over = mouseX >= x && mouseX < x + w && mouseY >= clipTop && mouseY < clipBottom && dragging == null;
-            float hv = animate(hover, module, over ? 1 : 0, dt, 18);
-            float on = animate(lit, module, module.isActive() ? 1 : 0, dt, 12);
+    private void drawTabs(DrawContext context, int mouseX, int mouseY) {
+        int x = width - MARGIN;
+        List<Tab> tabs = new ArrayList<>(Tabs.get());
+        for (int i = tabs.size() - 1; i >= 0; i--) {
+            Tab tab = tabs.get(i);
+            if (tab.name.equalsIgnoreCase("Modules")) continue;
+            int w = textRenderer.getWidth(tab.name);
+            x -= w;
+            boolean over = mouseX >= x - 3 && mouseX < x + w + 3 && mouseY >= 8 && mouseY < 23;
+            context.drawText(textRenderer, tab.name, x, 12, over ? BRIGHT : MUTED, false);
+            hits.add(new Hit(x - 3, 8, w + 6, 15, Kind.TAB, tab, null));
+            x -= 12;
+        }
+    }
 
-            if (hv > 0.01f) r.quad(x, y, w, h, color(alpha(HOVER, hv)));
-            if (on > 0.01f) {
-                r.quad(x, y, w, h, color(alpha(accent(), 0.13f * on)));
-                r.quad(x, y + u(3), u(2), h - u(6), color(alpha(accent(), on)));
+    private void drawPanel(DrawContext context, Panel panel, int mouseX, int mouseY, float dt, int lift) {
+        List<Module> shown = new ArrayList<>();
+        String query = search.toLowerCase(Locale.ROOT);
+        for (Module module : panel.modules) {
+            if (query.isEmpty() || module.title.toLowerCase(Locale.ROOT).contains(query)) shown.add(module);
+        }
+        if (!query.isEmpty() && shown.isEmpty()) return;
+
+        int x = panel.x;
+        int y = panel.y + lift;
+
+        int active = 0;
+        for (Module module : panel.modules) if (module.isActive()) active++;
+
+        context.fill(x + 1, y, x + WIDTH - 1, y + 1, HEAD);
+        context.fill(x, y + 1, x + WIDTH, y + HEADER, HEAD);
+        context.drawText(textRenderer, panel.category.name, x + PAD, y + 5, TITLE, false);
+        String count = active + "/" + panel.modules.size();
+        context.drawText(textRenderer, count, x + WIDTH - PAD - textRenderer.getWidth(count), y + 5, MUTED, false);
+        context.fill(x, y + HEADER - 1, x + WIDTH, y + HEADER, alpha(accent(), panel.collapsed ? 0.25f : 0.6f));
+        hits.add(new Hit(x, y, WIDTH, HEADER, Kind.HEADER, panel, null));
+        if (panel.collapsed) return;
+
+        int body = 0;
+        for (Module module : shown) body += ROW + Math.round(settingsHeight(module) * openness(module, dt));
+        panel.contentHeight = body;
+        int limit = height - y - HEADER - 26;
+        if (panel.maxView > 0) limit = Math.min(limit, panel.maxView);
+        panel.viewHeight = Math.max(ROW * 3, Math.min(body, limit));
+        panel.scrollTarget = MathHelper.clamp(panel.scrollTarget, 0, Math.max(0, body - panel.viewHeight));
+        panel.scroll += (panel.scrollTarget - panel.scroll) * Math.min(1, dt * 18);
+
+        int top = y + HEADER;
+        int bottom = top + panel.viewHeight;
+        context.fill(x, top, x + WIDTH, bottom, PANEL);
+        context.fill(x + 1, bottom, x + WIDTH - 1, bottom + 1, PANEL);
+        context.drawStrokedRectangle(x, y + HEADER - 1, WIDTH, panel.viewHeight + 2, OUTLINE);
+        hits.add(new Hit(x, top, WIDTH, panel.viewHeight, Kind.PANEL, panel, null));
+
+        context.enableScissor(x, top, x + WIDTH, bottom);
+        int row = top - Math.round(panel.scroll);
+        for (Module module : shown) {
+            row = drawModule(context, module, x, row, top, bottom, mouseX, mouseY, dt);
+        }
+        context.disableScissor();
+
+        if (body > panel.viewHeight) {
+            float ratio = panel.viewHeight / (float) body;
+            int barHeight = Math.max(10, Math.round(panel.viewHeight * ratio));
+            int barY = top + Math.round((panel.viewHeight - barHeight) * (panel.scroll / Math.max(1, body - panel.viewHeight)));
+            context.fill(x + WIDTH - 2, barY, x + WIDTH - 1, barY + barHeight, alpha(accent(), 0.5f));
+        }
+    }
+
+    private int drawModule(DrawContext context, Module module, int x, int y, int top, int bottom, int mouseX, int mouseY, float dt) {
+        boolean visible = y + ROW > top && y < bottom;
+        boolean over = visible && mouseX >= x && mouseX < x + WIDTH && mouseY >= Math.max(y, top) && mouseY < Math.min(y + ROW, bottom);
+        float h = animate(hover, module, over ? 1 : 0, dt, 14);
+        float e = animate(on, module, module.isActive() ? 1 : 0, dt, 12);
+
+        if (visible) {
+            if (h > 0.01f) context.fill(x, y, x + WIDTH, y + ROW, alpha(HOVER, h));
+            if (e > 0.01f) {
+                context.fill(x, y, x + WIDTH, y + ROW, alpha(accent(), 0.16f * e));
+                context.fill(x, y + 2, x + 2, y + ROW - 2, alpha(accent(), e));
             }
-            double textY = y + (h - theme.textHeight()) / 2;
-            r.text(module.title, x + pad + u(1.5) * on, textY, color(blend(OFF, ON, Math.max(on, hv * 0.6f))), false);
-
-            hits.add(new Hit(x, clipTop, w, clipBottom - clipTop, module, false));
+            int color = blend(TEXT, BRIGHT, Math.max(e, h * 0.6f));
+            context.drawText(textRenderer, trim(module.title, WIDTH - PAD * 2 - 10), x + PAD + Math.round(e * 2), y + 3, color, false);
+            boolean expandedNow = expanded.contains(module);
+            context.drawText(textRenderer, expandedNow ? "-" : "+", x + WIDTH - PAD - 5, y + 3, blend(MUTED, TEXT, h), false);
+            hits.add(new Hit(x, Math.max(y, top), WIDTH, Math.min(y + ROW, bottom) - Math.max(y, top), Kind.MODULE, module, null));
             if (over) hint = module.description;
         }
+        y += ROW;
 
-        private void drawSearch(GuiRenderer r, long now) {
-            double h = u(17);
-            double w = u(150);
-            double x = u(12);
-            double y = u(12);
-            round(r, x, y, w, h, h / 2, search.isEmpty() ? 0xA0111118 : PANEL);
-            boolean empty = search.isEmpty();
-            String text = empty ? "Type to search" : search;
-            double ty = y + (h - theme.textHeight()) / 2;
-            r.text(text, x + u(9), ty, color(empty ? MUTED : ON), false);
-            if (!empty && (now / 530) % 2 == 0) {
-                double cx = x + u(9) + theme.textWidth(search) + u(1);
-                r.quad(cx, y + u(4), u(1), h - u(8), color(ON));
+        float openness = open.getOrDefault(module, 0f);
+        if (openness <= 0.001f) return y;
+
+        int full = settingsHeight(module);
+        int shown = Math.round(full * openness);
+        int clipTop = Math.max(y, top);
+        int clipBottom = Math.min(y + shown, bottom);
+        if (clipBottom > clipTop) {
+            context.enableScissor(x, clipTop, x + WIDTH, clipBottom);
+            context.fill(x, y, x + WIDTH, y + shown, INSET);
+            context.fill(x, y, x + 1, y + shown, alpha(accent(), 0.35f));
+            drawSettings(context, module, x, y, clipTop, clipBottom, mouseX, mouseY, dt);
+            context.disableScissor();
+        }
+        return y + shown;
+    }
+
+    private void drawSettings(DrawContext context, Module module, int x, int y, int top, int bottom, int mouseX, int mouseY, float dt) {
+        int left = x + PAD + 4;
+        int right = x + WIDTH - PAD;
+
+        y = drawRow(context, module, Kind.MODULE_BIND, x, y, top, bottom, mouseX, mouseY, dt, "Bind", bindText(module.keybind, module), null);
+
+        boolean groups = module.settings.groups.size() > 1;
+        for (SettingGroup group : module.settings.groups) {
+            List<Setting<?>> list = visibleSettings(group);
+            if (list.isEmpty()) continue;
+            if (groups) {
+                if (y + SETTING > top && y < bottom) context.drawText(textRenderer, group.name.toUpperCase(Locale.ROOT), left, y + 3, MUTED, false);
+                y += SETTING;
+            }
+            for (Setting<?> setting : list) {
+                y = drawSetting(context, module, setting, x, y, top, bottom, mouseX, mouseY, dt, left, right);
             }
         }
 
-        private void drawHint(GuiRenderer r, float dt) {
-            boolean has = hint != null && !hint.isEmpty();
-            if (has) shownHint = hint;
-            hintAlpha += ((has ? 1 : 0) - hintAlpha) * Math.min(1, dt * 12);
-            if (hintAlpha < 0.02f || shownHint.isEmpty()) return;
+        drawRow(context, module, Kind.MORE, x, y, top, bottom, mouseX, mouseY, dt, "All settings", "›", null);
+    }
 
-            String text = shownHint;
-            double max = Math.min(width - u(60), u(420));
-            while (text.length() > 4 && theme.textWidth(text) > max) text = text.substring(0, text.length() - 2);
-            if (!text.equals(shownHint)) text = text.trim() + "…";
-            double w = theme.textWidth(text) + u(20);
-            double h = u(17);
-            double x = (width - w) / 2;
-            double y = height - h - u(12) + (1 - hintAlpha) * u(3);
-            fade = hintAlpha;
-            round(r, x, y, w, h, h / 2, PANEL);
-            r.text(text, x + u(10), y + (h - theme.textHeight()) / 2, color(ON), false);
-            fade = 1;
+    private int drawSetting(DrawContext context, Module module, Setting<?> setting, int x, int y, int top, int bottom, int mouseX, int mouseY, float dt, int left, int right) {
+        if (setting instanceof BoolSetting bool) {
+            boolean visible = y + SETTING > top && y < bottom;
+            boolean over = visible && within(mouseX, mouseY, x, y, top, bottom);
+            float h = animate(hover, setting, over ? 1 : 0, dt, 14);
+            float e = animate(on, setting, bool.get() ? 1 : 0, dt, 14);
+            if (visible) {
+                if (h > 0.01f) context.fill(x + 1, y, x + WIDTH, y + SETTING, alpha(HOVER, h));
+                context.drawText(textRenderer, trim(setting.title, WIDTH - PAD * 2 - 16), left, y + 3, blend(LABEL, VALUE, h), false);
+                int bx = right - 7;
+                int by = y + 3;
+                context.drawStrokedRectangle(bx, by, 7, 7, blend(0xFF3A3A45, accent(), e));
+                if (e > 0.01f) context.fill(bx + 2, by + 2, bx + 5, by + 5, alpha(accent(), e));
+                hits.add(new Hit(x, Math.max(y, top), WIDTH, Math.min(y + SETTING, bottom) - Math.max(y, top), Kind.BOOL, setting, module));
+                if (over) hint = setting.description;
+            }
+            return y + SETTING;
         }
 
-        @Override
-        public boolean onMouseClicked(Click click, boolean used) {
-            if (used) return false;
-            Hit hit = hitAt(click.x(), click.y());
-            if (hit == null) return false;
-            int button = click.button();
+        if (setting instanceof DoubleSetting || setting instanceof IntSetting) {
+            boolean visible = y + SETTING > top && y < bottom;
+            boolean over = visible && within(mouseX, mouseY, x, y, top, bottom);
+            float h = animate(hover, setting, over || sliding == setting ? 1 : 0, dt, 14);
+            if (visible) {
+                if (h > 0.01f) context.fill(x + 1, y, x + WIDTH, y + SETTING, alpha(HOVER, h));
+                String value = valueText(setting);
+                int valueWidth = textRenderer.getWidth(value);
+                context.drawText(textRenderer, trim(setting.title, right - left - valueWidth - 4), left, y + 2, blend(LABEL, VALUE, h), false);
+                context.drawText(textRenderer, value, right - valueWidth, y + 2, VALUE, false);
+                float t = sliderFraction(setting);
+                context.fill(left, y + SETTING - 2, right, y + SETTING - 1, TRACK);
+                context.fill(left, y + SETTING - 2, left + Math.round((right - left) * t), y + SETTING - 1, accent());
+                hits.add(new Hit(x, Math.max(y, top), WIDTH, Math.min(y + SETTING, bottom) - Math.max(y, top), Kind.SLIDER, setting, new int[]{left, right}));
+                if (over) hint = setting.description;
+            }
+            return y + SETTING;
+        }
 
-            if (hit.header) {
+        if (setting instanceof EnumSetting<?>) {
+            return drawRow(context, module, Kind.ENUM, x, y, top, bottom, mouseX, mouseY, dt, setting.title, String.valueOf(setting.get()), setting);
+        }
+
+        if (setting instanceof KeybindSetting keybind) {
+            return drawRow(context, module, Kind.BIND, x, y, top, bottom, mouseX, mouseY, dt, setting.title, bindText(keybind.get(), keybind), setting);
+        }
+
+        if (setting instanceof ColorSetting color) {
+            int end = drawRow(context, module, Kind.MORE, x, y, top, bottom, mouseX, mouseY, dt, setting.title, "", setting);
+            if (y + SETTING > top && y < bottom) {
+                context.fill(right - 7, y + 3, right, y + 10, color.get().getPacked() | 0xFF000000);
+                context.drawStrokedRectangle(right - 8, y + 2, 9, 9, 0xFF3A3A45);
+            }
+            return end;
+        }
+
+        return drawRow(context, module, Kind.MORE, x, y, top, bottom, mouseX, mouseY, dt, setting.title, "›", setting);
+    }
+
+    private int drawRow(DrawContext context, Module module, Kind kind, int x, int y, int top, int bottom, int mouseX, int mouseY, float dt, String label, String value, Setting<?> setting) {
+        boolean visible = y + SETTING > top && y < bottom;
+        Object key = setting != null ? setting : kind.name() + module.name;
+        boolean over = visible && within(mouseX, mouseY, x, y, top, bottom);
+        float h = animate(hover, key, over ? 1 : 0, dt, 14);
+        if (visible) {
+            if (h > 0.01f) context.fill(x + 1, y, x + WIDTH, y + SETTING, alpha(HOVER, h));
+            int right = x + WIDTH - PAD;
+            int valueWidth = textRenderer.getWidth(value);
+            boolean active = binding != null && binding == (kind == Kind.MODULE_BIND ? module : setting);
+            context.drawText(textRenderer, trim(label, right - (x + PAD + 4) - valueWidth - 4), x + PAD + 4, y + 3, blend(LABEL, VALUE, h), false);
+            context.drawText(textRenderer, value, right - valueWidth, y + 3, active ? accent() : (kind == Kind.ENUM ? blend(VALUE, accent(), 0.35f) : VALUE), false);
+            hits.add(new Hit(x, Math.max(y, top), WIDTH, Math.min(y + SETTING, bottom) - Math.max(y, top), kind, setting != null ? setting : module, module));
+            if (over && setting != null) hint = setting.description;
+        }
+        return y + SETTING;
+    }
+
+    private void drawHint(DrawContext context, float dt) {
+        float target = hint == null || hint.isEmpty() ? 0 : 1;
+        hintAlpha += (target - hintAlpha) * Math.min(1, dt * 12);
+        if (hintAlpha < 0.02f || hint == null) return;
+        String text = trim(hint, width - 80);
+        int w = textRenderer.getWidth(text) + 16;
+        int x = (width - w) / 2;
+        int y = height - 22;
+        context.fill(x, y, x + w, y + 15, alpha(PANEL, hintAlpha));
+        context.drawStrokedRectangle(x, y, w, 15, alpha(OUTLINE, hintAlpha));
+        context.drawText(textRenderer, text, x + 8, y + 4, alpha(VALUE, hintAlpha), false);
+    }
+
+    @Override
+    public boolean mouseClicked(Click click, boolean doubled) {
+        double mx = click.x();
+        double my = click.y();
+        int button = click.button();
+
+        if (binding != null) {
+            if (button > GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+                applyBind(Keybind.fromButton(button));
+                return true;
+            }
+            binding = null;
+        }
+
+        Hit hit = hitAt(mx, my);
+        if (hit == null) return super.mouseClicked(click, doubled);
+
+        switch (hit.kind) {
+            case HEADER -> {
                 Panel panel = (Panel) hit.target;
                 if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
                     panel.collapsed = !panel.collapsed;
+                    if (!custom) arrange();
+                    saveLayout();
+                } else if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && doubled) {
+                    custom = false;
+                    for (Panel each : panels) each.maxView = 0;
+                    arrange();
                     saveLayout();
                 } else if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
                     dragging = panel;
-                    dragX = click.x() - panel.x;
-                    dragY = click.y() - panel.y;
+                    dragX = (int) mx - panel.x;
+                    dragY = (int) my - panel.y;
                     panels.remove(panel);
                     panels.add(panel);
                 }
-                return true;
             }
-
-            Module module = (Module) hit.target;
-            if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) module.toggle();
-            else if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) mc.setScreen(theme.moduleScreen(module));
-            return true;
-        }
-
-        @Override
-        public boolean onMouseReleased(Click click) {
-            if (dragging != null) {
-                dragging = null;
-                saveLayout();
-                return true;
+            case MODULE -> {
+                Module module = (Module) hit.target;
+                if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) module.toggle();
+                else if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT && !expanded.remove(module)) expanded.add(module);
             }
-            return false;
-        }
-
-        @Override
-        public void onMouseMoved(double mx, double my, double lastX, double lastY) {
-            mouseX = mx;
-            mouseY = my;
-            if (dragging == null) return;
-            dragging.x = MathHelper.clamp(mx - dragX, 0, Math.max(0, width - panelWidth()));
-            dragging.y = MathHelper.clamp(my - dragY, 0, Math.max(0, height - u(21)));
-        }
-
-        @Override
-        public boolean onMouseScrolled(double amount) {
-            for (Panel panel : panels) {
-                double y = panel.y + u(21);
-                if (mouseX >= panel.x && mouseX < panel.x + panelWidth() && mouseY >= y && mouseY < y + panel.view) {
-                    panel.scrollTarget = MathHelper.clamp(panel.scrollTarget - amount * u(15) * 2, 0, Math.max(0, panel.content - panel.view));
-                    return true;
+            case BOOL -> {
+                BoolSetting setting = (BoolSetting) hit.target;
+                setting.set(!setting.get());
+            }
+            case SLIDER -> {
+                if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+                    sliding = (Setting<?>) hit.target;
+                    slidingHit = hit;
+                    slide(mx);
                 }
             }
-            return false;
-        }
-
-        @Override
-        public boolean onKeyPressed(KeyInput input) {
-            if (input.key() == GLFW.GLFW_KEY_BACKSPACE && !search.isEmpty()) {
-                search = search.substring(0, search.length() - 1);
-                return true;
+            case ENUM -> cycle((EnumSetting<?>) hit.target, button == GLFW.GLFW_MOUSE_BUTTON_RIGHT ? -1 : 1);
+            case BIND -> binding = hit.target;
+            case MODULE_BIND -> binding = hit.extra;
+            case MORE -> client.setScreen(GuiThemes.get().moduleScreen((Module) hit.extra));
+            case TAB -> ((Tab) hit.target).openScreen(GuiThemes.get());
+            case PANEL -> {
             }
-            return false;
         }
+        return true;
+    }
 
-        @Override
-        public boolean onCharTyped(CharInput input) {
-            if (!input.isValidChar() || search.length() >= 24) return false;
-            search += input.asString();
+    @Override
+    public boolean mouseDragged(Click click, double offsetX, double offsetY) {
+        if (dragging != null) {
+            custom = true;
+            dragging.x = MathHelper.clamp((int) click.x() - dragX, 0, Math.max(0, width - WIDTH));
+            dragging.y = MathHelper.clamp((int) click.y() - dragY, 0, Math.max(0, height - HEADER));
             return true;
         }
-
-        private Hit hitAt(double mx, double my) {
-            for (int i = hits.size() - 1; i >= 0; i--) {
-                if (hits.get(i).contains(mx, my)) return hits.get(i);
-            }
-            return null;
+        if (sliding != null) {
+            slide(click.x());
+            return true;
         }
+        return super.mouseDragged(click, offsetX, offsetY);
+    }
 
-        private float appear(long delay) {
-            float t = MathHelper.clamp((Util.getMeasuringTimeMs() - openedAt - delay) / 200f, 0, 1);
-            return 1 - (1 - t) * (1 - t) * (1 - t);
-        }
+    @Override
+    public boolean mouseReleased(Click click) {
+        if (dragging != null) saveLayout();
+        dragging = null;
+        sliding = null;
+        slidingHit = null;
+        return super.mouseReleased(click);
+    }
 
-        private static float animate(Map<Object, Float> map, Object key, float target, float dt, float speed) {
-            float value = map.getOrDefault(key, target);
-            value += (target - value) * Math.min(1, dt * speed);
-            map.put(key, value);
-            return value;
-        }
-
-        private void round(GuiRenderer r, double x, double y, double w, double h, double radius, int argb) {
-            Color c = color(argb);
-            int rad = (int) Math.min(Math.floor(radius), Math.floor(Math.min(w, h) / 2));
-            if (rad <= 0) {
-                r.quad(x, y, w, h, c);
-                return;
-            }
-            r.quad(x, y + rad, w, h - rad * 2, c);
-            for (int i = 0; i < rad; i++) {
-                double dy = rad - i - 0.5;
-                double inset = rad - Math.sqrt(rad * rad - dy * dy);
-                r.quad(x + inset, y + i, w - inset * 2, 1, c);
-                r.quad(x + inset, y + h - 1 - i, w - inset * 2, 1, c);
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
+        for (int i = hits.size() - 1; i >= 0; i--) {
+            Hit hit = hits.get(i);
+            if (hit.kind == Kind.PANEL && hit.contains(mouseX, mouseY)) {
+                Panel panel = (Panel) hit.target;
+                panel.scrollTarget = MathHelper.clamp(panel.scrollTarget - (float) vertical * ROW * 2, 0, Math.max(0, panel.contentHeight - panel.viewHeight));
+                return true;
             }
         }
+        return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
+    }
 
-        private Color color(int argb) {
-            int a = Math.round(((argb >>> 24) & 0xFF) * MathHelper.clamp(fade, 0, 1));
-            return new Color((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, a);
+    @Override
+    public boolean keyPressed(KeyInput input) {
+        int key = input.key();
+        if (binding != null) {
+            if (key == GLFW.GLFW_KEY_ESCAPE || key == GLFW.GLFW_KEY_BACKSPACE || key == GLFW.GLFW_KEY_DELETE) applyBind(Keybind.none());
+            else applyBind(Keybind.fromKeys(key, input.modifiers()));
+            return true;
         }
-
-        private int accent() {
-            return owner.accent.get().getPacked() | 0xFF000000;
+        if (key == GLFW.GLFW_KEY_ESCAPE) {
+            if (!search.isEmpty()) {
+                search = "";
+                return true;
+            }
+            close();
+            return true;
         }
-
-        private static int lighten(int color) {
-            return blend(color, 0xFFFFFFFF, 0.35f);
+        if (key == GLFW.GLFW_KEY_BACKSPACE) {
+            if (!search.isEmpty()) search = search.substring(0, search.length() - 1);
+            return true;
         }
+        return super.keyPressed(input);
+    }
 
-        private static int alpha(int color, float factor) {
-            int a = Math.round(((color >>> 24) & 0xFF) * MathHelper.clamp(factor, 0, 1));
-            return (a << 24) | (color & 0xFFFFFF);
+    @Override
+    public boolean charTyped(CharInput input) {
+        if (binding != null || !input.isValidChar()) return false;
+        if (search.length() < 24) search += input.asString();
+        return true;
+    }
+
+    @Override
+    public void close() {
+        saveLayout();
+        super.close();
+    }
+
+    private Hit hitAt(double mx, double my) {
+        for (int i = hits.size() - 1; i >= 0; i--) {
+            Hit hit = hits.get(i);
+            if (hit.kind != Kind.PANEL && hit.contains(mx, my)) return hit;
         }
-
-        private static int blend(int from, int to, float t) {
-            t = MathHelper.clamp(t, 0, 1);
-            int a = Math.round(((from >>> 24) & 0xFF) + (((to >>> 24) & 0xFF) - ((from >>> 24) & 0xFF)) * t);
-            int r = Math.round(((from >> 16) & 0xFF) + (((to >> 16) & 0xFF) - ((from >> 16) & 0xFF)) * t);
-            int g = Math.round(((from >> 8) & 0xFF) + (((to >> 8) & 0xFF) - ((from >> 8) & 0xFF)) * t);
-            int b = Math.round((from & 0xFF) + ((to & 0xFF) - (from & 0xFF)) * t);
-            return (a << 24) | (r << 16) | (g << 8) | b;
+        for (int i = hits.size() - 1; i >= 0; i--) {
+            Hit hit = hits.get(i);
+            if (hit.contains(mx, my)) return hit;
         }
+        return null;
+    }
 
-        private void saveLayout() {
-            StringBuilder out = new StringBuilder("v2");
+    private void applyBind(Keybind keybind) {
+        if (binding instanceof Module module) module.keybind.set(keybind);
+        else if (binding instanceof KeybindSetting setting) setting.set(keybind);
+        binding = null;
+    }
+
+    private void slide(double mx) {
+        if (sliding == null || slidingHit == null) return;
+        int[] range = (int[]) slidingHit.extra;
+        double t = MathHelper.clamp((mx - range[0]) / (double) (range[1] - range[0]), 0, 1);
+        if (sliding instanceof DoubleSetting setting) {
+            double value = setting.sliderMin + (setting.sliderMax - setting.sliderMin) * t;
+            double scale = Math.pow(10, setting.decimalPlaces);
+            value = Math.round(value * scale) / scale;
+            setting.set(MathHelper.clamp(value, setting.min, setting.max));
+        } else if (sliding instanceof IntSetting setting) {
+            int value = (int) Math.round(setting.sliderMin + (setting.sliderMax - setting.sliderMin) * t);
+            setting.set(MathHelper.clamp(value, setting.min, setting.max));
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void cycle(EnumSetting setting, int step) {
+        Enum<?> current = (Enum<?>) setting.get();
+        Object[] values = current.getDeclaringClass().getEnumConstants();
+        int index = Math.floorMod(current.ordinal() + step, values.length);
+        setting.set((Enum) values[index]);
+    }
+
+    private static float sliderFraction(Setting<?> setting) {
+        if (setting instanceof DoubleSetting d) {
+            double span = d.sliderMax - d.sliderMin;
+            return span <= 0 ? 0 : (float) MathHelper.clamp((d.get() - d.sliderMin) / span, 0, 1);
+        }
+        if (setting instanceof IntSetting i) {
+            int span = i.sliderMax - i.sliderMin;
+            return span <= 0 ? 0 : (float) MathHelper.clamp((i.get() - i.sliderMin) / (double) span, 0, 1);
+        }
+        return 0;
+    }
+
+    private static String valueText(Setting<?> setting) {
+        if (setting instanceof DoubleSetting d) return String.format(Locale.ROOT, "%." + Math.min(d.decimalPlaces, 2) + "f", d.get());
+        return String.valueOf(setting.get());
+    }
+
+    private String bindText(Keybind keybind, Object owner) {
+        if (binding == owner) return "...";
+        return keybind.isSet() ? keybind.toString() : "None";
+    }
+
+    private static List<Setting<?>> visibleSettings(SettingGroup group) {
+        List<Setting<?>> list = new ArrayList<>();
+        for (Setting<?> setting : group) if (setting.isVisible()) list.add(setting);
+        return list;
+    }
+
+    private int settingsHeight(Module module) {
+        int rows = 2;
+        boolean groups = module.settings.groups.size() > 1;
+        for (SettingGroup group : module.settings.groups) {
+            int visible = visibleSettings(group).size();
+            if (visible == 0) continue;
+            rows += visible + (groups ? 1 : 0);
+        }
+        return rows * SETTING;
+    }
+
+    private float openness(Module module, float dt) {
+        float target = expanded.contains(module) ? 1 : 0;
+        float value = open.getOrDefault(module, 0f);
+        value += (target - value) * Math.min(1, dt * 14);
+        if (Math.abs(target - value) < 0.002f) value = target;
+        if (value == 0) open.remove(module);
+        else open.put(module, value);
+        return value;
+    }
+
+    private static float animate(Map<Object, Float> map, Object key, float target, float dt, float speed) {
+        float value = map.getOrDefault(key, target);
+        value += (target - value) * Math.min(1, dt * speed);
+        map.put(key, value);
+        return value;
+    }
+
+    private boolean within(int mouseX, int mouseY, int x, int y, int top, int bottom) {
+        return mouseX >= x && mouseX < x + WIDTH && mouseY >= Math.max(y, top) && mouseY < Math.min(y + SETTING, bottom);
+    }
+
+    private String trim(String text, int max) {
+        if (textRenderer.getWidth(text) <= max) return text;
+        String dots = "…";
+        int end = text.length();
+        while (end > 0 && textRenderer.getWidth(text.substring(0, end)) + textRenderer.getWidth(dots) > max) end--;
+        return text.substring(0, end) + dots;
+    }
+
+    private float appear() {
+        return Math.min(1, (Util.getMeasuringTimeMs() - openedAt) / 160f);
+    }
+
+    private static float ease(float t) {
+        return 1 - (1 - t) * (1 - t) * (1 - t);
+    }
+
+    private int accent() {
+        return owner.accent.get().getPacked() | 0xFF000000;
+    }
+
+    private static int alpha(int color, float factor) {
+        int a = Math.round(((color >>> 24) & 0xFF) * MathHelper.clamp(factor, 0, 1));
+        return (a << 24) | (color & 0xFFFFFF);
+    }
+
+    private static int blend(int from, int to, float t) {
+        t = MathHelper.clamp(t, 0, 1);
+        int a = Math.round(((from >>> 24) & 0xFF) + (((to >>> 24) & 0xFF) - ((from >>> 24) & 0xFF)) * t);
+        int r = Math.round(((from >> 16) & 0xFF) + (((to >> 16) & 0xFF) - ((from >> 16) & 0xFF)) * t);
+        int g = Math.round(((from >> 8) & 0xFF) + (((to >> 8) & 0xFF) - ((from >> 8) & 0xFF)) * t);
+        int b = Math.round((from & 0xFF) + ((to & 0xFF) - (from & 0xFF)) * t);
+        return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+
+    private void saveLayout() {
+        StringBuilder out = new StringBuilder(custom ? "custom" : "auto");
+        for (Panel panel : panels) {
+            out.append('|').append(panel.category.name).append(':').append(panel.x).append(':').append(panel.y).append(':').append(panel.collapsed ? 1 : 0);
+        }
+        owner.layout.set(out.toString());
+    }
+
+    private void loadLayout() {
+        String saved = owner.layout.get();
+        if (saved == null || !(saved.startsWith("custom|") || saved.startsWith("auto|"))) return;
+        custom = saved.startsWith("custom|");
+        for (String entry : saved.substring(saved.indexOf('|') + 1).split("\\|")) {
+            String[] parts = entry.split(":");
+            if (parts.length != 4) continue;
             for (Panel panel : panels) {
-                out.append('|');
-                out.append(panel.category.name).append(':')
-                    .append(Math.round(panel.x / Math.max(1, width) * 10000)).append(':')
-                    .append(Math.round(panel.y / Math.max(1, height) * 10000)).append(':')
-                    .append(panel.collapsed ? 1 : 0);
-            }
-            owner.layout.set(out.toString());
-        }
-
-        private void loadLayout() {
-            String saved = owner.layout.get();
-            if (saved == null || !saved.startsWith("v2|")) return;
-            for (String entry : saved.substring(3).split("\\|")) {
-                String[] parts = entry.split(":");
-                if (parts.length != 4) continue;
-                for (Panel panel : panels) {
-                    if (!panel.category.name.equals(parts[0])) continue;
-                    try {
-                        panel.x = MathHelper.clamp(Integer.parseInt(parts[1]) / 10000.0 * width, 0, Math.max(0, width - panelWidth()));
-                        panel.y = MathHelper.clamp(Integer.parseInt(parts[2]) / 10000.0 * height, 0, Math.max(0, height - u(21)));
-                        panel.collapsed = parts[3].equals("1");
-                    } catch (NumberFormatException ignored) {
-                    }
+                if (!panel.category.name.equals(parts[0])) continue;
+                try {
+                    panel.x = Integer.parseInt(parts[1]);
+                    panel.y = Integer.parseInt(parts[2]);
+                    panel.collapsed = parts[3].equals("1");
+                } catch (NumberFormatException ignored) {
                 }
             }
         }
