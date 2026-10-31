@@ -124,7 +124,10 @@ public class ClickGui extends Module {
     }
 
     private void restoreHudFont() {
-        restoreHudFont();
+        if (previousHudFont.get().equals("custom") && Hud.get().settings.get("custom-font") instanceof BoolSetting hudFont) {
+            hudFont.set(true);
+            previousHudFont.set("");
+        }
     }
 
     private void font(Setting<Boolean> custom, Setting<String> previous) {
@@ -147,10 +150,7 @@ public class ClickGui extends Module {
             Config.get().customFont.set(true);
             previousFont.set("");
         }
-        if (previousHudFont.get().equals("custom") && Hud.get().settings.get("custom-font") instanceof BoolSetting hudFont) {
-            hudFont.set(true);
-            previousHudFont.set("");
-        }
+        restoreHudFont();
     }
 
     @EventHandler
