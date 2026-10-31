@@ -1,5 +1,6 @@
 package dev.coyduck;
 
+import dev.coyduck.gui.CoyduckTheme;
 import dev.coyduck.commands.PilotCommand;
 import dev.coyduck.managers.ConfigSaver;
 import dev.coyduck.managers.CrystalTracker;
@@ -21,7 +22,6 @@ import dev.coyduck.modules.AutoTotem;
 import dev.coyduck.modules.AutoTrap;
 import dev.coyduck.modules.AutoWeb;
 import dev.coyduck.modules.Burrow;
-import dev.coyduck.modules.ClickGui;
 import dev.coyduck.modules.CustomFov;
 import dev.coyduck.modules.ElytraFly;
 import dev.coyduck.modules.Esp;
@@ -38,6 +38,7 @@ import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
 import meteordevelopment.meteorclient.commands.Commands;
+import meteordevelopment.meteorclient.gui.GuiThemes;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.item.Items;
@@ -51,6 +52,8 @@ public class Coyduck extends MeteorAddon {
     @Override
     public void onInitialize() {
         LOG.info("Initializing Coyduck");
+
+        GuiThemes.add(new CoyduckTheme());
 
         MeteorClient.EVENT_BUS.subscribe(ConfigSaver.get());
         MeteorClient.EVENT_BUS.subscribe(LatencyManager.get());
@@ -82,7 +85,6 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new PopCounter());
         Modules.get().add(new AutoEz());
         Modules.get().add(new HideRich());
-        Modules.get().add(new ClickGui());
         Modules.get().add(new KillEffects());
         Modules.get().add(new Esp());
         Modules.get().add(new CrystalChams());
