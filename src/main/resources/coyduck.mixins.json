@@ -12,7 +12,6 @@
     "EndCrystalEntityRendererMixin",
     "EntityMixin",
     "GameRendererMixin",
-    "GuiThemeAccessor",
     "KeyboardInputMixin",
     "LivingEntityMixin",
     "LivingEntityRendererMixin",
