@@ -102,6 +102,8 @@ public class AutoCrystal extends Module {
     private static final float HIDDEN_PENALTY = 2.0f;
     private static final float LOW_HEALTH_BONUS = 3.0f;
     private static final int GAP_PLACES = 1;
+    private static final float MINE_AHEAD_PROGRESS = 0.6f;
+    private static final double MINE_AHEAD_RANGE = 4.0;
 
     private record Choice(Target target, float damage, float raw, float self, float score) {
         boolean beats(Choice other) {
@@ -252,6 +254,33 @@ public class AutoCrystal extends Module {
         .build()
     );
 
+    private final Setting<Boolean> chip = sgDamage.add(new BoolSetting.Builder()
+        .name("chip")
+        .description("Keeps hitting with crystals below min damage when they barely hurt you, to wear down the target's armor and absorption.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Double> chipDamage = sgDamage.add(new DoubleSetting.Builder()
+        .name("chip-damage")
+        .description("Least damage a chip crystal must deal.")
+        .defaultValue(1)
+        .range(0, 36)
+        .sliderRange(0, 10)
+        .visible(chip::get)
+        .build()
+    );
+
+    private final Setting<Double> chipSelf = sgDamage.add(new DoubleSetting.Builder()
+        .name("chip-self-damage")
+        .description("Most damage a chip crystal may deal to you.")
+        .defaultValue(1)
+        .range(0, 36)
+        .sliderRange(0, 10)
+        .visible(chip::get)
+        .build()
+    );
+
     private final Setting<Double> balance = sgDamage.add(new DoubleSetting.Builder()
         .name("balance")
         .description("Least ratio of the damage a crystal deals to the target over the damage it deals to you. A crystal below it is neither placed nor broken, unless it kills the target. 0 turns it off.")
@@ -319,6 +348,13 @@ public class AutoCrystal extends Module {
     private final Setting<Boolean> antiSurround = sgGeneral.add(new BoolSetting.Builder()
         .name("anti-surround")
         .description("Fills a gap in the target's surround with a crystal the moment it opens, and prefers crystals that keep it open, so the gap cannot be closed again.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> mineAhead = sgGeneral.add(new BoolSetting.Builder()
+        .name("mine-ahead")
+        .description("Counts the surround block you are about to break as already gone, so a crystal waits next to it and goes off in the same tick the block breaks.")
         .defaultValue(true)
         .build()
     );
@@ -707,8 +743,14 @@ public class AutoCrystal extends Module {
         BlockPos seen = null;
         Choice seenChoice = null;
         Vec3d eye = mc.player.getEyePos();
+        BlockPos mined = minedCell(targets);
+        BlockView minedView = mined == null ? null : new BlockOverlay(mc.world).set(mined, mc.world.getFluidState(mined).getBlockState());
+        double aheadRange = MINE_AHEAD_RANGE * MINE_AHEAD_RANGE;
         for (BlockPos base : candidates) {
-            Choice choice = evaluate(targets, crystalCenter(base), health, 0, mc.world);
+            if (base.equals(mined)) continue;
+            Vec3d center = crystalCenter(base);
+            boolean ahead = minedView != null && center.squaredDistanceTo(Vec3d.ofCenter(mined)) <= aheadRange;
+            Choice choice = evaluate(targets, center, health, 0, ahead ? minedView : mc.world);
             if (choice == null) continue;
             if (choice.beats(spotChoice)) {
                 spot = base;
@@ -726,6 +768,8 @@ public class AutoCrystal extends Module {
 
         if (spot != null) {
             placeCrystal(spot, spotChoice);
+            boolean ahead = minedView != null && crystalCenter(spot).squaredDistanceTo(Vec3d.ofCenter(mined)) <= aheadRange;
+            if (ahead && status != null && status.endsWith("dmg")) status = "ahead " + status;
             return;
         }
 
@@ -820,6 +864,20 @@ public class AutoCrystal extends Module {
             clearing.remove(base);
             breakBudget--;
         }
+    }
+
+    private BlockPos minedCell(List<Target> targets) {
+        if (!mineAhead.get()) return null;
+
+        MiningManager mining = MiningManager.get();
+        BlockPos cell = mining.pos();
+        if (cell == null || mc.world.getBlockState(cell).isReplaceable() || mining.progress() < MINE_AHEAD_PROGRESS) return null;
+
+        long key = cell.asLong();
+        for (Target target : targets) {
+            if (target.gaps.contains(key)) return cell;
+        }
+        return null;
     }
 
     private boolean leavesLow(float self, float health) {
@@ -1133,7 +1191,7 @@ public class AutoCrystal extends Module {
         boolean reachable = false;
         for (Target target : targets) {
             float bound = ExplosionDamage.upperBound(target.player, target.feet, crystal);
-            if (bound >= target.minDamage || bound >= target.health) {
+            if (bound >= floor(target, true) || bound >= target.health) {
                 reachable = true;
                 break;
             }
@@ -1155,10 +1213,12 @@ public class AutoCrystal extends Module {
             return null;
         }
 
+        boolean chipping = !low && self <= chipSelf.get();
         Choice best = null;
         for (Target target : targets) {
+            float least = floor(target, chipping);
             float bound = ExplosionDamage.upperBound(target.player, target.feet, crystal);
-            if (bound < target.minDamage && bound < target.health) continue;
+            if (bound < least && bound < target.health) continue;
             float bonus = FOCUS_BONUS + (bound >= target.health ? LETHAL_BONUS : 0) + (antiSurround.get() && target.gaps.contains(key) ? GAP_BONUS : 0)
                 + LOW_HEALTH_BONUS * Math.min(bound / Math.max(target.health, 1.0f), 1.0f);
             if (best != null && bound + bonus < best.score) continue;
@@ -1173,7 +1233,7 @@ public class AutoCrystal extends Module {
             }
 
             float damage = arrival != 0 ? HurtTracker.get().effective(target.player, raw, arrival) : ExplosionDamage.mitigate(target.player, raw);
-            if (damage < target.minDamage && damage < target.health) continue;
+            if (damage < least && damage < target.health) continue;
             if (low && !(damage >= target.health && AutoTotem.canAffordPop())) {
                 rejectedSelf = true;
                 continue;
@@ -1193,6 +1253,10 @@ public class AutoCrystal extends Module {
         }
 
         return best;
+    }
+
+    private float floor(Target target, boolean chipping) {
+        return chip.get() && chipping ? Math.min(target.minDamage, chipDamage.get().floatValue()) : target.minDamage;
     }
 
     private float selfDamage(Vec3d crystal, BlockView view) {
