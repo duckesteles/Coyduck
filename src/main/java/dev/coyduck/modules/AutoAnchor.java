@@ -218,8 +218,8 @@ public class AutoAnchor extends Module {
 
     private final Setting<Boolean> rotate = sgRotate.add(new BoolSetting.Builder()
         .name("rotate")
-        .description("Looks at every anchor before using it. Needed on servers with Grim.")
-        .defaultValue(true)
+        .description("Looks at every anchor before using it, for servers whose anticheat checks where you look.")
+        .defaultValue(false)
         .build()
     );
 
