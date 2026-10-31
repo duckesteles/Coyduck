@@ -47,10 +47,10 @@ public class AutoEz extends Module {
         .name("messages")
         .description("Picked at random for every kill. {name} becomes the player's name.")
         .defaultValue(List.of(
-            "gg {name}, you played well",
-            "good fight {name}, that one was close",
-            "gg {name}, nice totem play",
-            "well played {name}, rematch anytime"
+            "gg",
+            "gg wp",
+            "gf {name}",
+            "close one"
         ))
         .build()
     );
