@@ -13,6 +13,7 @@ import dev.coyduck.managers.MotionTracker;
 import dev.coyduck.managers.RotationManager;
 import dev.coyduck.modules.AirMine;
 import dev.coyduck.modules.AutoAnchor;
+import dev.coyduck.modules.CrystalChams;
 import dev.coyduck.modules.AutoCity;
 import dev.coyduck.modules.AutoCrystal;
 import dev.coyduck.modules.AutoTotem;
@@ -78,6 +79,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new PopCounter());
         Modules.get().add(new KillEffects());
         Modules.get().add(new Esp());
+        Modules.get().add(new CrystalChams());
 
         Commands.add(new PilotCommand());
     }
