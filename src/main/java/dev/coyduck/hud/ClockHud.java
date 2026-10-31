@@ -1,6 +1,7 @@
 package dev.coyduck.hud;
 
 import meteordevelopment.meteorclient.settings.BoolSetting;
+import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.settings.StringSetting;
@@ -22,9 +23,25 @@ import static meteordevelopment.meteorclient.MeteorClient.mc;
 public class ClockHud extends HudElement {
     public static final HudElementInfo<ClockHud> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-clock", "Real time and date in any time zone, with your session length.", ClockHud::new);
 
-    private static final double BIG = 1.6;
-
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
+
+    private final Setting<Double> size = sgGeneral.add(new DoubleSetting.Builder()
+        .name("size")
+        .description("Size of the card. Whole numbers stay the sharpest.")
+        .defaultValue(1)
+        .range(0.5, 4)
+        .sliderRange(0.5, 3)
+        .build()
+    );
+
+    private final Setting<Double> timeSize = sgGeneral.add(new DoubleSetting.Builder()
+        .name("time-size")
+        .description("How much bigger the time is than the lines under it.")
+        .defaultValue(1)
+        .range(1, 3)
+        .sliderRange(1, 2)
+        .build()
+    );
 
     private final Setting<String> zone = sgGeneral.add(new StringSetting.Builder()
         .name("time-zone")
@@ -107,26 +124,28 @@ public class ClockHud extends HudElement {
         if (greeting.get() && mc.player != null) small.add(greet(now.getHour()) + ", " + mc.player.getName().getString());
         if (session.get() && world != null) small.add("Session " + duration(System.currentTimeMillis() - joined));
 
-        double pad = 6;
-        double bar = 3;
-        double timeWidth = r.textWidth(time, false, BIG);
-        double timeHeight = r.textHeight(false, BIG);
+        double scale = size.get();
+        double big = scale * timeSize.get();
+        double pad = 5 * scale;
+        double bar = 3 * scale;
+        double timeWidth = r.textWidth(time, false, big);
+        double timeHeight = r.textHeight(false, big);
         double width = timeWidth;
-        for (String line : small) width = Math.max(width, r.textWidth(line));
-        double lineHeight = r.textHeight() + 2;
+        for (String line : small) width = Math.max(width, r.textWidth(line, false, scale));
+        double lineHeight = r.textHeight(false, scale) + 2 * scale;
         double w = pad * 2 + bar + width;
-        double h = pad * 2 + timeHeight + (small.isEmpty() ? 0 : 3 + lineHeight * small.size() - 2);
+        double h = pad * 2 + timeHeight + (small.isEmpty() ? 0 : 2 * scale + lineHeight * small.size() - 2 * scale);
         setSize(w, h);
 
         CoyHud.panel(r, x, y, w, h, 1);
-        CoyHud.round(r, x, y + 4, 2, h - 8, 1, CoyHud.color(CoyHud.accent()));
+        CoyHud.round(r, x, y + 3 * scale, 2 * scale, h - 6 * scale, 1, CoyHud.color(CoyHud.accent()));
 
         double tx = x + pad + bar;
         double ty = y + pad;
-        r.text(time, tx, ty, CoyHud.color(CoyHud.TEXT), false, BIG);
-        ty += timeHeight + 3;
+        r.text(time, tx, ty, CoyHud.color(CoyHud.TEXT), false, big);
+        ty += timeHeight + 2 * scale;
         for (int i = 0; i < small.size(); i++) {
-            r.text(small.get(i), tx, ty, CoyHud.color(i == 0 && date.get() ? CoyHud.SUBTLE : CoyHud.MUTED), false);
+            r.text(small.get(i), tx, ty, CoyHud.color(i == 0 && date.get() ? CoyHud.SUBTLE : CoyHud.MUTED), false, scale);
             ty += lineHeight;
         }
     }

@@ -12,6 +12,7 @@ import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.settings.StringSetting;
 import meteordevelopment.meteorclient.systems.config.Config;
+import meteordevelopment.meteorclient.systems.hud.Hud;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
@@ -48,7 +49,7 @@ public class ClickGui extends Module {
 
     private final Setting<Boolean> minecraftFont = sgGeneral.add(new BoolSetting.Builder()
         .name("minecraft-font")
-        .description("Uses the Minecraft font in every menu and the HUD while this is on.")
+        .description("Uses the sharp Minecraft font in every menu and the HUD while this is on.")
         .defaultValue(true)
         .onChanged(value -> {
             if (isActive()) apply();
@@ -75,6 +76,14 @@ public class ClickGui extends Module {
     private final Setting<String> previousFont = sgGeneral.add(new StringSetting.Builder()
         .name("previous-font")
         .description("Custom font state to go back to when this is turned off.")
+        .defaultValue("")
+        .visible(() -> false)
+        .build()
+    );
+
+    private final Setting<String> previousHudFont = sgGeneral.add(new StringSetting.Builder()
+        .name("previous-hud-font")
+        .description("HUD custom font state to go back to when this is turned off.")
         .defaultValue("")
         .visible(() -> false)
         .build()
@@ -110,15 +119,19 @@ public class ClickGui extends Module {
             GuiThemes.select(previousTheme.get().isEmpty() ? "Meteor" : previousTheme.get());
         }
 
-        Setting<Boolean> custom = Config.get().customFont;
+        font(Config.get().customFont, previousFont);
+        if (Hud.get().settings.get("custom-font") instanceof BoolSetting hudFont) font(hudFont, previousHudFont);
+    }
+
+    private void font(Setting<Boolean> custom, Setting<String> previous) {
         if (minecraftFont.get()) {
             if (custom.get()) {
-                previousFont.set("custom");
+                previous.set("custom");
                 custom.set(false);
             }
-        } else if (previousFont.get().equals("custom") && !custom.get()) {
+        } else if (previous.get().equals("custom") && !custom.get()) {
             custom.set(true);
-            previousFont.set("");
+            previous.set("");
         }
     }
 
@@ -129,6 +142,10 @@ public class ClickGui extends Module {
         if (previousFont.get().equals("custom")) {
             Config.get().customFont.set(true);
             previousFont.set("");
+        }
+        if (previousHudFont.get().equals("custom") && Hud.get().settings.get("custom-font") instanceof BoolSetting hudFont) {
+            hudFont.set(true);
+            previousHudFont.set("");
         }
     }
 
