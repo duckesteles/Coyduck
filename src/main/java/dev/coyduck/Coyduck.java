@@ -2,6 +2,7 @@ package dev.coyduck;
 
 import dev.coyduck.commands.PilotCommand;
 import dev.coyduck.gui.CoyduckTheme;
+import dev.coyduck.hud.ClockHud;
 import dev.coyduck.hud.InfoHud;
 import dev.coyduck.hud.ModuleList;
 import dev.coyduck.hud.Watermark;
@@ -62,6 +63,7 @@ public class Coyduck extends MeteorAddon {
         Hud.get().register(Watermark.INFO);
         Hud.get().register(ModuleList.INFO);
         Hud.get().register(InfoHud.INFO);
+        Hud.get().register(ClockHud.INFO);
 
         MeteorClient.EVENT_BUS.subscribe(ConfigSaver.get());
         MeteorClient.EVENT_BUS.subscribe(LatencyManager.get());

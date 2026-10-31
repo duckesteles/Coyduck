@@ -9,6 +9,8 @@ import meteordevelopment.meteorclient.systems.hud.HudRenderer;
 import meteordevelopment.meteorclient.utils.Utils;
 import meteordevelopment.meteorclient.utils.world.TickRate;
 import net.minecraft.client.network.PlayerListEntry;
+import net.minecraft.client.network.ServerInfo;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
 
 import java.util.ArrayList;
@@ -27,6 +29,12 @@ public class InfoHud extends HudElement {
     private final Setting<Boolean> tps = add("tps", "Server ticks per second.");
     private final Setting<Boolean> speed = add("speed", "Your speed in blocks per second.");
     private final Setting<Boolean> coords = add("coords", "Your coordinates, with the other dimension's next to them.");
+    private final Setting<Boolean> facing = add("facing", "The direction you are looking at.", false);
+    private final Setting<Boolean> biome = add("biome", "The biome you are in.", false);
+    private final Setting<Boolean> dimension = add("dimension", "The dimension you are in.", false);
+    private final Setting<Boolean> day = add("day", "The in-game day and time.", false);
+    private final Setting<Boolean> server = add("server", "The server address.", false);
+    private final Setting<Boolean> players = add("players", "How many players are online.", false);
 
     private record Line(String label, String value, int color) {}
 
@@ -35,7 +43,11 @@ public class InfoHud extends HudElement {
     }
 
     private Setting<Boolean> add(String name, String description) {
-        return sgGeneral.add(new BoolSetting.Builder().name(name).description(description).defaultValue(true).build());
+        return add(name, description, true);
+    }
+
+    private Setting<Boolean> add(String name, String description, boolean value) {
+        return sgGeneral.add(new BoolSetting.Builder().name(name).description(description).defaultValue(value).build());
     }
 
     @Override
@@ -65,6 +77,30 @@ public class InfoHud extends HudElement {
             lines.add(new Line("XYZ", main, CoyHud.TEXT));
             if (mc.world.getRegistryKey() != World.END) lines.add(new Line(nether ? "Overworld" : "Nether", other, CoyHud.SUBTLE));
         }
+        if (facing.get() && mc.player != null) {
+            float yaw = MathHelper.wrapDegrees(mc.player.getYaw());
+            lines.add(new Line("Facing", capitalize(mc.player.getHorizontalFacing().asString()) + String.format(Locale.ROOT, " %.0f°", yaw), CoyHud.TEXT));
+        }
+        if (biome.get() && mc.player != null && mc.world != null) {
+            String name = mc.world.getBiome(mc.player.getBlockPos()).getKey().map(key -> key.getValue().getPath()).orElse("unknown");
+            lines.add(new Line("Biome", capitalize(name.replace('_', ' ')), CoyHud.TEXT));
+        }
+        if (dimension.get() && mc.world != null) {
+            lines.add(new Line("Dimension", capitalize(mc.world.getRegistryKey().getValue().getPath().replace('_', ' ')), CoyHud.TEXT));
+        }
+        if (day.get() && mc.world != null) {
+            long time = mc.world.getTimeOfDay();
+            long hours = (time / 1000 + 6) % 24;
+            long minutes = (time % 1000) * 60 / 1000;
+            lines.add(new Line("Day", String.format(Locale.ROOT, "%d  %02d:%02d", time / 24000 + 1, hours, minutes), CoyHud.TEXT));
+        }
+        if (server.get()) {
+            ServerInfo entry = mc.getCurrentServerEntry();
+            lines.add(new Line("Server", mc.isInSingleplayer() ? "Singleplayer" : entry == null ? "-" : entry.address, CoyHud.TEXT));
+        }
+        if (players.get() && mc.getNetworkHandler() != null) {
+            lines.add(new Line("Players", String.valueOf(mc.getNetworkHandler().getPlayerList().size()), CoyHud.TEXT));
+        }
 
         double pad = 6;
         double gap = 10;
@@ -89,6 +125,10 @@ public class InfoHud extends HudElement {
             r.text(line.value, vx, rowY, CoyHud.color(line.color), false);
             rowY += rowHeight;
         }
+    }
+
+    private static String capitalize(String text) {
+        return text.isEmpty() ? text : Character.toUpperCase(text.charAt(0)) + text.substring(1);
     }
 
     private static int latency() {
