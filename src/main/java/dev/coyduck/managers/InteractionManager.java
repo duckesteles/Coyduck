@@ -217,9 +217,27 @@ public final class InteractionManager {
         return hit == null || aimed(hit.getPos(), new Box(hit.getBlockPos()), priority);
     }
 
+    public Direction crystalFace(BlockPos base) {
+        Vec3d eye = mc.player.getEyePos();
+        if (eye.y > base.getY() + 1.0) return Direction.UP;
+        Direction best = Direction.UP;
+        double bestBy = 0;
+        for (Direction direction : Direction.values()) {
+            if (direction == Direction.UP) continue;
+            Vec3d normal = Vec3d.of(direction.getVector());
+            double by = eye.subtract(Vec3d.ofCenter(base).add(normal.multiply(0.5))).dotProduct(normal);
+            if (by > bestBy) {
+                bestBy = by;
+                best = direction;
+            }
+        }
+        return best;
+    }
+
     public Vec3d crystalAim(BlockPos base) {
-        Vec3d point = visiblePoint(base, Direction.UP, mc.player.getEyePos(), Double.MAX_VALUE);
-        return point != null ? point : new Vec3d(base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5);
+        Direction face = crystalFace(base);
+        Vec3d point = visiblePoint(base, face, mc.player.getEyePos(), Double.MAX_VALUE);
+        return point != null ? point : Vec3d.ofCenter(base).add(Vec3d.of(face.getVector()).multiply(0.5));
     }
 
     public boolean hasCrystals() {
@@ -231,7 +249,7 @@ public final class InteractionManager {
     }
 
     public boolean placeCrystal(BlockPos base, InventoryManager.SwitchMode mode, SwingMode swing, Runnable after, boolean whileEating) {
-        BlockHitResult hit = new BlockHitResult(crystalAim(base), Direction.UP, base, false);
+        BlockHitResult hit = new BlockHitResult(crystalAim(base), crystalFace(base), base, false);
 
         if (mc.player.getOffHandStack().isOf(Items.END_CRYSTAL)) {
             boolean[] done = {false};
