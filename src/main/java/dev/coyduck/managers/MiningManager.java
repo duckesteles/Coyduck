@@ -203,6 +203,10 @@ public final class MiningManager {
         if (!owns(owner) || !isReady(state) || state.isOf(Blocks.COBWEB) || lastStopTick == ticks || InventoryManager.get().isOffhandEating()) return false;
 
         int tool = bestTool(state);
+        if (tool != -1 && holdTicks == 0 && canHold()) {
+            hold(state, pos);
+            return false;
+        }
         Runnable action = () -> {
             InteractionManager.get().swing(swing == InteractionManager.SwingMode.None ? InteractionManager.SwingMode.Packet : swing);
             send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
@@ -387,8 +391,17 @@ public final class MiningManager {
         return delta * ((Util.getMeasuringTimeMs() - backgroundStartTime) / 50.0f * rate - margin) >= BACKGROUND_THRESHOLD;
     }
 
+    private boolean canHold() {
+        return !InventoryManager.get().wantsToEat() && !InventoryManager.get().isEating()
+            && mc.player.getHealth() + mc.player.getAbsorptionAmount() > HOLD_MIN_HEALTH;
+    }
+
     private void hold(BlockState state) {
-        int tool = bestTool(state, background);
+        hold(state, background);
+    }
+
+    private void hold(BlockState state, BlockPos at) {
+        int tool = bestTool(state, at);
         if (tool != -1) {
             int hotbar = InventoryManager.get().selectedSlot();
             if (!InventoryManager.get().swapWithHotbar(tool, hotbar)) return;
