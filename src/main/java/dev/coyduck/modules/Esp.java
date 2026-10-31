@@ -35,6 +35,7 @@ public class Esp extends Module {
     );
 
     private static Method keepVisible;
+    private static Method setCulled;
     private static boolean cullingChecked;
 
     public Esp() {
@@ -53,6 +54,11 @@ public class Esp extends Module {
     }
 
     @EventHandler
+    private void onTickPre(TickEvent.Pre event) {
+        onTick(null);
+    }
+
+    @EventHandler
     private void onTick(TickEvent.Post event) {
         if (mc.world == null) return;
         Method method = cullingMethod();
@@ -62,6 +68,7 @@ public class Esp extends Module {
             if (!shows(player)) continue;
             try {
                 method.invoke(player);
+                if (setCulled != null) setCulled.invoke(player, false);
             } catch (ReflectiveOperationException | IllegalArgumentException ignored) {
                 return;
             }
@@ -72,9 +79,12 @@ public class Esp extends Module {
         if (cullingChecked) return keepVisible;
         cullingChecked = true;
         try {
-            keepVisible = Class.forName(CULLABLE).getMethod("setTimeout");
+            Class<?> cullable = Class.forName(CULLABLE);
+            keepVisible = cullable.getMethod("setTimeout");
+            setCulled = cullable.getMethod("setCulled", boolean.class);
         } catch (ReflectiveOperationException ignored) {
             keepVisible = null;
+            setCulled = null;
         }
         return keepVisible;
     }
