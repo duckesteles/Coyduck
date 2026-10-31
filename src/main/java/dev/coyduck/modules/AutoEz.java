@@ -50,7 +50,7 @@ public class AutoEz extends Module {
             "gg",
             "gg wp",
             "gf {name}",
-            "close one"
+            "ggs"
         ))
         .build()
     );
