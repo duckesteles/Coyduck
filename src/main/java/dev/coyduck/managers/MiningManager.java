@@ -5,6 +5,8 @@ import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
 import dev.coyduck.modules.AirMine;
+import dev.coyduck.modules.AutoTotem;
+import dev.coyduck.utils.ExplosionDamage;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
@@ -17,7 +19,9 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.enchantment.Enchantments;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityPose;
+import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffectUtil;
@@ -392,8 +396,19 @@ public final class MiningManager {
     }
 
     private boolean canHold() {
-        return !InventoryManager.get().wantsToEat() && !InventoryManager.get().isEating()
-            && mc.player.getHealth() + mc.player.getAbsorptionAmount() > HOLD_MIN_HEALTH;
+        if (InventoryManager.get().wantsToEat() || InventoryManager.get().isEating()) return false;
+
+        float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
+        return health > HOLD_MIN_HEALTH || (AutoTotem.canAffordPop() && !lethalCrystalNear(health));
+    }
+
+    private boolean lethalCrystalNear(float health) {
+        double range = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
+        for (Entity entity : mc.world.getEntities()) {
+            if (entity instanceof EndCrystalEntity crystal && crystal.squaredDistanceTo(mc.player) <= range
+                && ExplosionDamage.crystal(mc.player, crystal.getEntityPos()) >= health) return true;
+        }
+        return false;
     }
 
     private void hold(BlockState state) {
