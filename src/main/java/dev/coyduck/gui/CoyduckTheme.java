@@ -1,7 +1,16 @@
 package dev.coyduck.gui;
 
 import dev.coyduck.mixin.GuiThemeAccessor;
+import meteordevelopment.meteorclient.gui.renderer.packer.GuiTexture;
 import meteordevelopment.meteorclient.gui.themes.meteor.MeteorGuiTheme;
+import meteordevelopment.meteorclient.gui.widgets.WHorizontalSeparator;
+import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.containers.WSection;
+import meteordevelopment.meteorclient.gui.widgets.containers.WWindow;
+import meteordevelopment.meteorclient.gui.widgets.input.WSlider;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WCheckbox;
+import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
@@ -18,7 +27,7 @@ public class CoyduckTheme extends MeteorGuiTheme {
         color("minus", 226, 108, 122, 255);
         color("favorite", 244, 198, 96, 255);
 
-        color("text", 237, 237, 243, 255);
+        color("text", 196, 196, 206, 255);
         color("text-secondary-text", 150, 150, 162, 255);
         color("text-highlight", 141, 126, 248, 100);
         color("title-text", 237, 237, 243, 255);
@@ -37,6 +46,41 @@ public class CoyduckTheme extends MeteorGuiTheme {
         states("slider-handle", 236, 236, 242, 255, 255, 255, 255, 255, 141, 126, 248, 255);
         color("slider-left", 141, 126, 248, 255);
         color("slider-right", 255, 255, 255, 48);
+    }
+
+    @Override
+    public WWindow window(WWidget icon, String title) {
+        return w(new CoyWidgets.Window(icon, title));
+    }
+
+    @Override
+    public WCheckbox checkbox(boolean checked) {
+        return w(new CoyWidgets.Checkbox(checked));
+    }
+
+    @Override
+    public WSlider slider(double value, double min, double max) {
+        return w(new CoyWidgets.Slider(value, min, max));
+    }
+
+    @Override
+    public WSection section(String title, boolean expanded, WWidget headerWidget) {
+        return w(new CoyWidgets.Section(title, expanded, headerWidget));
+    }
+
+    @Override
+    protected WButton button(String text, GuiTexture texture) {
+        return w(new CoyWidgets.Button(text, texture));
+    }
+
+    @Override
+    public WWidget module(Module module, String title) {
+        return w(new CoyWidgets.ModuleRow(module, title));
+    }
+
+    @Override
+    public WHorizontalSeparator horizontalSeparator(String text) {
+        return w(new CoyWidgets.Separator(text));
     }
 
     private void states(String name, int r, int g, int b, int a, int hr, int hg, int hb, int ha, int pr, int pg, int pb, int pa) {
