@@ -1,6 +1,12 @@
 package dev.coyduck;
 
 import dev.coyduck.commands.PilotCommand;
+import dev.coyduck.gui.CoyduckTheme;
+import dev.coyduck.hud.InfoHud;
+import dev.coyduck.hud.ItemCounter;
+import dev.coyduck.hud.ModuleList;
+import dev.coyduck.hud.TargetHud;
+import dev.coyduck.hud.Watermark;
 import dev.coyduck.managers.ConfigSaver;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
@@ -38,6 +44,8 @@ import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
 import meteordevelopment.meteorclient.commands.Commands;
+import meteordevelopment.meteorclient.gui.GuiThemes;
+import meteordevelopment.meteorclient.systems.hud.Hud;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.item.Items;
@@ -51,6 +59,13 @@ public class Coyduck extends MeteorAddon {
     @Override
     public void onInitialize() {
         LOG.info("Initializing Coyduck");
+
+        GuiThemes.add(new CoyduckTheme());
+        Hud.get().register(Watermark.INFO);
+        Hud.get().register(ModuleList.INFO);
+        Hud.get().register(TargetHud.INFO);
+        Hud.get().register(InfoHud.INFO);
+        Hud.get().register(ItemCounter.INFO);
 
         MeteorClient.EVENT_BUS.subscribe(ConfigSaver.get());
         MeteorClient.EVENT_BUS.subscribe(LatencyManager.get());
