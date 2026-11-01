@@ -49,7 +49,7 @@ public class Step extends Module {
     private final Setting<Mode> mode = sgGeneral.add(new EnumSetting.Builder<Mode>()
         .name("mode")
         .description("Instant walks straight up. Jump uses a real jump. Auto walks up and switches to jumping for a while when the server pulls you back.")
-        .defaultValue(Mode.Auto)
+        .defaultValue(Mode.Instant)
         .build()
     );
 
@@ -104,7 +104,7 @@ public class Step extends Module {
     private long lastFrame;
 
     public Step() {
-        super(Coyduck.CATEGORY, "step+", "Walks up ledges in the direction you move, never from knockback, and backs off when the server disagrees.");
+        super(Coyduck.CATEGORY, "step+", "Walks up ledges like Meteor's step, with guards for holes and lethal crystals.");
     }
 
     public static double cameraY(double y) {
@@ -205,7 +205,9 @@ public class Step extends Module {
             return;
         }
 
-        steppingUp = climb && ledge <= height.get();
+        boolean guarded = holeGuard.get() && inHole() && enemyClose();
+        boolean lethal = ledge > VANILLA && safe.get() && lethalAt(ledge);
+        steppingUp = allowed() && !guarded && !lethal;
         setStepHeight(steppingUp ? height.get().floatValue() : VANILLA);
     }
 
