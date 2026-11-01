@@ -1,6 +1,8 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.utils.ShaderGlow;
+import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
@@ -9,14 +11,12 @@ import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.systems.modules.render.ESP;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
-import net.minecraft.entity.EntityType;
-import net.minecraft.nbt.NbtCompound;
-
-import java.util.HashSet;
-import java.util.Set;
+import meteordevelopment.orbit.EventHandler;
+import net.minecraft.client.render.entity.state.EndCrystalEntityRenderState;
+import net.minecraft.client.render.entity.state.EntityRenderState;
+import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
 
 public class Shaders extends Module {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -25,7 +25,6 @@ public class Shaders extends Module {
         .name("color")
         .description("Color of the shader on players, crystals and held items, and of every Coyduck render.")
         .defaultValue(new SettingColor(165, 120, 255, 255))
-        .onChanged(value -> refresh())
         .build()
     );
 
@@ -33,7 +32,6 @@ public class Shaders extends Module {
         .name("players")
         .description("Puts the shader on other players.")
         .defaultValue(true)
-        .onChanged(value -> refresh())
         .build()
     );
 
@@ -41,7 +39,6 @@ public class Shaders extends Module {
         .name("crystals")
         .description("Puts the shader on end crystals.")
         .defaultValue(true)
-        .onChanged(value -> refresh())
         .build()
     );
 
@@ -49,7 +46,6 @@ public class Shaders extends Module {
         .name("hands")
         .description("Glows the items you hold in first person.")
         .defaultValue(true)
-        .onChanged(value -> refresh())
         .build()
     );
 
@@ -66,7 +62,6 @@ public class Shaders extends Module {
         .defaultValue(0.35)
         .range(0, 1)
         .sliderRange(0, 1)
-        .onChanged(value -> refresh())
         .build()
     );
 
@@ -76,7 +71,6 @@ public class Shaders extends Module {
         .defaultValue(3)
         .range(1, 10)
         .sliderRange(1, 8)
-        .onChanged(value -> refresh())
         .build()
     );
 
@@ -86,30 +80,16 @@ public class Shaders extends Module {
         .defaultValue(2.5)
         .range(0, 10)
         .sliderRange(0, 6)
-        .onChanged(value -> refresh())
         .build()
     );
-
-    private NbtCompound savedEsp;
-    private boolean espWasOn;
 
     public Shaders() {
         super(Coyduck.CATEGORY, "shaders+", "One color for everything: a glow on players, crystals and held items, and all Coyduck renders.");
     }
 
-    private static Shaders active() {
+    public static Shaders active() {
         Shaders module = Modules.get().get(Shaders.class);
         return module != null && module.isActive() ? module : null;
-    }
-
-    public static boolean handsOn() {
-        Shaders module = active();
-        return module != null && module.hands.get();
-    }
-
-    public static int colorValue() {
-        Shaders module = active();
-        return module == null ? -1 : module.color.get().getPacked();
     }
 
     public static Color tint(Color original) {
@@ -119,47 +99,34 @@ public class Shaders extends Module {
         return new Color(global.r, global.g, global.b, original.a);
     }
 
-    @Override
-    public void onActivate() {
-        mc.execute(() -> {
-            if (!isActive()) return;
-            ESP esp = Modules.get().get(ESP.class);
-            savedEsp = esp.settings.toTag();
-            espWasOn = esp.isActive();
-            refresh();
-        });
+    public boolean handsOn() {
+        return hands.get();
     }
 
-    @Override
-    public void onDeactivate() {
-        mc.execute(() -> {
-            ESP esp = Modules.get().get(ESP.class);
-            if (savedEsp != null) esp.settings.fromTag(savedEsp);
-            if (esp.isActive() != espWasOn) esp.toggle();
-            savedEsp = null;
-        });
+    public boolean shows(EntityRenderState state) {
+        if (state instanceof PlayerEntityRenderState player) return players.get() && (mc.player == null || player.id != mc.player.getId());
+        return state instanceof EndCrystalEntityRenderState && crystals.get();
     }
 
-    @SuppressWarnings("unchecked")
-    private void refresh() {
-        if (!isActive() || savedEsp == null) return;
+    public Color maskColor() {
+        Color global = color.get();
+        return new Color(global.r, global.g, global.b, 255);
+    }
 
-        ESP esp = Modules.get().get(ESP.class);
-        esp.settings.get("mode").parse("Shader");
-        esp.settings.get("shape-mode").parse("Both");
-        esp.settings.get("color-mode").parse("EntityType");
-        ((Setting<Integer>) esp.settings.get("outline-width")).set(width.get());
-        ((Setting<Double>) esp.settings.get("glow-multiplier")).set(glow.get());
-        ((Setting<Double>) esp.settings.get("fill-opacity")).set(fill.get());
-        ((Setting<SettingColor>) esp.settings.get("players-color")).set(new SettingColor(color.get()));
-        ((Setting<SettingColor>) esp.settings.get("misc-color")).set(new SettingColor(color.get()));
-        ((Setting<SettingColor>) esp.settings.get("non-living-entity-color")).set(new SettingColor(color.get()));
+    public int glowWidth() {
+        return width.get();
+    }
 
-        Set<EntityType<?>> types = new HashSet<>();
-        if (players.get()) types.add(EntityType.PLAYER);
-        if (crystals.get()) types.add(EntityType.END_CRYSTAL);
-        ((Setting<Set<EntityType<?>>>) esp.settings.get("entities")).set(types);
-        boolean wantEsp = !types.isEmpty();
-        if (esp.isActive() != wantEsp) esp.toggle();
+    public float fillOpacity() {
+        return fill.get().floatValue();
+    }
+
+    public float glowStrength() {
+        return glow.get().floatValue();
+    }
+
+    @EventHandler
+    private void onRender2D(Render2DEvent event) {
+        ShaderGlow.get().render();
     }
 }

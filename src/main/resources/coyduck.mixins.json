@@ -14,6 +14,7 @@
     "GameRendererMixin",
     "GuiThemeAccessor",
     "HeldItemRendererMixin",
+    "WorldRendererMixin",
     "KeyboardInputMixin",
     "LivingEntityMixin",
     "LivingEntityRendererMixin",
