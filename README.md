@@ -25,3 +25,11 @@
 - PearlPhase
 - Burrow
 - ESP
+- HoleESP
+- BreakESP
+- Shaders
+- CrystalChams
+- NoExplosion
+- HideRich
+- AutoEz
+- ClickGui
