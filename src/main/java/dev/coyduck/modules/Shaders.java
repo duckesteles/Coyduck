@@ -20,6 +20,7 @@ import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
 
 public class Shaders extends Module {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
+    private final SettingGroup sgAtmosphere = settings.createGroup("Atmosphere");
 
     private final Setting<SettingColor> color = sgGeneral.add(new ColorSetting.Builder()
         .name("color")
@@ -83,6 +84,51 @@ public class Shaders extends Module {
         .build()
     );
 
+    private final Setting<Boolean> atmosphere = sgAtmosphere.add(new BoolSetting.Builder()
+        .name("atmosphere")
+        .description("Paints the sky and fog with the color and pulls the fog in.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> changeTime = sgAtmosphere.add(new BoolSetting.Builder()
+        .name("change-time")
+        .description("Shows a fixed time of day on your screen only.")
+        .defaultValue(true)
+        .visible(atmosphere::get)
+        .build()
+    );
+
+    private final Setting<Integer> time = sgAtmosphere.add(new IntSetting.Builder()
+        .name("time")
+        .description("The time of day to show. 6000 is noon and 18000 is midnight.")
+        .defaultValue(20000)
+        .range(0, 24000)
+        .sliderRange(0, 24000)
+        .visible(() -> atmosphere.get() && changeTime.get())
+        .build()
+    );
+
+    private final Setting<Integer> fogStart = sgAtmosphere.add(new IntSetting.Builder()
+        .name("fog-start")
+        .description("How many blocks away the fog begins.")
+        .defaultValue(10)
+        .range(0, 512)
+        .sliderRange(0, 128)
+        .visible(atmosphere::get)
+        .build()
+    );
+
+    private final Setting<Integer> fogEnd = sgAtmosphere.add(new IntSetting.Builder()
+        .name("fog-end")
+        .description("How many blocks away the fog is fully solid.")
+        .defaultValue(80)
+        .range(1, 512)
+        .sliderRange(1, 256)
+        .visible(atmosphere::get)
+        .build()
+    );
+
     public Shaders() {
         super(Coyduck.CATEGORY, "shaders+", "One color for everything: a glow on players, crystals and held items, and all Coyduck renders.");
     }
@@ -97,6 +143,27 @@ public class Shaders extends Module {
         if (module == null || !module.allRenders.get()) return original;
         Color global = module.color.get();
         return new Color(global.r, global.g, global.b, original.a);
+    }
+
+    public static Shaders atmosphere() {
+        Shaders module = active();
+        return module != null && module.atmosphere.get() ? module : null;
+    }
+
+    public boolean changesTime() {
+        return changeTime.get();
+    }
+
+    public long timeOfDay() {
+        return time.get();
+    }
+
+    public float fogStart() {
+        return fogStart.get();
+    }
+
+    public float fogEnd() {
+        return fogEnd.get();
     }
 
     public boolean handsOn() {
