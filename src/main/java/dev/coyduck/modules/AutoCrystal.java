@@ -268,7 +268,7 @@ public class AutoCrystal extends Module {
     private final Setting<Double> chipDamage = sgDamage.add(new DoubleSetting.Builder()
         .name("chip-damage")
         .description("Least damage a chip crystal must deal.")
-        .defaultValue(1)
+        .defaultValue(2)
         .range(0, 36)
         .sliderRange(0, 10)
         .visible(chip::get)
