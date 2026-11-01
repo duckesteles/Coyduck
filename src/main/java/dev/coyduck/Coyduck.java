@@ -43,6 +43,7 @@ import dev.coyduck.modules.PearlPhase;
 import dev.coyduck.modules.PopCounter;
 import dev.coyduck.modules.SelfTrap;
 import dev.coyduck.modules.Shaders;
+import dev.coyduck.modules.Step;
 import dev.coyduck.modules.Surround;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.addons.GithubRepo;
@@ -104,6 +105,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new ClickGui());
         Modules.get().add(new KillEffects());
         Modules.get().add(new NoExplosion());
+        Modules.get().add(new Step());
         Modules.get().add(new Esp());
         Modules.get().add(new CrystalChams());
         Modules.get().add(new HoleEsp());
