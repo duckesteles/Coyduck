@@ -295,7 +295,7 @@ public class AutoCity extends Module {
 
         MiningManager mining = MiningManager.get();
         if (!mining.owns(this) || !mining.isMining(current)) return true;
-        if (mining.wasBroken()) return best.score > (currentScore >= BURROW_SCORE ? 0 : currentScore) + SWITCH_GAIN;
+        if (mining.wasBroken()) return currentScore >= BURROW_SCORE ? best.score > SWITCH_GAIN : best.score >= BURROW_SCORE;
         return mining.progress() < SWITCH_PROGRESS && best.score > currentScore + SWITCH_GAIN;
     }
 

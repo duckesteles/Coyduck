@@ -733,6 +733,7 @@ public class AutoCrystal extends Module {
             status = "hurt-sync";
             return;
         }
+        if (antiSurround.get() && placeClearing(targets, health)) return;
 
         List<BlockPos> candidates = candidates();
         rejectedSelf = false;
@@ -779,7 +780,6 @@ public class AutoCrystal extends Module {
         else if (rejectedBalance) status = "balance";
         else status = "low damage";
 
-        if (antiSurround.get() && placeClearing(targets, health)) return;
         if (basePlace.get() && !CrystalTracker.get().hasPlacing()) placeBase(targets, health);
     }
 
@@ -899,6 +899,7 @@ public class AutoCrystal extends Module {
                 if (gapBudget <= 0) return;
 
                 BlockPos gap = BlockPos.fromLong(key);
+                clearGap(gap, targets, health);
                 if (!canFillGap(gap, target, health)) continue;
 
                 BlockPos base = gap.down();
@@ -914,13 +915,51 @@ public class AutoCrystal extends Module {
         }
     }
 
+    private void clearGap(BlockPos gap, List<Target> targets, float health) {
+        BlockPos base = gap.down();
+        if (breakBudget <= 0 || !mc.world.getBlockState(gap).isAir() || !isBase(mc.world.getBlockState(base))) return;
+        if (!inPlaceRange(base) || !breakable(base) || !blocked(base)) return;
+
+        CrystalTracker tracker = CrystalTracker.get();
+        Box cell = new Box(gap.getX(), gap.getY(), gap.getZ(), gap.getX() + 1, gap.getY() + 2, gap.getZ() + 1);
+        for (Entity entity : mc.world.getOtherEntities(null, cell, EntityPredicates.EXCEPT_SPECTATOR)) {
+            if (!tracker.isAlive(entity)) continue;
+            if (!(entity instanceof EndCrystalEntity) && !(entity instanceof ItemEntity) && !(entity instanceof ExperienceOrbEntity)) return;
+        }
+
+        Vec3d middle = Vec3d.ofCenter(gap);
+        double reach = breakRange.get() * breakRange.get();
+        long arrival = Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2;
+        EndCrystalEntity best = null;
+        double bestDistance = CLEAR_RANGE * CLEAR_RANGE;
+        for (Entity entity : mc.world.getEntities()) {
+            if (!(entity instanceof EndCrystalEntity crystal) || !tracker.isAlive(crystal)) continue;
+            if (crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > reach) continue;
+            double distance = crystal.getEntityPos().squaredDistanceTo(middle);
+            if (distance >= bestDistance || !selfSafe(crystal.getEntityPos(), health, arrival, mc.world) || hurtsFriend(crystal.getEntityPos(), mc.world)) continue;
+            best = crystal;
+            bestDistance = distance;
+        }
+        if (best == null || !InteractionManager.get().canAttack()) return;
+        if (!rotationReady(best.getBoundingBox(), breakAim(best), breakRange.get(), BREAK_PRIORITY)) return;
+        if (!InteractionManager.get().attack(best, switchMode.get(), swing.get(), !pauseEating.get())) return;
+
+        Vec3d center = best.getEntityPos();
+        tracker.explodeAt(center);
+        for (Target target : targets) {
+            float hit = ExplosionDamage.crystalRaw(target.player, target.feet, target.box, center, mc.world);
+            if (hit > 0) HurtTracker.get().expect(target.player, hit);
+        }
+        breakBudget--;
+    }
+
     private boolean canFillGap(BlockPos gap, Target target, float health) {
         BlockPos base = gap.down();
         if (!mc.world.getBlockState(gap).isAir() || !isBase(mc.world.getBlockState(base))) return false;
         if (CrystalTracker.get().placingOverlaps(base) || blocked(base) || !inPlaceRange(base) || !breakable(base) || overlapsOwnCells(base)) return false;
 
         Vec3d center = crystalCenter(base);
-        if (!selfSafe(center, health, 0, mc.world) || hurtsFriend(center, mc.world)) return false;
+        if (selfDamage(center, mc.world) >= health || hurtsFriend(center, mc.world)) return false;
 
         float raw = ExplosionDamage.crystalRaw(target.player, target.feet, target.box, center, mc.world);
         float damage = ExplosionDamage.mitigate(target.player, raw);
