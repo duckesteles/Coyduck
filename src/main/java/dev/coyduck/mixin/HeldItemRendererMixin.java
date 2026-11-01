@@ -17,7 +17,15 @@ public abstract class HeldItemRendererMixin {
     private void coyduck$glow(float tickDelta, MatrixStack matrices, OrderedRenderCommandQueue queue, ClientPlayerEntity player, int light, Operation<Void> original) {
         Shaders module = Shaders.active();
         boolean glow = module != null && module.handsOn();
-        original.call(tickDelta, matrices, glow ? new HandQueue(queue, module.maskColor().getPacked()) : queue, player, light);
-        if (glow) ShaderGlow.get().submitVertices();
+        if (!glow) {
+            original.call(tickDelta, matrices, queue, player, light);
+            return;
+        }
+
+        ShaderGlow shader = ShaderGlow.get();
+        shader.submitVertices(() -> {
+            original.call(tickDelta, matrices, new HandQueue(queue, module.maskColor().getPacked()), player, light);
+            shader.vertexConsumerProvider.draw();
+        });
     }
 }

@@ -87,7 +87,7 @@ public class Shaders extends Module {
     private final Setting<Boolean> atmosphere = sgAtmosphere.add(new BoolSetting.Builder()
         .name("atmosphere")
         .description("Paints the sky and fog with the color and pulls the fog in.")
-        .defaultValue(true)
+        .defaultValue(false)
         .build()
     );
 
