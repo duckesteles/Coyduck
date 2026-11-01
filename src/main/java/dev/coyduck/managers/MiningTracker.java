@@ -41,6 +41,10 @@ public final class MiningTracker {
         return mining.get(pos.asLong());
     }
 
+    public void forEach(java.util.function.BiConsumer<BlockPos, Mining> action) {
+        mining.long2ObjectEntrySet().forEach(entry -> action.accept(BlockPos.fromLong(entry.getLongKey()), entry.getValue()));
+    }
+
     public int stage(BlockPos pos) {
         Mining entry = mining.get(pos.asLong());
         return entry == null ? -1 : entry.stage;

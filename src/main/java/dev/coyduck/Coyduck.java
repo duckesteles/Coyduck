@@ -26,6 +26,7 @@ import dev.coyduck.modules.AutoCrystal;
 import dev.coyduck.modules.AutoTotem;
 import dev.coyduck.modules.AutoTrap;
 import dev.coyduck.modules.AutoWeb;
+import dev.coyduck.modules.BreakEsp;
 import dev.coyduck.modules.Burrow;
 import dev.coyduck.modules.ClickGui;
 import dev.coyduck.modules.CustomFov;
@@ -33,12 +34,14 @@ import dev.coyduck.modules.ElytraFly;
 import dev.coyduck.modules.Esp;
 import dev.coyduck.modules.ElytraPilot;
 import dev.coyduck.modules.HideRich;
+import dev.coyduck.modules.HoleEsp;
 import dev.coyduck.modules.HoleSnap;
 import dev.coyduck.modules.KillEffects;
 import dev.coyduck.modules.LadderTrap;
 import dev.coyduck.modules.PearlPhase;
 import dev.coyduck.modules.PopCounter;
 import dev.coyduck.modules.SelfTrap;
+import dev.coyduck.modules.Shaders;
 import dev.coyduck.modules.Surround;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.addons.GithubRepo;
@@ -101,6 +104,9 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new KillEffects());
         Modules.get().add(new Esp());
         Modules.get().add(new CrystalChams());
+        Modules.get().add(new HoleEsp());
+        Modules.get().add(new BreakEsp());
+        Modules.get().add(new Shaders());
 
         Commands.add(new PilotCommand());
     }
