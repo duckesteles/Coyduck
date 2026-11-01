@@ -31,14 +31,14 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 
-public final class WallQueue implements OrderedRenderCommandQueue {
+public class WallQueue implements OrderedRenderCommandQueue {
     private static final float BIAS_SCALE = 1.0f;
     private static final float BIAS_CONSTANT = -1_100_000.0f;
 
     private static final Map<RenderLayer, RenderLayer> LAYERS = new IdentityHashMap<>();
     private static final Map<RenderPipeline, RenderPipeline> PIPELINES = new IdentityHashMap<>();
 
-    private final RenderCommandQueue delegate;
+    protected final RenderCommandQueue delegate;
 
     public WallQueue(RenderCommandQueue delegate) {
         this.delegate = delegate;
@@ -46,6 +46,10 @@ public final class WallQueue implements OrderedRenderCommandQueue {
 
     private static RenderLayer through(RenderLayer layer) {
         return layer == null ? null : LAYERS.computeIfAbsent(layer, WallQueue::copy);
+    }
+
+    protected RenderLayer convert(RenderLayer layer) {
+        return through(layer);
     }
 
     private static RenderLayer copy(RenderLayer layer) {
@@ -97,12 +101,12 @@ public final class WallQueue implements OrderedRenderCommandQueue {
 
     @Override
     public <S> void submitModel(Model<? super S> model, S state, MatrixStack matrices, RenderLayer layer, int light, int overlay, int color, Sprite sprite, int outlineColor, ModelCommandRenderer.CrumblingOverlayCommand crumbling) {
-        delegate.submitModel(model, state, matrices, through(layer), light, overlay, color, sprite, outlineColor, crumbling);
+        delegate.submitModel(model, state, matrices, convert(layer), light, overlay, color, sprite, outlineColor, crumbling);
     }
 
     @Override
     public void submitModelPart(ModelPart part, MatrixStack matrices, RenderLayer layer, int light, int overlay, Sprite sprite, boolean sheeted, boolean hasGlint, int color, ModelCommandRenderer.CrumblingOverlayCommand crumbling, int outlineColor) {
-        delegate.submitModelPart(part, matrices, through(layer), light, overlay, sprite, sheeted, hasGlint, color, crumbling, outlineColor);
+        delegate.submitModelPart(part, matrices, convert(layer), light, overlay, sprite, sheeted, hasGlint, color, crumbling, outlineColor);
     }
 
     @Override
@@ -117,17 +121,17 @@ public final class WallQueue implements OrderedRenderCommandQueue {
 
     @Override
     public void submitBlockStateModel(MatrixStack matrices, RenderLayer layer, BlockStateModel model, float r, float g, float b, int light, int overlay, int outlineColor) {
-        delegate.submitBlockStateModel(matrices, through(layer), model, r, g, b, light, overlay, outlineColor);
+        delegate.submitBlockStateModel(matrices, convert(layer), model, r, g, b, light, overlay, outlineColor);
     }
 
     @Override
     public void submitItem(MatrixStack matrices, ItemDisplayContext context, int light, int overlay, int outlineColor, int[] tints, List<BakedQuad> quads, RenderLayer layer, ItemRenderState.Glint glint) {
-        delegate.submitItem(matrices, context, light, overlay, outlineColor, tints, quads, through(layer), glint);
+        delegate.submitItem(matrices, context, light, overlay, outlineColor, tints, quads, convert(layer), glint);
     }
 
     @Override
     public void submitCustom(MatrixStack matrices, RenderLayer layer, OrderedRenderCommandQueue.Custom custom) {
-        delegate.submitCustom(matrices, through(layer), custom);
+        delegate.submitCustom(matrices, convert(layer), custom);
     }
 
     @Override

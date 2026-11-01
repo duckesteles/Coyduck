@@ -9,8 +9,8 @@ import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.systems.modules.render.Chams;
 import meteordevelopment.meteorclient.systems.modules.render.ESP;
+import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import net.minecraft.entity.EntityType;
 import net.minecraft.nbt.NbtCompound;
@@ -23,7 +23,7 @@ public class Shaders extends Module {
 
     private final Setting<SettingColor> color = sgGeneral.add(new ColorSetting.Builder()
         .name("color")
-        .description("Color of the shader on players, crystals and your hands.")
+        .description("Color of the shader on players, crystals and held items, and of every Coyduck render.")
         .defaultValue(new SettingColor(165, 120, 255, 255))
         .onChanged(value -> refresh())
         .build()
@@ -47,9 +47,16 @@ public class Shaders extends Module {
 
     private final Setting<Boolean> hands = sgGeneral.add(new BoolSetting.Builder()
         .name("hands")
-        .description("Tints your hands and held items with the color.")
+        .description("Glows the items you hold in first person.")
         .defaultValue(true)
         .onChanged(value -> refresh())
+        .build()
+    );
+
+    private final Setting<Boolean> allRenders = sgGeneral.add(new BoolSetting.Builder()
+        .name("all-renders")
+        .description("Uses the color for hole, break, crystal and block renders too. The red to green mining box keeps its colors.")
+        .defaultValue(true)
         .build()
     );
 
@@ -84,12 +91,32 @@ public class Shaders extends Module {
     );
 
     private NbtCompound savedEsp;
-    private NbtCompound savedChams;
     private boolean espWasOn;
-    private boolean chamsWasOn;
 
     public Shaders() {
-        super(Coyduck.CATEGORY, "shaders+", "A colored glow on players and crystals and a matching tint on your hands, all from one color.");
+        super(Coyduck.CATEGORY, "shaders+", "One color for everything: a glow on players, crystals and held items, and all Coyduck renders.");
+    }
+
+    private static Shaders active() {
+        Shaders module = Modules.get().get(Shaders.class);
+        return module != null && module.isActive() ? module : null;
+    }
+
+    public static boolean handsOn() {
+        Shaders module = active();
+        return module != null && module.hands.get();
+    }
+
+    public static int colorValue() {
+        Shaders module = active();
+        return module == null ? -1 : module.color.get().getPacked();
+    }
+
+    public static Color tint(Color original) {
+        Shaders module = active();
+        if (module == null || !module.allRenders.get()) return original;
+        Color global = module.color.get();
+        return new Color(global.r, global.g, global.b, original.a);
     }
 
     @Override
@@ -97,17 +124,8 @@ public class Shaders extends Module {
         mc.execute(() -> {
             if (!isActive()) return;
             ESP esp = Modules.get().get(ESP.class);
-            Chams chams = Modules.get().get(Chams.class);
             savedEsp = esp.settings.toTag();
-            savedChams = chams.settings.toTag();
             espWasOn = esp.isActive();
-            chamsWasOn = chams.isActive();
-
-            CrystalChams wire = Modules.get().get(CrystalChams.class);
-            if (wire != null && wire.isActive() && crystals.get()) {
-                wire.toggle();
-                info("Disabled %s, it hides the crystal the shader draws on.", wire.title);
-            }
             refresh();
         });
     }
@@ -116,13 +134,9 @@ public class Shaders extends Module {
     public void onDeactivate() {
         mc.execute(() -> {
             ESP esp = Modules.get().get(ESP.class);
-            Chams chams = Modules.get().get(Chams.class);
             if (savedEsp != null) esp.settings.fromTag(savedEsp);
-            if (savedChams != null) chams.settings.fromTag(savedChams);
             if (esp.isActive() != espWasOn) esp.toggle();
-            if (chams.isActive() != chamsWasOn) chams.toggle();
             savedEsp = null;
-            savedChams = null;
         });
     }
 
@@ -147,13 +161,5 @@ public class Shaders extends Module {
         ((Setting<Set<EntityType<?>>>) esp.settings.get("entities")).set(types);
         boolean wantEsp = !types.isEmpty();
         if (esp.isActive() != wantEsp) esp.toggle();
-
-        Chams chams = Modules.get().get(Chams.class);
-        chams.hand.set(hands.get());
-        chams.handTexture.set(true);
-        SettingColor tint = new SettingColor(color.get());
-        tint.a = 170;
-        chams.handColor.set(tint);
-        if (hands.get() && !chams.isActive()) chams.toggle();
     }
 }

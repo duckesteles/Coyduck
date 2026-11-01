@@ -121,7 +121,7 @@ public class CrystalChams extends Module {
             for (int[] face : FACES) {
                 Vector3f a = corners[face[0]], b = corners[face[1]], c = corners[face[2]], d = corners[face[3]];
                 renderer.quad(pos.x + a.x, pos.y + a.y, pos.z + a.z, pos.x + b.x, pos.y + b.y, pos.z + b.z,
-                    pos.x + c.x, pos.y + c.y, pos.z + c.z, pos.x + d.x, pos.y + d.y, pos.z + d.z, sideColor.get());
+                    pos.x + c.x, pos.y + c.y, pos.z + c.z, pos.x + d.x, pos.y + d.y, pos.z + d.z, Shaders.tint(sideColor.get()));
             }
         }
 
@@ -130,7 +130,7 @@ public class CrystalChams extends Module {
                 for (int bit = 1; bit < 8; bit <<= 1) {
                     if ((i & bit) != 0) continue;
                     Vector3f a = corners[i], b = corners[i | bit];
-                    renderer.line(pos.x + a.x, pos.y + a.y, pos.z + a.z, pos.x + b.x, pos.y + b.y, pos.z + b.z, lineColor.get());
+                    renderer.line(pos.x + a.x, pos.y + a.y, pos.z + a.z, pos.x + b.x, pos.y + b.y, pos.z + b.z, Shaders.tint(lineColor.get()));
                 }
             }
         }

@@ -1,5 +1,6 @@
 package dev.coyduck.utils;
 
+import dev.coyduck.modules.Shaders;
 import meteordevelopment.meteorclient.renderer.Renderer3D;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.utils.render.color.Color;
@@ -24,6 +25,10 @@ public final class DuckRender {
     private DuckRender() {}
 
     public static void box(Renderer3D renderer, Box box, Color side, Color line, ShapeMode mode, double alpha) {
+        exact(renderer, box, Shaders.tint(side), Shaders.tint(line), mode, alpha);
+    }
+
+    public static void exact(Renderer3D renderer, Box box, Color side, Color line, ShapeMode mode, double alpha) {
         if (alpha <= 0.01) return;
 
         if (mode != ShapeMode.Lines) {

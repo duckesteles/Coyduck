@@ -241,8 +241,13 @@ public class AutoCity extends Module {
             line = DuckRender.lerp(lineShade, PROGRESS_START.a(line.a), PROGRESS_END.a(line.a), progress);
         }
 
-        if (shapeMode.get() != ShapeMode.Lines) DuckRender.box(event.renderer, box.contract((1 - progress) * 0.5), side, line, ShapeMode.Sides, 1);
-        if (shapeMode.get() != ShapeMode.Sides) DuckRender.box(event.renderer, box, side, line, ShapeMode.Lines, 1);
+        if (shapeMode.get() != ShapeMode.Lines) drawBox(event, box.contract((1 - progress) * 0.5), side, line, ShapeMode.Sides);
+        if (shapeMode.get() != ShapeMode.Sides) drawBox(event, box, side, line, ShapeMode.Lines);
+    }
+
+    private void drawBox(Render3DEvent event, Box box, Color side, Color line, ShapeMode mode) {
+        if (progressColor.get()) DuckRender.exact(event.renderer, box, side, line, mode, 1);
+        else DuckRender.box(event.renderer, box, side, line, mode, 1);
     }
 
     private void update() {

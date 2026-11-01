@@ -235,7 +235,7 @@ public class HoleEsp extends Module {
     private void draw(Renderer3D r, Hole hole) {
         double inverse = 1 - hole.shown;
         double t = 1 - inverse * inverse * inverse;
-        Color base = hole.safe ? safeColor.get() : otherColor.get();
+        Color base = Shaders.tint(hole.safe ? safeColor.get() : otherColor.get());
         fill.set(base.r, base.g, base.b, (int) (base.a * t));
         clear.set(base.r, base.g, base.b, 0);
         line.set(base.r, base.g, base.b, (int) (Math.min(255, base.a * 3.5) * t));

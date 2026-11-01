@@ -3,6 +3,7 @@ package dev.coyduck.mixin;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import dev.coyduck.modules.CrystalChams;
+import meteordevelopment.meteorclient.utils.OutlineRenderCommandQueue;
 import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.render.entity.EndCrystalEntityRenderer;
 import net.minecraft.client.render.entity.model.EndCrystalEntityModel;
@@ -26,6 +27,6 @@ public abstract class EndCrystalEntityRendererMixin implements CrystalChams.Mode
 
     @WrapMethod(method = "render(Lnet/minecraft/client/render/entity/state/EndCrystalEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V")
     private void coyduck$chams(EndCrystalEntityRenderState state, MatrixStack matrices, OrderedRenderCommandQueue queue, CameraRenderState camera, Operation<Void> original) {
-        if (!CrystalChams.hidesModel()) original.call(state, matrices, queue, camera);
+        if (!CrystalChams.hidesModel() || queue instanceof OutlineRenderCommandQueue) original.call(state, matrices, queue, camera);
     }
 }
