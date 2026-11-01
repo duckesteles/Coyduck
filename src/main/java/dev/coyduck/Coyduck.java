@@ -32,6 +32,7 @@ import dev.coyduck.modules.ClickGui;
 import dev.coyduck.modules.CustomFov;
 import dev.coyduck.modules.ElytraFly;
 import dev.coyduck.modules.Esp;
+import dev.coyduck.modules.ElytraMace;
 import dev.coyduck.modules.ElytraPilot;
 import dev.coyduck.modules.HideRich;
 import dev.coyduck.modules.HoleEsp;
@@ -92,6 +93,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new LadderTrap());
         Modules.get().add(new ElytraFly());
         Modules.get().add(new ElytraPilot());
+        Modules.get().add(new ElytraMace());
         Modules.get().add(new PearlPhase());
         Modules.get().add(new Burrow());
         Modules.get().add(new SelfTrap());
