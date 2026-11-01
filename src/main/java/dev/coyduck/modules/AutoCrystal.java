@@ -104,6 +104,8 @@ public class AutoCrystal extends Module {
     private static final int GAP_PLACES = 1;
     private static final float MINE_AHEAD_PROGRESS = 0.6f;
     private static final double MINE_AHEAD_RANGE = 4.0;
+    private static final int AIM_PRIORITY = 99;
+    private static final float HURT_WORTH = 0.6f;
 
     private record Choice(Target target, float damage, float raw, float self, float score) {
         boolean beats(Choice other) {
@@ -385,8 +387,16 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> rotate = sgRotate.add(new BoolSetting.Builder()
         .name("rotate")
-        .description("Looks at every crystal and block before using it, for servers whose anticheat checks where you look.")
+        .description("Looks at the block before placing a crystal on it. Placing fails much more often on 6b6t without this.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> rotateBreak = sgRotate.add(new BoolSetting.Builder()
+        .name("rotate-break")
+        .description("Also looks at crystals before breaking them. Breaking works without it and is a tick faster.")
         .defaultValue(false)
+        .visible(rotate::get)
         .build()
     );
 
@@ -727,6 +737,7 @@ public class AutoCrystal extends Module {
             return;
         }
 
+        aimAtMinedGap(targets);
         if (antiSurround.get() && gapBudget > 0) fillGaps(targets, health);
         if (placeBudget <= 0) return;
         if (holding) {
@@ -791,8 +802,10 @@ public class AutoCrystal extends Module {
             for (long key : target.gaps) {
                 BlockPos cell = BlockPos.fromLong(key);
                 BlockPos base = cell.down();
-                if (!mc.world.getBlockState(cell).isAir() || !isBase(mc.world.getBlockState(base))) continue;
-                if (!inPlaceRange(base) || !breakable(base) || overlapsOwnCells(base) || !blockedByDrops(base)) continue;
+                BlockState state = mc.world.getBlockState(cell);
+                boolean web = state.isOf(Blocks.COBWEB);
+                if ((!state.isAir() && !web) || !isBase(mc.world.getBlockState(base))) continue;
+                if (!inPlaceRange(base) || !breakable(base) || overlapsOwnCells(base) || (!web && !blockedByDrops(base))) continue;
                 gap = cell;
                 break;
             }
@@ -866,6 +879,23 @@ public class AutoCrystal extends Module {
         }
     }
 
+    private void aimAtMinedGap(List<Target> targets) {
+        if (!rotate.get() || !antiSurround.get()) return;
+
+        MiningManager mining = MiningManager.get();
+        BlockPos cell = mining.pos();
+        if (cell == null || mining.progress() < MINE_AHEAD_PROGRESS) return;
+
+        BlockPos base = cell.down();
+        if (!isBase(mc.world.getBlockState(base)) || !inPlaceRange(base)) return;
+        long key = cell.asLong();
+        for (Target target : targets) {
+            if (!target.gaps.contains(key)) continue;
+            rotationReady(new Box(base), InteractionManager.get().crystalAim(base), placeRange.get() + 1, AIM_PRIORITY);
+            return;
+        }
+    }
+
     private BlockPos minedCell(List<Target> targets) {
         if (!mineAhead.get()) return null;
 
@@ -917,8 +947,10 @@ public class AutoCrystal extends Module {
 
     private void clearGap(BlockPos gap, List<Target> targets, float health) {
         BlockPos base = gap.down();
-        if (breakBudget <= 0 || !mc.world.getBlockState(gap).isAir() || !isBase(mc.world.getBlockState(base))) return;
-        if (!inPlaceRange(base) || !breakable(base) || !blocked(base)) return;
+        BlockState state = mc.world.getBlockState(gap);
+        boolean web = state.isOf(Blocks.COBWEB);
+        if (breakBudget <= 0 || (!state.isAir() && !web) || !isBase(mc.world.getBlockState(base))) return;
+        if (!inPlaceRange(base) || !breakable(base) || (!web && !blocked(base))) return;
 
         CrystalTracker tracker = CrystalTracker.get();
         Box cell = new Box(gap.getX(), gap.getY(), gap.getZ(), gap.getX() + 1, gap.getY() + 2, gap.getZ() + 1);
@@ -987,6 +1019,10 @@ public class AutoCrystal extends Module {
 
                 Vec3d center = crystal.getEntityPos();
                 Choice choice = evaluate(targets, center, health, hurtSync.get() ? arrival : 0, mc.world);
+                if (choice != null && hurtSync.get() && choice.damage < choice.target.health) {
+                    Choice full = evaluate(targets, center, health, 0, mc.world);
+                    if (full != null && choice.damage < full.damage * HURT_WORTH) choice = null;
+                }
                 if (choice == null) {
                     if (hurtSync.get()) {
                         Choice ready = evaluate(targets, center, health, 0, mc.world);
@@ -1437,6 +1473,7 @@ public class AutoCrystal extends Module {
 
     private boolean rotationReady(Box box, Vec3d aim, double range, int priority) {
         if (!rotate.get()) return true;
+        if (!rotateBreak.get() && priority != PLACE_PRIORITY && priority != GAP_PRIORITY && priority != AIM_PRIORITY) return true;
 
         RotationManager rotations = RotationManager.get();
         rotations.request(priority, aim, rotateSpeed.get().floatValue(), moveFix.get());

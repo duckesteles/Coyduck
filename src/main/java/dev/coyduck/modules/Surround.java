@@ -36,6 +36,7 @@ import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.MovementType;
@@ -48,6 +49,7 @@ import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.EntitiesDestroyS2CPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
+import net.minecraft.util.Hand;
 import net.minecraft.util.Util;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.entity.player.PlayerEntity;
@@ -73,6 +75,10 @@ public class Surround extends Module {
     }
 
     private static final long HOT_TIME = 2_000;
+    private static final long FEET_WAIT = 3_000;
+    private static final long FEET_RETRY = 250;
+    private static final float FEET_BUSY = 0.3f;
+    private static final int FEET_PRIORITY = 1_000;
     private static final double EDGE = 1.0E-4;
     private static final double CENTER_SPEED = 0.2;
     private static final double NEAR = 5 * 5;
@@ -128,6 +134,13 @@ public class Surround extends Module {
     private final Setting<Boolean> floor = sgGeneral.add(new BoolSetting.Builder()
         .name("floor")
         .description("Fills the blocks under your feet.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> clearFeet = sgGeneral.add(new BoolSetting.Builder()
+        .name("clear-feet")
+        .description("Breaks scaffolding and ladders put on you. Waits up to 3 seconds for a mine that is already under way.")
         .defaultValue(true)
         .build()
     );
@@ -243,6 +256,15 @@ public class Surround extends Module {
         super(Coyduck.CATEGORY, "surround+", "Surrounds your feet with obsidian and keeps it up against any break.");
     }
 
+    private long feetSeen;
+    private long feetHit;
+
+    @Override
+    public void onDeactivate() {
+        MiningManager.get().release(this);
+        feetSeen = 0;
+    }
+
     @Override
     public void onActivate() {
         Module meteor = Modules.get().get(meteordevelopment.meteorclient.systems.modules.combat.Surround.class);
@@ -264,6 +286,47 @@ public class Surround extends Module {
     private void onTick(TickEvent.Pre event) {
         budget = blocksPerTick.get();
         pass();
+        clearFeet();
+    }
+
+    private void clearFeet() {
+        if (!canAct()) return;
+
+        MiningManager mining = MiningManager.get();
+        BlockPos climb = clearFeet.get() ? climbable() : null;
+        if (climb == null) {
+            feetSeen = 0;
+            mining.release(this);
+            return;
+        }
+
+        long now = Util.getMeasuringTimeMs();
+        if (feetSeen == 0) feetSeen = now;
+        boolean waited = now - feetSeen >= FEET_WAIT;
+        if (!waited && !mining.owns(this) && mining.pos() != null && mining.progress() >= FEET_BUSY) return;
+
+        if (mc.world.getBlockState(climb).isOf(Blocks.SCAFFOLDING)) {
+            if (now - feetHit < FEET_RETRY) return;
+            feetHit = now;
+            mc.interactionManager.attackBlock(climb, Direction.UP);
+            mc.player.swingHand(Hand.MAIN_HAND);
+            return;
+        }
+        mining.mine(this, waited ? FEET_PRIORITY : 1, climb, true, switchMode.get(), InteractionManager.SwingMode.Packet);
+    }
+
+    private BlockPos climbable() {
+        for (long key : Targets.columns(Targets.box(mc.player))) {
+            BlockPos feet = BlockPos.fromLong(key);
+            if (isClimb(feet)) return feet;
+            if (isClimb(feet.up())) return feet.up();
+        }
+        return null;
+    }
+
+    private boolean isClimb(BlockPos pos) {
+        BlockState state = mc.world.getBlockState(pos);
+        return state.isOf(Blocks.SCAFFOLDING) || state.isOf(Blocks.LADDER) || state.isOf(Blocks.VINE);
     }
 
     @EventHandler

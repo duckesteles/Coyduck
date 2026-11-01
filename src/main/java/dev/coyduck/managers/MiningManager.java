@@ -49,7 +49,7 @@ public final class MiningManager {
     private static final int HOLD_TICKS = 2;
     private static final int MAX_HOLDS = 4;
     private static final float HOLD_MIN_HEALTH = 10;
-    private static final int MAX_STOPS = 1;
+    private static final int MAX_STOPS = 2;
 
     private BlockPos background;
     private int backgroundStart;

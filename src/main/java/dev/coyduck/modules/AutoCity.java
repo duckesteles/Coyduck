@@ -3,6 +3,7 @@ package dev.coyduck.modules;
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.managers.InteractionManager;
+import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.utils.DuckRender;
@@ -26,6 +27,8 @@ import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.entity.decoration.EndCrystalEntity;
+import net.minecraft.util.Util;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
@@ -45,6 +48,7 @@ public class AutoCity extends Module {
     private static final float BURROW_SCORE = 1000;
     private static final float SWITCH_GAIN = 4;
     private static final float SWITCH_PROGRESS = 0.3f;
+    private static final long OPEN_LIMIT = 1500;
     private static final float SUPPORT_PENALTY = 1;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -176,6 +180,7 @@ public class AutoCity extends Module {
     private BlockPos current;
     private BlockPos currentSupport;
     private float currentScore;
+    private long openSince;
 
     public AutoCity() {
         super(Coyduck.CATEGORY, "auto-city+", "Mines the target's surround or burrow and breaks it again whenever it is replaced.");
@@ -257,11 +262,14 @@ public class AutoCity extends Module {
         LongSet columns = Targets.columns(box);
 
         if (current != null && !stillValid(current, columns)) current = null;
+        if (current == null || !mc.world.getBlockState(current).isReplaceable()) openSince = 0;
+        else if (openSince == 0) openSince = Util.getMeasuringTimeMs();
 
         List<Choice> choices = choose(box, columns);
         Choice best = choices.isEmpty() ? null : choices.getFirst();
         if (best != null && (current == null || shouldSwitch(best))) {
             current = best.pos;
+            openSince = 0;
             currentScore = best.score;
             currentSupport = best.support;
         }
@@ -295,8 +303,17 @@ public class AutoCity extends Module {
 
         MiningManager mining = MiningManager.get();
         if (!mining.owns(this) || !mining.isMining(current)) return true;
-        if (mining.wasBroken()) return currentScore >= BURROW_SCORE ? best.score > SWITCH_GAIN : best.score >= BURROW_SCORE;
+        if (mining.wasBroken()) {
+            if (currentScore >= BURROW_SCORE) return best.score > SWITCH_GAIN;
+            return best.score >= BURROW_SCORE || (stuckOpen() && best.score > SWITCH_GAIN);
+        }
         return mining.progress() < SWITCH_PROGRESS && best.score > currentScore + SWITCH_GAIN;
+    }
+
+    private boolean stuckOpen() {
+        if (openSince == 0 || Util.getMeasuringTimeMs() - openSince < OPEN_LIMIT) return false;
+        Box cell = new Box(current.getX(), current.getY(), current.getZ(), current.getX() + 1, current.getY() + 2, current.getZ() + 1);
+        return mc.world.getOtherEntities(null, cell, entity -> entity instanceof EndCrystalEntity && CrystalTracker.get().isAlive(entity)).isEmpty();
     }
 
     private boolean stillValid(BlockPos pos, LongSet columns) {
@@ -354,9 +371,10 @@ public class AutoCity extends Module {
 
             BlockPos support = null;
             float damage = gapDamage(pos, box, feet, null);
-            if (damage < minDamage.get() && supportable(pos.down(), own)) {
+            boolean noFloor = !Targets.isBase(mc.world.getBlockState(pos.down()));
+            if ((noFloor || damage < minDamage.get()) && supportable(pos.down(), own)) {
                 support = pos.down();
-                damage = gapDamage(pos, box, feet, support) - SUPPORT_PENALTY;
+                damage = Math.max(noFloor ? damage : 0, gapDamage(pos, box, feet, support) - SUPPORT_PENALTY);
             }
             if (damage < minDamage.get()) continue;
 
