@@ -147,6 +147,13 @@ public class Shaders extends Module {
         return new Color(global.r, global.g, global.b, original.a);
     }
 
+    public static Color lightTint(Color original) {
+        Shaders module = active();
+        if (module == null || !module.allRenders.get()) return original;
+        Color global = module.color.get();
+        return new Color((global.r + 255) / 2, (global.g + 255) / 2, (global.b + 255) / 2, original.a);
+    }
+
     public static Shaders atmosphere() {
         Shaders module = active();
         return module != null && module.atmosphere.get() ? module : null;

@@ -130,7 +130,7 @@ public class CrystalChams extends Module {
                 for (int bit = 1; bit < 8; bit <<= 1) {
                     if ((i & bit) != 0) continue;
                     Vector3f a = corners[i], b = corners[i | bit];
-                    renderer.line(pos.x + a.x, pos.y + a.y, pos.z + a.z, pos.x + b.x, pos.y + b.y, pos.z + b.z, Shaders.tint(lineColor.get()));
+                    renderer.line(pos.x + a.x, pos.y + a.y, pos.z + a.z, pos.x + b.x, pos.y + b.y, pos.z + b.z, Shaders.lightTint(lineColor.get()));
                 }
             }
         }

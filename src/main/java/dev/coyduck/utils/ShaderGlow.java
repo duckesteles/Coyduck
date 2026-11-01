@@ -1,7 +1,12 @@
 package dev.coyduck.utils;
 
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.DepthTestFunction;
+import com.mojang.blaze3d.systems.RenderSystem;
 import dev.coyduck.modules.Shaders;
 import meteordevelopment.meteorclient.mixininterface.IWorldRenderer;
+import meteordevelopment.meteorclient.renderer.ExtendedRenderPipelineBuilder;
 import meteordevelopment.meteorclient.renderer.MeshRenderer;
 import meteordevelopment.meteorclient.renderer.MeteorRenderPipelines;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
@@ -11,24 +16,44 @@ import meteordevelopment.meteorclient.utils.render.NoopOutlineVertexConsumerProv
 import meteordevelopment.meteorclient.utils.render.WrapperImmediateVertexConsumerProvider;
 import meteordevelopment.meteorclient.utils.render.postprocess.EntityShader;
 import meteordevelopment.meteorclient.utils.render.postprocess.OutlineUniforms;
+import net.minecraft.client.gl.UniformType;
 import net.minecraft.client.render.command.RenderDispatcher;
 import net.minecraft.client.render.entity.EntityRenderManager;
 import net.minecraft.client.render.entity.state.EntityRenderState;
 import net.minecraft.client.render.state.WorldRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 public final class ShaderGlow extends EntityShader {
+    private static final RenderPipeline SOFT = new ExtendedRenderPipelineBuilder()
+        .withLocation(Identifier.of("coyduck", "pipeline/glow"))
+        .withVertexFormat(MeteorRenderPipelines.POST_OUTLINE.getVertexFormat(), MeteorRenderPipelines.POST_OUTLINE.getVertexFormatMode())
+        .withVertexShader(Identifier.of("coyduck", "post/glow"))
+        .withFragmentShader(Identifier.of("coyduck", "post/glow"))
+        .withSampler("u_Texture")
+        .withUniform("PostData", UniformType.UNIFORM_BUFFER)
+        .withUniform("OutlineData", UniformType.UNIFORM_BUFFER)
+        .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+        .withDepthWrite(false)
+        .withBlend(BlendFunction.TRANSLUCENT)
+        .withCull(false)
+        .build();
+
     private static ShaderGlow instance;
 
     private final OutlineRenderCommandQueue queue = new OutlineRenderCommandQueue();
     private RenderDispatcher dispatcher;
 
     private ShaderGlow() {
-        super(MeteorRenderPipelines.POST_OUTLINE);
+        super(pipeline());
+    }
+
+    private static RenderPipeline pipeline() {
+        return RenderSystem.getDevice().precompilePipeline(SOFT).isValid() ? SOFT : MeteorRenderPipelines.POST_OUTLINE;
     }
 
     public static ShaderGlow get() {
