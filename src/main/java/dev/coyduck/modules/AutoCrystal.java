@@ -66,11 +66,13 @@ import net.minecraft.network.packet.s2c.play.EntitiesDestroyS2CPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.util.Util;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.RaycastContext;
 import net.minecraft.world.BlockView;
 
 import java.util.ArrayList;
@@ -350,6 +352,13 @@ public class AutoCrystal extends Module {
     private final Setting<Boolean> antiSurround = sgGeneral.add(new BoolSetting.Builder()
         .name("anti-surround")
         .description("Fills a gap in the target's surround with a crystal the moment it opens, and prefers crystals that keep it open, so the gap cannot be closed again.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> throughWalls = sgGeneral.add(new BoolSetting.Builder()
+        .name("through-walls")
+        .description("Places and breaks crystals with a block in between. On 6b6t these fail about twice as often for placing and six times as often for breaking, but most still land. Off only uses crystals you can see.")
         .defaultValue(true)
         .build()
     );
@@ -759,7 +768,7 @@ public class AutoCrystal extends Module {
         BlockView minedView = mined == null ? null : new BlockOverlay(mc.world).set(mined, mc.world.getFluidState(mined).getBlockState());
         double aheadRange = MINE_AHEAD_RANGE * MINE_AHEAD_RANGE;
         for (BlockPos base : candidates) {
-            if (base.equals(mined)) continue;
+            if (base.equals(mined) || !canUse(base)) continue;
             Vec3d center = crystalCenter(base);
             boolean ahead = minedView != null && center.squaredDistanceTo(Vec3d.ofCenter(mined)) <= aheadRange;
             Choice choice = evaluate(targets, center, health, 0, ahead ? minedView : mc.world);
@@ -820,7 +829,7 @@ public class AutoCrystal extends Module {
         for (BlockPos base : candidates()) {
             Vec3d center = crystalCenter(base);
             double distance = center.squaredDistanceTo(gapCenter);
-            if (distance > bestDistance) continue;
+            if (distance > bestDistance || !canUse(base)) continue;
             if (!selfSafe(center, health, 0, mc.world) || hurtsFriend(center, mc.world)) continue;
             best = base;
             bestDistance = distance;
@@ -861,7 +870,7 @@ public class AutoCrystal extends Module {
             if (breakBudget <= 0) return;
             if (!(entity instanceof EndCrystalEntity crystal) || !tracker.isAlive(crystal)) continue;
             long base = crystal.getBlockPos().down().asLong();
-            if (!clearing.containsKey(base) || crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > range) continue;
+            if (!clearing.containsKey(base) || crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > range || !canHit(crystal)) continue;
 
             Vec3d center = crystal.getEntityPos();
             if (!selfSafe(center, health, arrival, mc.world) || hurtsFriend(center, mc.world)) continue;
@@ -966,7 +975,7 @@ public class AutoCrystal extends Module {
         double bestDistance = CLEAR_RANGE * CLEAR_RANGE;
         for (Entity entity : mc.world.getEntities()) {
             if (!(entity instanceof EndCrystalEntity crystal) || !tracker.isAlive(crystal)) continue;
-            if (crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > reach) continue;
+            if (crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > reach || !canHit(crystal)) continue;
             double distance = crystal.getEntityPos().squaredDistanceTo(middle);
             if (distance >= bestDistance || !selfSafe(crystal.getEntityPos(), health, arrival, mc.world) || hurtsFriend(crystal.getEntityPos(), mc.world)) continue;
             best = crystal;
@@ -988,7 +997,7 @@ public class AutoCrystal extends Module {
     private boolean canFillGap(BlockPos gap, Target target, float health) {
         BlockPos base = gap.down();
         if (!mc.world.getBlockState(gap).isAir() || !isBase(mc.world.getBlockState(base))) return false;
-        if (CrystalTracker.get().placingOverlaps(base) || blocked(base) || !inPlaceRange(base) || !breakable(base) || overlapsOwnCells(base)) return false;
+        if (CrystalTracker.get().placingOverlaps(base) || blocked(base) || !inPlaceRange(base) || !breakable(base) || overlapsOwnCells(base) || !canUse(base)) return false;
 
         Vec3d center = crystalCenter(base);
         if (selfDamage(center, mc.world) >= health || hurtsFriend(center, mc.world)) return false;
@@ -1015,7 +1024,7 @@ public class AutoCrystal extends Module {
 
             for (Entity entity : mc.world.getEntities()) {
                 if (!(entity instanceof EndCrystalEntity crystal) || !tracker.isAlive(crystal)) continue;
-                if (crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > breakRange.get() * breakRange.get()) continue;
+                if (crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > breakRange.get() * breakRange.get() || !canHit(crystal)) continue;
 
                 Vec3d center = crystal.getEntityPos();
                 Choice choice = evaluate(targets, center, health, hurtSync.get() ? arrival : 0, mc.world);
@@ -1076,7 +1085,7 @@ public class AutoCrystal extends Module {
         for (Entity entity : mc.world.getEntities()) {
             if (breakBudget <= 0) return broke;
             if (!(entity instanceof EndCrystalEntity crystal) || !tracker.isAlive(crystal)) continue;
-            if (crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > range) continue;
+            if (crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > range || !canHit(crystal)) continue;
 
             Vec3d center = crystal.getEntityPos();
             float raw = ExplosionDamage.crystalRaw(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), center, mc.world);
@@ -1156,7 +1165,7 @@ public class AutoCrystal extends Module {
                         if (ring.contains(base) || ownCells.contains(base) || overlapsOwnCells(base)) continue;
                         if (MiningManager.get().isMining(base) || MiningTracker.get().wasBroken(base, BROKEN_GAP_TIME)) continue;
                         if (!inPlaceRange(base) || !breakable(base) || !interaction.obstructions(base).isEmpty() || blocked(base)) continue;
-                        if (target.box.intersects(new Box(base))) continue;
+                        if (target.box.intersects(new Box(base)) || (!throughWalls.get() && !clearLine(crystalCenter(base)))) continue;
 
                         BlockOverlay view = new BlockOverlay(mc.world).set(base, Blocks.OBSIDIAN.getDefaultState());
                         Choice choice = evaluate(targets, crystalCenter(base), health, 0, view);
@@ -1469,6 +1478,23 @@ public class AutoCrystal extends Module {
     private Vec3d breakAim(EndCrystalEntity crystal) {
         BlockPos base = crystal.getBlockPos().down();
         return isBase(mc.world.getBlockState(base)) ? InteractionManager.get().crystalAim(base) : crystal.getBoundingBox().getCenter();
+    }
+
+    private boolean canUse(BlockPos base) {
+        if (throughWalls.get()) return true;
+        InteractionManager interaction = InteractionManager.get();
+        return interaction.visiblePoint(base, interaction.crystalFace(base), mc.player.getEyePos(), Double.MAX_VALUE) != null;
+    }
+
+    private boolean canHit(EndCrystalEntity crystal) {
+        if (throughWalls.get()) return true;
+        Box box = crystal.getBoundingBox();
+        Vec3d middle = box.getCenter();
+        return clearLine(middle) || clearLine(new Vec3d(middle.x, box.maxY - 0.1, middle.z)) || clearLine(new Vec3d(middle.x, box.minY + 0.1, middle.z));
+    }
+
+    private boolean clearLine(Vec3d point) {
+        return mc.world.raycast(new RaycastContext(mc.player.getEyePos(), point, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player)).getType() == HitResult.Type.MISS;
     }
 
     private boolean rotationReady(Box box, Vec3d aim, double range, int priority) {
