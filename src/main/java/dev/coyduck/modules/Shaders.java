@@ -134,7 +134,9 @@ public class Shaders extends Module {
     }
 
     public static Shaders active() {
-        Shaders module = Modules.get().get(Shaders.class);
+        Modules modules = Modules.get();
+        if (modules == null) return null;
+        Shaders module = modules.get(Shaders.class);
         return module != null && module.isActive() ? module : null;
     }
 
