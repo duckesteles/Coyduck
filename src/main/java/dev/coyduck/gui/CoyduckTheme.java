@@ -4,6 +4,7 @@ import dev.coyduck.mixin.GuiThemeAccessor;
 import meteordevelopment.meteorclient.gui.renderer.packer.GuiTexture;
 import meteordevelopment.meteorclient.gui.themes.meteor.MeteorGuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WHorizontalSeparator;
+import meteordevelopment.meteorclient.gui.widgets.WTopBar;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WSection;
 import meteordevelopment.meteorclient.gui.widgets.containers.WWindow;
@@ -51,6 +52,11 @@ public class CoyduckTheme extends MeteorGuiTheme {
     @Override
     public WWindow window(WWidget icon, String title) {
         return w(new CoyWidgets.Window(icon, title));
+    }
+
+    @Override
+    public WTopBar topBar() {
+        return w(new CoyWidgets.TopBar());
     }
 
     @Override

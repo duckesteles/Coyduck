@@ -208,12 +208,13 @@ public class CoyGuiScreen extends Screen {
         List<Tab> tabs = new ArrayList<>(Tabs.get());
         for (int i = tabs.size() - 1; i >= 0; i--) {
             Tab tab = tabs.get(i);
-            if (tab.name.equalsIgnoreCase("Modules")) continue;
+            boolean current = tab.name.equalsIgnoreCase("Modules");
             int w = textRenderer.getWidth(tab.name);
             x -= w;
-            boolean over = mouseX >= x - 3 && mouseX < x + w + 3 && mouseY >= 8 && mouseY < 23;
-            context.drawText(textRenderer, tab.name, x, 12, over ? BRIGHT : MUTED, false);
-            hits.add(new Hit(x - 3, 8, w + 6, 15, Kind.TAB, tab, null));
+            boolean over = mouseX >= x - 6 && mouseX < x + w + 6 && mouseY >= 8 && mouseY < 23;
+            context.drawText(textRenderer, tab.name, x, 12, current || over ? BRIGHT : MUTED, false);
+            if (current) context.fill(x, 22, x + w, 23, accent());
+            else hits.add(new Hit(x - 6, 8, w + 12, 15, Kind.TAB, tab, null));
             x -= 12;
         }
     }

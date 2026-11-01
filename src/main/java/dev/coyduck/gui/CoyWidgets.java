@@ -3,7 +3,13 @@ package dev.coyduck.gui;
 import dev.coyduck.modules.ClickGui;
 import meteordevelopment.meteorclient.gui.renderer.GuiRenderer;
 import meteordevelopment.meteorclient.gui.renderer.packer.GuiTexture;
+import meteordevelopment.meteorclient.gui.tabs.Tab;
+import meteordevelopment.meteorclient.gui.tabs.TabScreen;
+import meteordevelopment.meteorclient.gui.tabs.Tabs;
+import meteordevelopment.meteorclient.gui.utils.Cell;
 import meteordevelopment.meteorclient.gui.widgets.WHorizontalSeparator;
+import meteordevelopment.meteorclient.gui.widgets.WLabel;
+import meteordevelopment.meteorclient.gui.widgets.WTopBar;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WSection;
 import meteordevelopment.meteorclient.gui.widgets.containers.WWindow;
@@ -71,6 +77,74 @@ public final class CoyWidgets {
         return value + (target - value) * Math.min(1, delta * speed);
     }
 
+    public static class TopBar extends WTopBar {
+        private static final double TOP = 8;
+        private static final double HEIGHT = 15;
+        private static final double MARGIN = 12;
+        private static final double GAP = 12;
+
+        private static double unit() {
+            return mc.getWindow().getScaleFactor();
+        }
+
+        @Override
+        protected Color getButtonColor(boolean pressed, boolean hovered) {
+            return color(0);
+        }
+
+        @Override
+        protected Color getNameColor() {
+            return color(TEXT);
+        }
+
+        @Override
+        public void init() {
+            for (Tab tab : Tabs.get()) add(new TabButton(tab));
+        }
+
+        @Override
+        protected void onCalculateWidgetPositions() {
+            x = mc.getWindow().getFramebufferWidth() - width - (MARGIN - GAP / 2) * unit();
+            y = TOP * unit();
+            super.onCalculateWidgetPositions();
+        }
+
+        private class TabButton extends WPressable {
+            private final Tab tab;
+
+            TabButton(Tab tab) {
+                this.tab = tab;
+            }
+
+            private boolean current() {
+                return mc.currentScreen instanceof TabScreen screen && screen.tab == tab;
+            }
+
+            @Override
+            protected void onCalculateSize() {
+                width = theme.textWidth(tab.name) + GAP * unit();
+                height = HEIGHT * unit();
+            }
+
+            @Override
+            protected void onPressed(int button) {
+                if (current()) return;
+                double mouseX = mc.mouse.getX();
+                double mouseY = mc.mouse.getY();
+                tab.openScreen(theme);
+                GLFW.glfwSetCursorPos(mc.getWindow().getHandle(), mouseX, mouseY);
+            }
+
+            @Override
+            protected void onRender(GuiRenderer r, double mouseX, double mouseY, double delta) {
+                boolean current = current();
+                double textX = x + GAP * unit() / 2;
+                r.text(tab.name, textX, y + (height - theme.textHeight()) / 2, color(current || mouseOver ? BRIGHT : MUTED), false);
+                if (current) r.quad(textX, y + height - unit(), theme.textWidth(tab.name), unit(), color(accent()));
+            }
+        }
+    }
+
     public static class Window extends WWindow {
         public Window(WWidget icon, String title) {
             super(icon, title);
@@ -95,6 +169,14 @@ public final class CoyWidgets {
         private class Header extends WHeader {
             Header(WWidget icon) {
                 super(icon);
+            }
+
+            @Override
+            protected void onCalculateWidgetPositions() {
+                super.onCalculateWidgetPositions();
+                for (Cell<?> cell : cells) {
+                    if (cell.widget() instanceof WLabel) cell.widget().x = x + theme.scale(6);
+                }
             }
 
             @Override
