@@ -2,15 +2,11 @@ package dev.coyduck.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import dev.coyduck.modules.CustomFov;
-import dev.coyduck.modules.Shaders;
-import dev.coyduck.utils.ShaderGlow;
 import net.minecraft.client.render.GameRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Constant;
-import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyConstant;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {
@@ -27,11 +23,5 @@ public abstract class GameRendererMixin {
     @ModifyConstant(method = "getFov", constant = @Constant(floatValue = 70.0f))
     private float coyduck$handFov(float original) {
         return CustomFov.hand(original);
-    }
-
-    @Inject(method = "renderHand", at = @At("TAIL"))
-    private void coyduck$submitHandGlow(CallbackInfo info) {
-        Shaders module = Shaders.active();
-        if (module != null && module.handsOn()) ShaderGlow.get().submitVertices();
     }
 }

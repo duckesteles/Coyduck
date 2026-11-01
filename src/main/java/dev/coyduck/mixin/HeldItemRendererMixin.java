@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import dev.coyduck.modules.Shaders;
 import dev.coyduck.utils.HandQueue;
+import dev.coyduck.utils.ShaderGlow;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.render.item.HeldItemRenderer;
@@ -17,5 +18,6 @@ public abstract class HeldItemRendererMixin {
         Shaders module = Shaders.active();
         boolean glow = module != null && module.handsOn();
         original.call(tickDelta, matrices, glow ? new HandQueue(queue, module.maskColor().getPacked()) : queue, player, light);
+        if (glow) ShaderGlow.get().submitVertices();
     }
 }
