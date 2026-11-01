@@ -13,7 +13,6 @@
     "EntityMixin",
     "GameRendererMixin",
     "GuiThemeAccessor",
-    "CameraMixin",
     "ClientWorldPropertiesMixin",
     "FogRendererMixin",
     "HeldItemRendererMixin",
