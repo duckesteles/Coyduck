@@ -20,6 +20,7 @@ import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
+import net.minecraft.network.packet.s2c.play.PositionFlag;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -33,7 +34,7 @@ public class Step extends Module {
 
     private static final float VANILLA = 0.6f;
     private static final double JUMP_REACH = 1.25;
-    private static final double SCAN_LIMIT = 2.5;
+    private static final double MAX_HEIGHT = 8;
     private static final double SCAN_STEP = 1.0 / 16.0;
     private static final double PROBE = 0.3;
     private static final long REJECT_WINDOW = 800;
@@ -55,9 +56,9 @@ public class Step extends Module {
     private final Setting<Double> height = sgGeneral.add(new DoubleSetting.Builder()
         .name("height")
         .description("The highest ledge to walk up. Jump can reach 1.25 at most without jump boost.")
-        .defaultValue(1.0)
-        .range(0.6, SCAN_LIMIT)
-        .sliderRange(0.6, SCAN_LIMIT)
+        .defaultValue(2.0)
+        .range(0.6, MAX_HEIGHT)
+        .sliderRange(0.6, MAX_HEIGHT)
         .build()
     );
 
@@ -92,6 +93,7 @@ public class Step extends Module {
     private double lastY;
     private boolean wasOnGround;
     private long steppedAt;
+    private double stepFromY;
     private long lastReject;
     private int rejects;
     private long fallbackUntil;
@@ -118,7 +120,7 @@ public class Step extends Module {
         double delta = (now - lastFrame) / 1_000_000_000.0;
         lastFrame = now;
 
-        if (!smoothing || Math.abs(y - cameraY) > SCAN_LIMIT + 0.5) {
+        if (!smoothing || Math.abs(y - cameraY) > MAX_HEIGHT + 0.5) {
             smoothing = false;
             cameraY = y;
             return y;
@@ -169,14 +171,15 @@ public class Step extends Module {
 
     @EventHandler
     private void onReceive(PacketEvent.Receive event) {
-        if (!(event.packet instanceof PlayerPositionLookS2CPacket)) return;
-        mc.execute(this::onPulledBack);
+        if (!(event.packet instanceof PlayerPositionLookS2CPacket packet)) return;
+        boolean undone = !packet.relatives().contains(PositionFlag.Y) && packet.change().position().y <= stepFromY + 0.1;
+        mc.execute(() -> onPulledBack(undone));
     }
 
-    private void onPulledBack() {
+    private void onPulledBack(boolean undone) {
         smoothing = false;
         long now = Util.getMeasuringTimeMs();
-        if (mode.get() != Mode.Auto || now - steppedAt > REJECT_WINDOW) return;
+        if (!undone || mode.get() != Mode.Auto || now - steppedAt > REJECT_WINDOW) return;
 
         if (now - lastReject > REJECT_RESET) rejects = 0;
         lastReject = now;
@@ -213,6 +216,7 @@ public class Step extends Module {
 
         if (steppingUp && wasOnGround && onGround && rise > VANILLA && rise <= height.get() + 0.1) {
             steppedAt = Util.getMeasuringTimeMs();
+            stepFromY = lastY;
             if (smoothCamera.get()) smoothing = true;
         }
 
@@ -247,7 +251,7 @@ public class Step extends Module {
         Box box = mc.player.getBoundingBox();
         if (mc.world.isSpaceEmpty(mc.player, box.offset(x, 0, z))) return -1;
 
-        for (double h = SCAN_STEP; h <= SCAN_LIMIT; h += SCAN_STEP) {
+        for (double h = SCAN_STEP; h <= height.get(); h += SCAN_STEP) {
             if (!mc.world.isSpaceEmpty(mc.player, box.offset(0, h, 0))) return -1;
             if (mc.world.isSpaceEmpty(mc.player, box.offset(x, h, z))) return h;
         }
