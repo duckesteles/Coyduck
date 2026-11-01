@@ -37,6 +37,7 @@ import dev.coyduck.modules.HideRich;
 import dev.coyduck.modules.HoleEsp;
 import dev.coyduck.modules.HoleSnap;
 import dev.coyduck.modules.KillEffects;
+import dev.coyduck.modules.NoExplosion;
 import dev.coyduck.modules.LadderTrap;
 import dev.coyduck.modules.PearlPhase;
 import dev.coyduck.modules.PopCounter;
@@ -102,6 +103,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new HideRich());
         Modules.get().add(new ClickGui());
         Modules.get().add(new KillEffects());
+        Modules.get().add(new NoExplosion());
         Modules.get().add(new Esp());
         Modules.get().add(new CrystalChams());
         Modules.get().add(new HoleEsp());
