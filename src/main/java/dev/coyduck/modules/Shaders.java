@@ -25,14 +25,14 @@ public class Shaders extends Module {
     private final Setting<SettingColor> color = sgGeneral.add(new ColorSetting.Builder()
         .name("color")
         .description("Color of the shader on players, crystals and held items, and of every Coyduck render.")
-        .defaultValue(new SettingColor(165, 120, 255, 255))
+        .defaultValue(new SettingColor(130, 202, 255, 255))
         .build()
     );
 
     private final Setting<Boolean> players = sgGeneral.add(new BoolSetting.Builder()
         .name("players")
         .description("Puts the shader on other players.")
-        .defaultValue(true)
+        .defaultValue(false)
         .build()
     );
 
@@ -60,7 +60,7 @@ public class Shaders extends Module {
     private final Setting<Double> fill = sgGeneral.add(new DoubleSetting.Builder()
         .name("fill")
         .description("How strongly the color fills the model.")
-        .defaultValue(0.35)
+        .defaultValue(0.31)
         .range(0, 1)
         .sliderRange(0, 1)
         .build()
@@ -112,7 +112,7 @@ public class Shaders extends Module {
     private final Setting<Integer> fogStart = sgAtmosphere.add(new IntSetting.Builder()
         .name("fog-start")
         .description("How many blocks away the fog begins.")
-        .defaultValue(0)
+        .defaultValue(50)
         .range(0, 512)
         .sliderRange(0, 128)
         .visible(atmosphere::get)
@@ -122,7 +122,7 @@ public class Shaders extends Module {
     private final Setting<Integer> fogEnd = sgAtmosphere.add(new IntSetting.Builder()
         .name("fog-end")
         .description("How many blocks away the fog is fully solid.")
-        .defaultValue(40)
+        .defaultValue(150)
         .range(1, 512)
         .sliderRange(1, 256)
         .visible(atmosphere::get)
