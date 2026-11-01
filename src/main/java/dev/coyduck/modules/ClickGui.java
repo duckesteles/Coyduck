@@ -47,6 +47,13 @@ public class ClickGui extends Module {
         .build()
     );
 
+    private final Setting<Boolean> settingsWindow = sgGeneral.add(new BoolSetting.Builder()
+        .name("settings-window")
+        .description("Right clicking a module opens its settings in a window instead of inside the panel.")
+        .defaultValue(false)
+        .build()
+    );
+
     private final Setting<Boolean> minecraftFont = sgGeneral.add(new BoolSetting.Builder()
         .name("minecraft-font")
         .description("Uses the Minecraft font in every menu while this is on. The HUD keeps its own font.")
@@ -91,6 +98,10 @@ public class ClickGui extends Module {
 
     public ClickGui() {
         super(Coyduck.CATEGORY, "click-gui+", "Replaces the module menu with clean see-through columns and gives the other menus the same look.");
+    }
+
+    public boolean opensSettingsWindow() {
+        return settingsWindow.get();
     }
 
     public static int accentColor() {

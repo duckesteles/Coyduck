@@ -462,7 +462,10 @@ public class CoyGuiScreen extends Screen {
             case MODULE -> {
                 Module module = (Module) hit.target;
                 if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) module.toggle();
-                else if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT && !expanded.remove(module)) expanded.add(module);
+                else if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+                    if (owner.opensSettingsWindow()) client.setScreen(GuiThemes.get().moduleScreen(module));
+                    else if (!expanded.remove(module)) expanded.add(module);
+                }
             }
             case BOOL -> {
                 BoolSetting setting = (BoolSetting) hit.target;
