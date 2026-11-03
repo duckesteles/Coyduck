@@ -56,7 +56,7 @@ public class AutoWeb extends Module {
     private final Setting<Mode> mode = sgGeneral.add(new EnumSetting.Builder<Mode>()
         .name("mode")
         .description("Smart only webs targets that are out of a hole, where a web actually slows them. Always webs them anywhere.")
-        .defaultValue(Mode.Smart)
+        .defaultValue(Mode.Always)
         .build()
     );
 

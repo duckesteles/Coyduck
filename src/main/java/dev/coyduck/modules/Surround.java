@@ -75,6 +75,9 @@ public class Surround extends Module {
     }
 
     private static final long HOT_TIME = 2_000;
+    private static final int READY_STAGE = 7;
+    private static final long REBREAK_TIME = 1_200;
+    private static final double REBREAK_RANGE = 7;
     private static final long FEET_WAIT = 3_000;
     private static final long FEET_RETRY = 250;
     private static final float FEET_BUSY = 0.3f;
@@ -141,6 +144,13 @@ public class Surround extends Module {
     private final Setting<Boolean> clearFeet = sgGeneral.add(new BoolSetting.Builder()
         .name("clear-feet")
         .description("Breaks scaffolding and ladders put on you. Waits up to 3 seconds for a mine that is already under way.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> predict = sgGeneral.add(new BoolSetting.Builder()
+        .name("predict")
+        .description("Sends the block again every tick while an enemy is about to break a surround block, so it lands right after the break instead of a full ping later.")
         .defaultValue(true)
         .build()
     );
@@ -258,6 +268,8 @@ public class Surround extends Module {
 
     private long feetSeen;
     private long feetHit;
+    private int ticks;
+    private final Long2LongOpenHashMap preSent = new Long2LongOpenHashMap();
 
     @Override
     public void onDeactivate() {
@@ -285,6 +297,8 @@ public class Surround extends Module {
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         budget = blocksPerTick.get();
+        ticks++;
+        preSent.long2LongEntrySet().removeIf(entry -> ticks - entry.getLongValue() > 20);
         pass();
         clearFeet();
     }
@@ -422,14 +436,50 @@ public class Surround extends Module {
             cost += needed;
         }
 
-        if (placeable.isEmpty() || !interaction.ready(placeable.get(0), airplace.get(), rotate.get(), InteractionManager.SURROUND_PRIORITY)) return;
+        if (!placeable.isEmpty() && interaction.ready(placeable.get(0), airplace.get(), rotate.get(), InteractionManager.SURROUND_PRIORITY)) {
+            InventoryManager.get().withItemWhileEating(slot, switchMode.get(), () -> {
+                for (BlockPos pos : placeable) {
+                    if (budget <= 0 || !isBlock(mc.player.getMainHandStack())) break;
+                    place(pos, retried.contains(pos.asLong()));
+                }
+            });
+        }
+
+        prePlace(slot);
+    }
+
+    private void prePlace(int slot) {
+        if (!predict.get() || rotate.get() || budget <= 0) return;
+
+        InteractionManager interaction = InteractionManager.get();
+        List<BlockPos> ready = new ArrayList<>();
+        for (BlockPos pos : Targets.ring(anchored, 0)) {
+            if (ready.size() >= budget || preSent.get(pos.asLong()) == ticks || !aboutToBreak(pos)) continue;
+            if (interaction.hit(pos, airplace.get()) != null) ready.add(pos);
+        }
+        if (ready.isEmpty()) return;
 
         InventoryManager.get().withItemWhileEating(slot, switchMode.get(), () -> {
-            for (BlockPos pos : placeable) {
+            for (BlockPos pos : ready) {
                 if (budget <= 0 || !isBlock(mc.player.getMainHandStack())) break;
-                place(pos, retried.contains(pos.asLong()));
+                BlockHitResult hit = interaction.hit(pos, airplace.get());
+                if (hit == null) continue;
+
+                mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+                interaction.swing(swing.get());
+                preSent.put(pos.asLong(), ticks);
+                budget--;
             }
         });
+    }
+
+    private boolean aboutToBreak(BlockPos pos) {
+        BlockState state = mc.world.getBlockState(pos);
+        if (state.isReplaceable() || !blocks.get().contains(state.getBlock())) return false;
+
+        MiningTracker.Mining mining = MiningTracker.get().mining(pos);
+        if (mining != null && mining.breaker() != mc.player.getId() && mining.stage() >= READY_STAGE) return true;
+        return MiningTracker.get().wasBroken(pos, REBREAK_TIME) && Targets.find(REBREAK_RANGE) != null;
     }
 
     private boolean liveCrystalIn(BlockPos pos) {
