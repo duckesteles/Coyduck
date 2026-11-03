@@ -78,6 +78,7 @@ public class Surround extends Module {
     private static final int READY_STAGE = 7;
     private static final long REBREAK_TIME = 1_200;
     private static final double REBREAK_RANGE = 7;
+    private static final float STRONG = 600;
     private static final long FEET_WAIT = 3_000;
     private static final long FEET_RETRY = 250;
     private static final float FEET_BUSY = 0.3f;
@@ -475,7 +476,8 @@ public class Surround extends Module {
 
     private boolean aboutToBreak(BlockPos pos) {
         BlockState state = mc.world.getBlockState(pos);
-        if (state.isReplaceable() || !blocks.get().contains(state.getBlock())) return false;
+        if (state.isReplaceable()) return false;
+        if (!blocks.get().contains(state.getBlock())) return state.getBlock().getBlastResistance() < STRONG && Targets.find(REBREAK_RANGE) != null;
 
         MiningTracker.Mining mining = MiningTracker.get().mining(pos);
         if (mining != null && mining.breaker() != mc.player.getId() && mining.stage() >= READY_STAGE) return true;
