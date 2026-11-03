@@ -359,6 +359,7 @@ public final class MiningManager {
     }
 
     private void tickBackground() {
+        keepTool();
         if (holdTicks > 0 && --holdTicks == 0) unhold();
         if (background == null) return;
 
@@ -395,8 +396,19 @@ public final class MiningManager {
         return delta * ((Util.getMeasuringTimeMs() - backgroundStartTime) / 50.0f * rate - margin) >= BACKGROUND_THRESHOLD;
     }
 
+    private void keepTool() {
+        if (pos == null || broken || !canHold()) return;
+
+        BlockState state = mc.world.getBlockState(pos);
+        if (state.isReplaceable()) return;
+
+        if (holdTicks > 0) holdTicks = HOLD_TICKS;
+        else if (bestTool(state, pos) != -1) hold(state, pos);
+    }
+
     private boolean canHold() {
         if (InventoryManager.get().wantsToEat() || InventoryManager.get().isEating()) return false;
+        if (!mc.player.getMainHandStack().contains(DataComponentTypes.DEATH_PROTECTION)) return true;
 
         float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
         return health > HOLD_MIN_HEALTH || (AutoTotem.canAffordPop() && !lethalCrystalNear(health));
