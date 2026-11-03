@@ -217,7 +217,7 @@ public class Surround extends Module {
     private final Setting<Double> faceHealth = sgProtect.add(new DoubleSetting.Builder()
         .name("face-health")
         .description("Health and absorption at or below which every dangerous head level cell is covered.")
-        .defaultValue(10)
+        .defaultValue(36)
         .range(0, 36)
         .sliderRange(0, 36)
         .visible(face::get)
