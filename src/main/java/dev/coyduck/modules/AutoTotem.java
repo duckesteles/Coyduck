@@ -64,7 +64,7 @@ public class AutoTotem extends Module {
     private final Setting<Mainhand> mainhand = sgGeneral.add(new EnumSetting.Builder<Mainhand>()
         .name("mainhand")
         .description("Holds a second totem in the main hand. The main hand pops first, so a second hit before the refill arrives still finds a totem.")
-        .defaultValue(Mainhand.Off)
+        .defaultValue(Mainhand.Smart)
         .build()
     );
 

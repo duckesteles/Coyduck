@@ -359,7 +359,7 @@ public class AutoCrystal extends Module {
     private final Setting<Boolean> throughWalls = sgGeneral.add(new BoolSetting.Builder()
         .name("through-walls")
         .description("Places and breaks crystals with a block in between. On 6b6t these fail about twice as often for placing and six times as often for breaking, but most still land. Off only uses crystals you can see.")
-        .defaultValue(true)
+        .defaultValue(false)
         .build()
     );
 
