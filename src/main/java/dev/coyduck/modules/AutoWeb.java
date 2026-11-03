@@ -167,13 +167,14 @@ public class AutoWeb extends Module {
 
         Box box = Targets.box(target);
         LongSet columns = Targets.columns(box);
-        if (mode.get() == Mode.Smart && Targets.isHoled(columns)) return;
+        boolean holed = Targets.isHoled(columns);
+        if (mode.get() == Mode.Smart && holed) return;
 
-        LongSet cells = cells(box);
+        LongSet cells = cells(box, holed);
         if (predict.get()) {
             int ticks = Math.min(MathHelper.ceil(LatencyManager.get().rtt() / 50.0) + 1, MAX_PREDICT_TICKS);
             LongSet current = new LongOpenHashSet(cells);
-            for (long key : cells(MotionTracker.get().predict(target, ticks))) {
+            for (long key : cells(MotionTracker.get().predict(target, ticks), false)) {
                 BlockPos cell = BlockPos.fromLong(key);
                 boolean crystalSpot = Targets.isBase(mc.world.getBlockState(cell.down())) && mc.world.getBlockState(cell).isAir();
                 if (current.contains(key) || !crystalSpot) cells.add(key);
@@ -212,10 +213,11 @@ public class AutoWeb extends Module {
         });
     }
 
-    private LongSet cells(Box box) {
+    private LongSet cells(Box box, boolean head) {
         LongSet cells = new LongLinkedOpenHashSet();
         int bottom = MathHelper.floor(box.minY);
         int top = MathHelper.floor(box.maxY - 1.0E-4);
+        if (head) bottom = top;
 
         for (int x = MathHelper.floor(box.minX); x <= MathHelper.floor(box.maxX - 1.0E-4); x++) {
             for (int z = MathHelper.floor(box.minZ); z <= MathHelper.floor(box.maxZ - 1.0E-4); z++) {

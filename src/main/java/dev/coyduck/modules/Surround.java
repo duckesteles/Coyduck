@@ -477,7 +477,9 @@ public class Surround extends Module {
     private boolean aboutToBreak(BlockPos pos) {
         BlockState state = mc.world.getBlockState(pos);
         if (state.isReplaceable()) return false;
-        if (!blocks.get().contains(state.getBlock())) return state.getBlock().getBlastResistance() < STRONG && Targets.find(REBREAK_RANGE) != null;
+        if (!blocks.get().contains(state.getBlock())) {
+            return state.getBlock().getBlastResistance() < STRONG && MiningTracker.get().wasBroken(pos, HOT_TIME) && Targets.find(REBREAK_RANGE) != null;
+        }
 
         MiningTracker.Mining mining = MiningTracker.get().mining(pos);
         if (mining != null && mining.breaker() != mc.player.getId() && mining.stage() >= READY_STAGE) return true;
