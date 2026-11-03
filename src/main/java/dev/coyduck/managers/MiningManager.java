@@ -397,6 +397,11 @@ public final class MiningManager {
     }
 
     private void keepTool() {
+        if (holdTicks > 0 && holdSource != -1 && !canHold()) {
+            holdTicks = 0;
+            unhold();
+            return;
+        }
         if (pos == null || broken || !canHold()) return;
 
         BlockState state = mc.world.getBlockState(pos);
