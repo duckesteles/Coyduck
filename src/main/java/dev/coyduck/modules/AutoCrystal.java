@@ -914,7 +914,8 @@ public class AutoCrystal extends Module {
 
         MiningManager mining = MiningManager.get();
         BlockPos cell = mining.pos();
-        if (cell == null || mc.world.getBlockState(cell).isReplaceable() || mining.progress() < MINE_AHEAD_PROGRESS) return null;
+        if (cell == null || mc.world.getBlockState(cell).isReplaceable()) return null;
+        if (mining.remainingTicks() > MathHelper.ceil(LatencyManager.get().rtt() / 50.0) + 1) return null;
 
         long key = cell.asLong();
         for (Target target : targets) {
