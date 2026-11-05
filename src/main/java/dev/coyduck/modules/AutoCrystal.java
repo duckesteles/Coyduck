@@ -577,6 +577,10 @@ public class AutoCrystal extends Module {
     @EventHandler
     private void onTickPost(TickEvent.Post event) {
         clearCache();
+        if (rotate.get()) {
+            pass();
+            clearCache();
+        }
     }
 
     private void updateFocus() {
