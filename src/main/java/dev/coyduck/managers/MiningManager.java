@@ -43,6 +43,7 @@ public final class MiningManager {
     private static final MiningManager INSTANCE = new MiningManager();
 
     private static final float SERVER_THRESHOLD = 1.0f;
+    private static final float STOP_THRESHOLD = 1.1f;
     private static final double REACH_MARGIN = 0.05;
 
     private static final float BACKGROUND_THRESHOLD = 1.0f;
@@ -185,7 +186,7 @@ public final class MiningManager {
         if (delta <= 0) return Integer.MAX_VALUE;
 
         float margin = (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
-        return Math.max(0, (int) Math.ceil(SERVER_THRESHOLD / delta - elapsed() + margin));
+        return Math.max(0, (int) Math.ceil(STOP_THRESHOLD / delta - elapsed() + margin));
     }
 
     public boolean isReady() {
@@ -200,7 +201,7 @@ public final class MiningManager {
         if (state.isReplaceable()) return false;
 
         float margin = (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
-        return bestDelta(state) * (elapsed() - margin) >= SERVER_THRESHOLD;
+        return bestDelta(state) * (elapsed() - margin) >= STOP_THRESHOLD;
     }
 
     private boolean stop(Object owner, BlockState state) {
