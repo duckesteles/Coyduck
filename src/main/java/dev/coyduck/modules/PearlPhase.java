@@ -32,16 +32,18 @@ public class PearlPhase extends Module {
     private static final double WIDTH = 0.3;
     private static final int MAX_TICKS = 8;
     private static final int AIM_TICKS = 10;
-    private static final int ROBUST_CANDIDATES = 40;
-    private static final float[][] SPREAD = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-    private static final double EYE_CLEARANCE = 0.54;
+    private static final int ROBUST_CANDIDATES = 60;
+    private static final float[][] SPREAD = {{0.5f, 0}, {-0.5f, 0}, {0, 0.5f}, {0, -0.5f}};
+    private static final double EYE_CLEARANCE = 0.6 * 0.8 + 0.02;
+    private static final double MIN_OVERLAP = 0.005;
+    private static final double FULL_OVERLAP = 0.03;
     private static final float MIN_HEALTH = 3;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
     private final Setting<Double> depth = sgGeneral.add(new DoubleSetting.Builder()
         .name("depth")
-        .description("How far into each wall you end up. Walls at eye height only allow a sliver, so you take no suffocation damage.")
+        .description("Preferred depth into each wall. Any overlap already stops crystals being placed in that cell; walls at eye height only allow a sliver so you never suffocate.")
         .defaultValue(0.22)
         .range(0.05, 0.28)
         .sliderRange(0.05, 0.28)
@@ -88,7 +90,7 @@ public class PearlPhase extends Module {
             return;
         }
         if (!plan()) {
-            error("No throw lands you in a wall: no wall next to you, or a crystal or player is in the way.");
+            error(reason());
             toggle();
             return;
         }
@@ -136,8 +138,8 @@ public class PearlPhase extends Module {
         Vec3d shooter = mc.player.isOnGround() ? new Vec3d(mc.player.getVelocity().x, 0, mc.player.getVelocity().z) : mc.player.getVelocity();
 
         List<float[]> candidates = new ArrayList<>();
-        for (float pitch = 50; pitch <= 90; pitch += 1) {
-            for (float yaw = -180; yaw < 180; yaw += 2) {
+        for (float pitch = 40; pitch <= 90; pitch += 0.5f) {
+            for (float yaw = -180; yaw < 180; yaw += 1.5f) {
                 double score = landingScore(spawn, shooter, feet, yaw, pitch);
                 if (score > 0) candidates.add(new float[] {yaw, pitch, (float) score});
             }
@@ -199,27 +201,46 @@ public class PearlPhase extends Module {
         if (!mc.world.isSpaceEmpty(middle)) return 0;
         if (!mc.world.isSpaceEmpty(Box.of(landing.add(0, mc.player.getStandingEyeHeight(), 0), EYE_CLEARANCE, 1.0E-6, EYE_CLEARANCE))) return 0;
 
-        double x = 0;
-        double z = 0;
+        double want = depth.get();
+        double total = 0;
+        int cells = 0;
         for (BlockPos pos : BlockPos.iterate(MathHelper.floor(box.minX), MathHelper.floor(box.minY), MathHelper.floor(box.minZ), MathHelper.floor(box.maxX), MathHelper.floor(box.maxY), MathHelper.floor(box.maxZ))) {
             VoxelShape shape = mc.world.getBlockState(pos).getCollisionShape(mc.world, pos);
             if (shape.isEmpty()) continue;
+
+            double deepest = 0;
             for (Box part : shape.offset(pos.getX(), pos.getY(), pos.getZ()).getBoundingBoxes()) {
                 if (!part.intersects(box) || part.maxY <= landing.y + 0.01) continue;
                 Box overlap = part.intersection(box);
                 boolean fullX = overlap.getLengthX() > 2 * WIDTH - 0.01;
                 boolean fullZ = overlap.getLengthZ() > 2 * WIDTH - 0.01;
                 if (fullX && fullZ) return 0;
-                if (!fullX) x = Math.max(x, overlap.getLengthX());
-                if (!fullZ) z = Math.max(z, overlap.getLengthZ());
+                double into = Math.min(fullX ? Double.MAX_VALUE : overlap.getLengthX(), fullZ ? Double.MAX_VALUE : overlap.getLengthZ());
+                deepest = Math.max(deepest, into);
             }
+            if (deepest < MIN_OVERLAP) continue;
+
+            double sure = Math.min(deepest / FULL_OVERLAP, 1);
+            double near = Math.max(0, 1 - Math.abs(deepest - want) / want);
+            double weight = pos.getY() == MathHelper.floor(landing.y + 0.01) ? 1.0 : 0.6;
+            total += weight * (sure + 0.5 * near);
+            cells++;
         }
 
-        double want = depth.get();
-        double sx = x > 0 ? 1 - Math.abs(x - want) / want : 0;
-        double sz = z > 0 ? 1 - Math.abs(z - want) / want : 0;
-        sx = Math.max(sx, 0);
-        sz = Math.max(sz, 0);
-        return corner.get() ? sx + sz + (sx > 0 && sz > 0 ? 1 : 0) : Math.max(sx, sz);
+        if (cells == 0) return 0;
+        return corner.get() ? total : total / cells;
+    }
+
+    private String reason() {
+        BlockPos feet = mc.player.getBlockPos();
+        int walls = 0;
+        int faces = 0;
+        for (net.minecraft.util.math.Direction direction : net.minecraft.util.math.Direction.Type.HORIZONTAL) {
+            if (!mc.world.getBlockState(feet.offset(direction)).getCollisionShape(mc.world, feet.offset(direction)).isEmpty()) walls++;
+            if (!mc.world.getBlockState(feet.up().offset(direction)).getCollisionShape(mc.world, feet.up().offset(direction)).isEmpty()) faces++;
+        }
+        if (walls == 0) return "No wall next to your feet to phase into.";
+        if (faces == 4) return "Every head level cell is blocked, which leaves only a sliver for your eyes and no throw hits it. Open one head level side and try again.";
+        return "No throw lands you in a wall from here: a crystal or player is in the way, or the pearl would hit a wall first.";
     }
 }
