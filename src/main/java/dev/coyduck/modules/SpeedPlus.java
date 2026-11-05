@@ -21,11 +21,11 @@ import net.minecraft.entity.MovementType;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
+import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec2f;
-import net.minecraft.util.shape.VoxelShape;
 
 public class SpeedPlus extends Module {
     public enum Mode { Strafe, Vanilla }
@@ -81,14 +81,14 @@ public class SpeedPlus extends Module {
 
     private final Setting<Boolean> slowBlocks = sgPause.add(new BoolSetting.Builder()
         .name("slow-blocks")
-        .description("Pauses in cobwebs, powder snow, berry bushes and on soul sand or honey, where the server expects you to be slowed.")
+        .description("Pauses in cobwebs, powder snow and berry bushes and on soul sand or honey, where the server expects you to be slowed.")
         .defaultValue(true)
         .build()
     );
 
-    private final Setting<Boolean> lowBlocks = sgPause.add(new BoolSetting.Builder()
-        .name("low-blocks")
-        .description("Pauses while you step onto or stand inside low blocks such as candles, slabs or carpets.")
+    private final Setting<Boolean> oddBlocks = sgPause.add(new BoolSetting.Builder()
+        .name("odd-blocks")
+        .description("Pauses next to and inside candles, ladders, scaffolding and vines, where speed gets pulled back. Slabs, carpets and ice are fine.")
         .defaultValue(true)
         .build()
     );
@@ -204,7 +204,7 @@ public class SpeedPlus extends Module {
         if (pauseTicks > 0) return "pulled back";
         if (liquidTicks > 0) return "liquid";
         if (slowBlocks.get() && slowed()) return "slowed";
-        if (lowBlocks.get() && lowBlock()) return "low block";
+        if (oddBlocks.get() && oddBlock()) return "odd block";
         return null;
     }
 
@@ -217,13 +217,12 @@ public class SpeedPlus extends Module {
         }
         BlockPos below = BlockPos.ofFloored(mc.player.getX(), box.minY - 0.5, mc.player.getZ());
         Block ground = mc.world.getBlockState(below).getBlock();
-        return mc.player.isOnGround() && (ground.getVelocityMultiplier() < 1.0f || ground.getSlipperiness() > 0.6f);
+        return mc.player.isOnGround() && ground.getVelocityMultiplier() < 1.0f;
     }
 
-    private boolean lowBlock() {
+    private boolean oddBlock() {
         Box box = mc.player.getBoundingBox();
-        int feet = MathHelper.floor(box.minY + 0.001);
-        if (lowAt(box, feet)) return true;
+        if (oddIn(box)) return true;
 
         Vec2f input = mc.player.input.getMovementInput();
         float yaw = mc.player.getYaw() * MathHelper.RADIANS_PER_DEGREE;
@@ -231,16 +230,13 @@ public class SpeedPlus extends Module {
         double z = input.y * MathHelper.cos(yaw) + input.x * MathHelper.sin(yaw);
         double length = Math.sqrt(x * x + z * z);
         if (length < 1.0E-4) return false;
-        return lowAt(box.offset(x / length * PROBE, 0, z / length * PROBE), feet);
+        return oddIn(box.offset(x / length * PROBE, 0, z / length * PROBE));
     }
 
-    private boolean lowAt(Box box, int feet) {
-        for (BlockPos pos : BlockPos.iterate(MathHelper.floor(box.minX), feet, MathHelper.floor(box.minZ), MathHelper.floor(box.maxX), feet, MathHelper.floor(box.maxZ))) {
+    private boolean oddIn(Box box) {
+        for (BlockPos pos : BlockPos.iterate(MathHelper.floor(box.minX), MathHelper.floor(box.minY - 0.5), MathHelper.floor(box.minZ), MathHelper.floor(box.maxX), MathHelper.floor(box.maxY), MathHelper.floor(box.maxZ))) {
             BlockState state = mc.world.getBlockState(pos);
-            VoxelShape shape = state.getCollisionShape(mc.world, pos);
-            if (shape.isEmpty()) continue;
-            double top = shape.getMax(net.minecraft.util.math.Direction.Axis.Y);
-            if (top < 1.0 && pos.getY() + top > box.minY + 0.001) return true;
+            if (state.isIn(BlockTags.CLIMBABLE) || state.isIn(BlockTags.CANDLES) || state.isIn(BlockTags.CANDLE_CAKES) || state.isOf(Blocks.SCAFFOLDING)) return true;
         }
         return false;
     }
