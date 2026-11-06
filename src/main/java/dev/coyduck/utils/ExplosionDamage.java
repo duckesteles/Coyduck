@@ -2,6 +2,7 @@ package dev.coyduck.utils;
 
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.RotationManager;
+import net.minecraft.block.Blocks;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.component.DataComponentTypes;
@@ -23,6 +24,7 @@ import net.minecraft.particle.ParticleType;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
@@ -135,6 +137,9 @@ public final class ExplosionDamage {
         double offsetX = (1.0 - Math.floor(1.0 / stepX) * stepX) / 2.0;
         double offsetZ = (1.0 - Math.floor(1.0 / stepZ) * stepZ) / 2.0;
         if (stepX < 0 || stepY < 0 || stepZ < 0) return 0;
+
+        BlockPos origin = BlockPos.ofFloored(source);
+        if (!view.getBlockState(origin).isAir()) view = new BlockOverlay(view).set(origin, Blocks.AIR.getDefaultState());
 
         int visible = 0;
         int total = 0;
