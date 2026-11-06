@@ -35,6 +35,7 @@ import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Vec3d;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
@@ -51,6 +52,7 @@ public final class MiningManager {
     private static final int MAX_HOLDS = 4;
     private static final float HOLD_MIN_HEALTH = 10;
     private static final int MAX_STOPS = 1;
+    private static final double REBREAK_ENEMY_RANGE = 6;
 
     private BlockPos background;
     private int backgroundStart;
@@ -230,16 +232,19 @@ public final class MiningManager {
     }
 
     private void blindStop() {
-        int tool = bestTool(Blocks.OBSIDIAN.getDefaultState());
-        Runnable action = () -> {
-            InteractionManager.get().swing(swing == InteractionManager.SwingMode.None ? InteractionManager.SwingMode.Packet : swing);
-            send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
-        };
-
-        InventoryManager.SwitchMode mode = tool < InventoryManager.HOTBAR_END ? InventoryManager.SwitchMode.Silent : switchMode;
-        if (tool == -1) action.run();
-        else if (!InventoryManager.get().withItem(tool, mode, action)) return;
+        if (!enemyNear(pos) || bestTool(Blocks.OBSIDIAN.getDefaultState()) != -1) return;
+        InteractionManager.get().swing(swing == InteractionManager.SwingMode.None ? InteractionManager.SwingMode.Packet : swing);
+        send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
         lastStopTick = ticks;
+    }
+
+    private boolean enemyNear(BlockPos cell) {
+        Vec3d center = Vec3d.ofCenter(cell);
+        for (PlayerEntity player : mc.world.getPlayers()) {
+            if (player == mc.player || !player.isAlive() || player.isSpectator()) continue;
+            if (player.squaredDistanceTo(center) <= REBREAK_ENEMY_RANGE * REBREAK_ENEMY_RANGE) return true;
+        }
+        return false;
     }
 
     public float delta(BlockState state, BlockPos at, ItemStack tool) {
@@ -420,10 +425,14 @@ public final class MiningManager {
             unhold();
             return;
         }
-        if (pos == null || broken || !canHold()) return;
+        boolean rebreaking = broken && autoStop && pos != null && enemyNear(pos);
+        if (pos == null || broken && !rebreaking || !canHold()) return;
 
         BlockState state = mc.world.getBlockState(pos);
-        if (state.isReplaceable()) return;
+        if (state.isReplaceable()) {
+            if (!rebreaking) return;
+            state = Blocks.OBSIDIAN.getDefaultState();
+        }
 
         if (holdTicks > 0) holdTicks = HOLD_TICKS;
         else if (bestTool(state, pos) != -1) hold(state, pos);
