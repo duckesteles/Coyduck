@@ -98,14 +98,14 @@ public class ClickGui extends Module {
 
     private final Setting<Boolean> pages = sgPages.add(new BoolSetting.Builder()
         .name("pages")
-        .description("Gives every addon its own page. Switch pages with the left and right arrow keys or A and D.")
+        .description("Gives every addon its own page. Switch pages with the left and right arrow keys.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<List<String>> pageOrder = sgPages.add(new StringListSetting.Builder()
         .name("page-order")
-        .description("Addon names in page order. Addons left out come after these.")
+        .description("Which addon gets which page, first line first. Meteor Client and Coyduck are the addon names. Addons not listed get the pages after these.")
         .defaultValue(List.of("Meteor Client", "Coyduck"))
         .visible(pages::get)
         .build()

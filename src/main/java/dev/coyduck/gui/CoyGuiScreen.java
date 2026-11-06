@@ -76,6 +76,7 @@ public class CoyGuiScreen extends Screen {
     public enum View { Modules, Config, Hud, Friends, Gui, Baritone, Macros, Profiles }
 
     private static boolean passThrough;
+    private static int lastPage;
 
     public static boolean passingThrough() {
         return passThrough;
@@ -224,6 +225,8 @@ public class CoyGuiScreen extends Screen {
 
     private Window window;
     private boolean draggingWindow;
+    private List<Panel> results = new ArrayList<>();
+    private String resultsFor;
 
     private boolean custom;
     private Panel dragging;
@@ -265,6 +268,7 @@ public class CoyGuiScreen extends Screen {
             build();
             buildExtra();
             loadLayout();
+            page = MathHelper.clamp(lastPage, 0, pages.size() - 1);
             showView(view);
         }
         arrange();
@@ -457,6 +461,7 @@ public class CoyGuiScreen extends Screen {
         previousPage = page;
         direction = Integer.signum(step);
         page = next;
+        lastPage = page;
         panels = pages.get(page).panels;
         switchedAt = Util.getMeasuringTimeMs();
         dragging = null;
@@ -495,7 +500,7 @@ public class CoyGuiScreen extends Screen {
         int panelMouseX = overWindow ? -1 : mouseX;
         int panelMouseY = overWindow ? -1 : mouseY;
 
-        if (previousPage >= 0) {
+        if (previousPage >= 0 && !searching()) {
             float eased = 1 - (1 - t) * (1 - t) * (1 - t);
             int out = Math.round(-direction * eased * width);
             int in = Math.round(direction * (1 - eased) * width);
@@ -503,10 +508,12 @@ public class CoyGuiScreen extends Screen {
             for (Panel panel : panels) drawPanel(context, panel, in, -1, -1);
             hits.clear();
         } else {
-            for (Panel panel : panels) {
+            List<Panel> list = visiblePanels();
+            for (Panel panel : list) {
                 Object over = drawPanel(context, panel, 0, panelMouseX, panelMouseY);
                 if (over != null) hovered = over;
             }
+            if (searching() && list.isEmpty()) text(context, "No module matches \"" + search + "\"", MARGIN, MARGIN, MUTED);
         }
         drawSearch(context, mouseX, mouseY);
         drawTabs(context, mouseX, mouseY);
@@ -521,6 +528,40 @@ public class CoyGuiScreen extends Screen {
             hoverSince = now;
         }
         if (hint != null && !hint.isEmpty() && dragging == null && sliding == null && !draggingWindow && now - hoverSince >= TIP_DELAY) drawTip(context, mouseX, mouseY);
+    }
+
+    private boolean searching() {
+        return view == View.Modules && !search.isEmpty();
+    }
+
+    private List<Panel> visiblePanels() {
+        if (!searching()) return panels;
+        if (search.equals(resultsFor)) return results;
+        Map<String, List<Module>> byAddon = new LinkedHashMap<>();
+        for (String name : owner.pageOrder()) byAddon.put(name, new ArrayList<>());
+        for (Module module : Modules.get().getAll()) {
+            if (matches(module)) byAddon.computeIfAbsent(addonName(module), name -> new ArrayList<>()).add(module);
+        }
+        List<Panel> found = new ArrayList<>();
+        int x = MARGIN;
+        int y = MARGIN;
+        for (Map.Entry<String, List<Module>> entry : byAddon.entrySet()) {
+            if (entry.getValue().isEmpty()) continue;
+            entry.getValue().sort((a, b) -> a.title.compareToIgnoreCase(b.title));
+            Panel panel = new Panel("search/" + entry.getKey(), entry.getKey(), Type.MODULES, entry.getValue());
+            if (x + WIDTH > width - MARGIN && x > MARGIN) {
+                x = MARGIN;
+                y += height / 2;
+            }
+            panel.x = x;
+            panel.y = y;
+            panel.placed = true;
+            x += WIDTH + GAP;
+            found.add(panel);
+        }
+        results = found;
+        resultsFor = search;
+        return results;
     }
 
     private boolean matches(Module module) {
@@ -1108,10 +1149,7 @@ public class CoyGuiScreen extends Screen {
     private void setEditText(String text, int cursor) {
         editText = text;
         editCursor = MathHelper.clamp(cursor, 0, text.length());
-        if (editing == SEARCH_EDIT) {
-            search = editText;
-            jumpToMatch();
-        } else if (editing == LIST_SEARCH && window != null) {
+        if (editing == SEARCH_EDIT) search = editText; else if (editing == LIST_SEARCH && window != null) {
             window.listSearch = editText;
             window.scroll = 0;
         }
@@ -1165,7 +1203,7 @@ public class CoyGuiScreen extends Screen {
     }
 
     private void drawPages(DrawContext context, int mouseX, int mouseY) {
-        if (view != View.Modules || pages.size() < 2) return;
+        if (view != View.Modules || pages.size() < 2 || searching()) return;
         String name = pages.get(page).name;
         String label = name + "  " + (page + 1) + "/" + pages.size();
         int arrow = width("<") + PAD * 2;
@@ -1235,8 +1273,9 @@ public class CoyGuiScreen extends Screen {
                     dragging = panel;
                     dragX = (int) mx - panel.x;
                     dragY = (int) my - panel.y;
-                    panels.remove(panel);
-                    panels.add(panel);
+                    List<Panel> list = visiblePanels();
+                    list.remove(panel);
+                    list.add(panel);
                 }
             }
             case MODULE -> {
@@ -1421,12 +1460,15 @@ public class CoyGuiScreen extends Screen {
             window.scroll -= (int) Math.signum(vertical) * WIN_ROW * 3;
             return true;
         }
-        for (int i = panels.size() - 1; i >= 0; i--) {
-            Panel panel = panels.get(i);
+        List<Panel> list = visiblePanels();
+        for (int i = list.size() - 1; i >= 0; i--) {
+            Panel panel = list.get(i);
             if (mouseX < panel.x || mouseX >= panel.x + WIDTH || !shown(panel)) continue;
             panel.y += (int) Math.signum(vertical) * SCROLL;
-            custom = true;
-            saveLayout();
+            if (!searching()) {
+                custom = true;
+                saveLayout();
+            }
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
@@ -1453,6 +1495,7 @@ public class CoyGuiScreen extends Screen {
                 } else finishEdit(true);
                 if (was == LIST_TEXT) startEdit(LIST_TEXT, "", list);
             } else if (key == GLFW.GLFW_KEY_ESCAPE) {
+                if (editing == SEARCH_EDIT) setEditText("", 0);
                 if (live) {
                     editing = null;
                     editText = "";
@@ -1490,11 +1533,15 @@ public class CoyGuiScreen extends Screen {
                 return true;
             }
         }
-        if (key == GLFW.GLFW_KEY_LEFT || key == GLFW.GLFW_KEY_A) {
+        if (key == GLFW.GLFW_KEY_ESCAPE && searching()) {
+            search = "";
+            return true;
+        }
+        if (key == GLFW.GLFW_KEY_LEFT) {
             switchPage(-1);
             return true;
         }
-        if (key == GLFW.GLFW_KEY_RIGHT || key == GLFW.GLFW_KEY_D) {
+        if (key == GLFW.GLFW_KEY_RIGHT) {
             switchPage(1);
             return true;
         }
@@ -1503,7 +1550,11 @@ public class CoyGuiScreen extends Screen {
 
     @Override
     public boolean charTyped(CharInput input) {
-        if (!input.isValidChar() || editing == null) return false;
+        if (!input.isValidChar()) return false;
+        if (editing == null) {
+            if (view != View.Modules || binding != null || input.asString().isBlank()) return false;
+            startEdit(SEARCH_EDIT, search, null);
+        }
         insert(input.asString());
         return true;
     }
@@ -1525,18 +1576,6 @@ public class CoyGuiScreen extends Screen {
         while (i < editText.length() && editText.charAt(i) == ' ') i++;
         while (i < editText.length() && editText.charAt(i) != ' ') i++;
         return i;
-    }
-
-    private void jumpToMatch() {
-        if (view != View.Modules || search.isEmpty()) return;
-        for (Panel panel : panels) if (shown(panel)) return;
-        for (int i = 0; i < pages.size(); i++) {
-            for (Panel panel : pages.get(i).panels) {
-                if (!shown(panel)) continue;
-                if (i != page) switchPage(i - page);
-                return;
-            }
-        }
     }
 
     @Override
