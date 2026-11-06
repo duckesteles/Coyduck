@@ -50,7 +50,7 @@ public final class MiningManager {
     private static final int HOLD_TICKS = 2;
     private static final int MAX_HOLDS = 4;
     private static final float HOLD_MIN_HEALTH = 10;
-    private static final int MAX_STOPS = 2;
+    private static final int MAX_STOPS = 1;
 
     private BlockPos background;
     private int backgroundStart;
@@ -480,7 +480,7 @@ public final class MiningManager {
             case STOP_DESTROY_BLOCK -> facing(pos);
             default -> side;
         };
-        send(action, pos, face, action == PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
+        send(action, pos, face, false);
     }
 
     private void send(PlayerActionC2SPacket.Action action, BlockPos target, Direction face, boolean predict) {
