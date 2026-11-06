@@ -19,14 +19,14 @@ import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 
 public class ClickGui extends Module {
-    private static final int DEFAULT_ACCENT = 0xFF8D7EF8;
+    private static final int DEFAULT_ACCENT = 0xFF7B62AA;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
     public final Setting<SettingColor> accent = sgGeneral.add(new ColorSetting.Builder()
         .name("accent")
         .description("Color of enabled modules, sliders, checkboxes and the Coyduck HUD.")
-        .defaultValue(new SettingColor(141, 126, 248, 255))
+        .defaultValue(new SettingColor(123, 98, 170, 255))
         .build()
     );
 
