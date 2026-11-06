@@ -5,15 +5,22 @@ import dev.coyduck.modules.ClickGui;
 import meteordevelopment.meteorclient.gui.GuiThemes;
 import meteordevelopment.meteorclient.gui.tabs.Tab;
 import meteordevelopment.meteorclient.gui.tabs.Tabs;
+import meteordevelopment.meteorclient.pathing.PathManagers;
+import meteordevelopment.meteorclient.settings.BlockListSetting;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
+import meteordevelopment.meteorclient.settings.EntityTypeListSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
+import meteordevelopment.meteorclient.settings.ItemListSetting;
 import meteordevelopment.meteorclient.settings.KeybindSetting;
+import meteordevelopment.meteorclient.settings.ModuleListSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.settings.Settings;
+import meteordevelopment.meteorclient.settings.StatusEffectListSetting;
+import meteordevelopment.meteorclient.settings.StringListSetting;
 import meteordevelopment.meteorclient.settings.StringSetting;
 import meteordevelopment.meteorclient.systems.config.Config;
 import meteordevelopment.meteorclient.systems.friends.Friend;
@@ -27,11 +34,19 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.misc.Keybind;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
+import net.minecraft.block.Block;
+import net.minecraft.block.Blocks;
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.input.CharInput;
 import net.minecraft.client.input.KeyInput;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.effect.StatusEffect;
+import net.minecraft.item.Item;
+import net.minecraft.item.Items;
+import net.minecraft.registry.Registries;
 import net.minecraft.text.OrderedText;
 import net.minecraft.text.StringVisitable;
 import net.minecraft.text.Style;
@@ -43,15 +58,18 @@ import net.minecraft.util.math.MathHelper;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 public class CoyGuiScreen extends Screen {
-    public enum View { Modules, Config, Hud, Friends, Gui }
+    public enum View { Modules, Config, Hud, Friends, Gui, Baritone }
 
     private static boolean passThrough;
 
@@ -74,15 +92,17 @@ public class CoyGuiScreen extends Screen {
         Map.entry("kill-effects", "Render"), Map.entry("no-explosion", "Render"), Map.entry("shaders+", "Render"),
         Map.entry("schem-builder", "World")
     );
-    private static final List<String> OWN_TABS = List.of("Modules", "Config", "GUI", "HUD", "Friends");
     private static final String[] CHANNELS = {"Red", "Green", "Blue", "Alpha"};
+    private static final Identifier RESET_ICON = Identifier.of("coyduck", "textures/gui/reset.png");
+    private static final Object LIST_SEARCH = new Object();
+    private static final Object LIST_TEXT = new Object();
+    private static final Object FRIEND_ADD = new Object();
 
     private static final int WIDTH = 96;
     private static final int HEADER = 12;
     private static final int ROW = 12;
     private static final int GAP = 4;
     private static final int MARGIN = 6;
-    private static final int INDENT = 3;
     private static final int PAD = 4;
     private static final int SCROLL = 16;
     private static final int SEARCH_WIDTH = 110;
@@ -90,17 +110,33 @@ public class CoyGuiScreen extends Screen {
     private static final long TIP_DELAY = 400;
     private static final long SWITCH_TIME = 220;
 
+    private static final int WIN_W = 230;
+    private static final int WIN_ROW = 13;
+    private static final int WIN_HEAD = 13;
+    private static final int CTRL_W = 96;
+    private static final int ICON = 8;
+    private static final int MAX_CANDIDATES = 400;
+
     private static final int TEXT = 0xFFFFFFFF;
     private static final int MUTED = 0xFFB4B0BE;
     private static final int FAINT = 0x55FFFFFF;
     private static final int BODY = 0x8C120F18;
+    private static final int WIN_BODY = 0xE6151219;
     private static final int CELL = 0xB42A2533;
     private static final int CELL_HOVER = 0xC8352F40;
-    private static final int SWATCH_EDGE = 0xFF0C0A10;
+    private static final int ROW_HOVER = 0x24FFFFFF;
+    private static final int EDGE = 0xFF0C0A10;
+    private static final int LINE = 0x30FFFFFF;
 
-    private enum Kind { HEADER, MODULE, ELEMENT, FRIEND, FRIEND_ADD, BOOL, SLIDER, CHANNEL, ENUM, COLOR, STRING, BIND, MODULE_BIND, MORE, ACTION, TAB, VIEW, PAGE, SEARCH, ADD_INFO, ADD_PRESET }
+    private enum Kind {
+        HEADER, MODULE, ELEMENT, FRIEND, FRIEND_ADD, ACTION, ADD_INFO, ADD_PRESET, TAB, VIEW, PAGE, SEARCH,
+        W_HEADER, W_CLOSE, W_RESET_ALL, W_BACK, W_RESET, W_BOOL, W_SLIDER, W_CHANNEL, W_ENUM, W_COLOR, W_STRING, W_BIND,
+        W_MODULE_BIND, W_LIST, W_MORE, W_ACTION, W_LIST_SEARCH, W_LIST_ADD, W_LIST_REMOVE, W_LIST_TEXT, W_AREA
+    }
 
-    private enum Type { MODULES, SETTINGS, ELEMENTS, FRIENDS, ADD }
+    private enum Type { MODULES, ELEMENTS, FRIENDS, ADD, ACTIONS }
+
+    private enum RowKind { GROUP, SETTING, CHANNEL, BIND, ACTION, SEARCH, ENTRY_REMOVE, ENTRY_ADD, TEXT_ADD, NOTE }
 
     private record Hit(int x, int y, int w, int h, Kind kind, Object target, Object extra) {
         boolean contains(double mx, double my) {
@@ -110,26 +146,24 @@ public class CoyGuiScreen extends Screen {
 
     private record Action(String label, Runnable run, java.util.function.BooleanSupplier on) {}
 
+    private record Row(RowKind kind, String label, Object target, Object extra) {}
+
     private static final class Panel {
         final String key;
         final String title;
         final Type type;
         final List<Module> modules;
-        final Settings settings;
-        final Object owner;
         final List<Action> actions = new ArrayList<>();
         int x;
         int y;
         boolean collapsed;
         boolean placed;
 
-        Panel(String key, String title, Type type, List<Module> modules, Settings settings, Object owner) {
+        Panel(String key, String title, Type type, List<Module> modules) {
             this.key = key;
             this.title = title;
             this.type = type;
             this.modules = modules;
-            this.settings = settings;
-            this.owner = owner;
         }
     }
 
@@ -139,6 +173,32 @@ public class CoyGuiScreen extends Screen {
 
         Page(String name) {
             this.name = name;
+        }
+    }
+
+    private static final class Window {
+        final String title;
+        final Settings settings;
+        final Object owner;
+        final boolean closable;
+        final Runnable resetAll;
+        final Runnable onClose;
+        int x;
+        int y;
+        int scroll;
+        int height;
+        Setting<?> list;
+        String listSearch = "";
+        List<Object> cache;
+        String cacheKey;
+
+        Window(String title, Settings settings, Object owner, boolean closable, Runnable resetAll, Runnable onClose) {
+            this.title = title;
+            this.settings = settings;
+            this.owner = owner;
+            this.closable = closable;
+            this.resetAll = resetAll;
+            this.onClose = onClose;
         }
     }
 
@@ -157,6 +217,9 @@ public class CoyGuiScreen extends Screen {
     private long switchedAt;
     private Style font = Style.EMPTY;
 
+    private Window window;
+    private boolean draggingWindow;
+
     private boolean custom;
     private Panel dragging;
     private int dragX;
@@ -167,6 +230,7 @@ public class CoyGuiScreen extends Screen {
     private Object binding;
 
     private Object editing;
+    private Setting<?> editingList;
     private String editText = "";
     private String search = "";
     private boolean searchFocused;
@@ -202,6 +266,7 @@ public class CoyGuiScreen extends Screen {
         for (Page each : allPages()) {
             for (Panel panel : each.panels) panel.x = MathHelper.clamp(panel.x, 0, Math.max(0, width - WIDTH));
         }
+        if (window != null) clampWindow();
     }
 
     private List<Page> allPages() {
@@ -250,52 +315,36 @@ public class CoyGuiScreen extends Screen {
                     for (Module module : inCategory) if (SPLIT.getOrDefault(module.name, "Misc").equals(group)) grouped.add(module);
                     if (grouped.isEmpty()) continue;
                     String title = paged ? group : "Coyduck " + group;
-                    target.panels.add(new Panel(prefix + title, title, Type.MODULES, grouped, null, null));
+                    target.panels.add(new Panel(prefix + title, title, Type.MODULES, grouped));
                 }
                 continue;
             }
-            target.panels.add(new Panel(prefix + category.name, category.name, Type.MODULES, inCategory, null, null));
+            target.panels.add(new Panel(prefix + category.name, category.name, Type.MODULES, inCategory));
         }
     }
 
     private void buildExtra() {
-        Page config = new Page("Config");
-        for (SettingGroup group : Config.get().settings.groups) config.panels.add(groupPanel("Config/" + group.name, group.name, group, Config.get()));
-        if (!config.panels.isEmpty()) config.panels.getFirst().actions.add(new Action("Reset Config", Config.get().settings::reset, null));
-        extra.add(config);
+        extra.add(new Page("Config"));
 
         Page hud = new Page("Hud");
         Hud system = Hud.get();
-        Panel hudPanel = new Panel("Hud/Hud", "Hud", Type.SETTINGS, null, system.settings, system);
+        Panel hudPanel = new Panel("Hud/Hud", "Hud", Type.ACTIONS, null);
         hudPanel.actions.add(new Action("Active", () -> system.active = !system.active, () -> system.active));
+        hudPanel.actions.add(new Action("Settings", () -> openWindow(new Window("Hud", system.settings, system, true, system.settings::reset, null)), null));
         hudPanel.actions.add(new Action("Edit Layout", () -> client.setScreen(new HudEditorScreen(GuiThemes.get())), null));
         hudPanel.actions.add(new Action("Reset Elements", system::resetToDefaultElements, null));
         hudPanel.actions.add(new Action("Clear Elements", system::clear, null));
-        hudPanel.actions.add(new Action("Reset Settings", system.settings::reset, null));
         hud.panels.add(hudPanel);
-        hud.panels.add(new Panel("Hud/Elements", "Elements", Type.ELEMENTS, null, null, system));
-        hud.panels.add(new Panel("Hud/Add", "Add Element", Type.ADD, null, null, system));
+        hud.panels.add(new Panel("Hud/Elements", "Elements", Type.ELEMENTS, null));
+        hud.panels.add(new Panel("Hud/Add", "Add Element", Type.ADD, null));
         extra.add(hud);
 
         Page friends = new Page("Friends");
-        friends.panels.add(new Panel("Friends/Friends", "Friends", Type.FRIENDS, null, null, Friends.get()));
+        friends.panels.add(new Panel("Friends/Friends", "Friends", Type.FRIENDS, null));
         extra.add(friends);
 
-        Page gui = new Page("Gui");
-        Panel guiPanel = new Panel("Gui/" + owner.title, owner.title, Type.SETTINGS, null, owner.settings, owner);
-        guiPanel.actions.add(new Action("Reset", () -> {
-            String saved = owner.layout.get();
-            owner.settings.reset();
-            owner.layout.set(saved);
-        }, null));
-        gui.panels.add(guiPanel);
-        extra.add(gui);
-    }
-
-    private static Panel groupPanel(String key, String title, SettingGroup group, Object owner) {
-        Settings single = new Settings();
-        single.groups.add(group);
-        return new Panel(key, title, Type.SETTINGS, null, single, owner);
+        extra.add(new Page("Gui"));
+        extra.add(new Page("Baritone"));
     }
 
     private static String addonName(Module module) {
@@ -309,13 +358,49 @@ public class CoyGuiScreen extends Screen {
         sliding = null;
         binding = null;
         finishEdit(true);
+        closeWindow();
         panels = switch (view) {
             case Modules -> pages.get(MathHelper.clamp(page, 0, pages.size() - 1)).panels;
             case Config -> extra.get(0).panels;
             case Hud -> extra.get(1).panels;
             case Friends -> extra.get(2).panels;
             case Gui -> extra.get(3).panels;
+            case Baritone -> extra.get(4).panels;
         };
+        switch (view) {
+            case Config -> openWindow(new Window("Config", Config.get().settings, Config.get(), false, Config.get().settings::reset, null));
+            case Gui -> openWindow(new Window(owner.title, owner.settings, owner, false, () -> {
+                String saved = owner.layout.get();
+                owner.settings.reset();
+                owner.layout.set(saved);
+            }, null));
+            case Baritone -> {
+                Settings baritone = PathManagers.get().getSettings().get();
+                openWindow(new Window("Baritone", baritone, null, false, baritone::reset, () -> PathManagers.get().getSettings().save()));
+            }
+            default -> {
+            }
+        }
+    }
+
+    private void openWindow(Window next) {
+        closeWindow();
+        window = next;
+        window.x = (width - WIN_W) / 2;
+        window.y = MARGIN + 8;
+        clampWindow();
+    }
+
+    private void closeWindow() {
+        if (window == null) return;
+        finishEdit(true);
+        if (window.onClose != null) window.onClose.run();
+        window = null;
+    }
+
+    private void clampWindow() {
+        window.x = MathHelper.clamp(window.x, 0, Math.max(0, width - WIN_W));
+        window.y = MathHelper.clamp(window.y, 0, Math.max(0, height - WIN_HEAD - HEADER - MARGIN * 2));
     }
 
     private void arrange() {
@@ -379,6 +464,10 @@ public class CoyGuiScreen extends Screen {
         float t = previousPage < 0 ? 1 : MathHelper.clamp((now - switchedAt) / (float) SWITCH_TIME, 0, 1);
         if (t >= 1) previousPage = -1;
 
+        boolean overWindow = window != null && inside(mouseX, mouseY, window.x, window.y, WIN_W, WIN_HEAD + window.height);
+        int panelMouseX = overWindow ? -1 : mouseX;
+        int panelMouseY = overWindow ? -1 : mouseY;
+
         if (previousPage >= 0) {
             float eased = 1 - (1 - t) * (1 - t) * (1 - t);
             int out = Math.round(-direction * eased * width);
@@ -388,19 +477,23 @@ public class CoyGuiScreen extends Screen {
             hits.clear();
         } else {
             for (Panel panel : panels) {
-                Object over = drawPanel(context, panel, 0, mouseX, mouseY);
+                Object over = drawPanel(context, panel, 0, panelMouseX, panelMouseY);
                 if (over != null) hovered = over;
             }
         }
         drawSearch(context, mouseX, mouseY);
         drawTabs(context, mouseX, mouseY);
         drawPages(context, mouseX, mouseY);
+        if (window != null) {
+            Object over = drawWindow(context, window, mouseX, mouseY);
+            if (over != null) hovered = over;
+        }
 
         if (hovered != hoverKey) {
             hoverKey = hovered;
             hoverSince = now;
         }
-        if (hint != null && !hint.isEmpty() && dragging == null && sliding == null && now - hoverSince >= TIP_DELAY) drawTip(context, mouseX, mouseY);
+        if (hint != null && !hint.isEmpty() && dragging == null && sliding == null && !draggingWindow && now - hoverSince >= TIP_DELAY) drawTip(context, mouseX, mouseY);
     }
 
     private boolean matches(Module module) {
@@ -422,7 +515,7 @@ public class CoyGuiScreen extends Screen {
 
         paint = false;
         int[] measure = {y + HEADER + 1};
-        if (!panel.collapsed) rows(context, panel, x, measure, -1, -1);
+        if (!panel.collapsed) panelRows(context, panel, x, measure, -1, -1);
         int bottom = panel.collapsed ? y + HEADER : measure[0];
 
         if (!panel.collapsed) context.fill(x, y + HEADER, x + WIDTH, bottom, BODY);
@@ -434,35 +527,27 @@ public class CoyGuiScreen extends Screen {
         if (!panel.collapsed) {
             paint = true;
             int[] rowY = {y + HEADER + 1};
-            hovered = rows(context, panel, x, rowY, mouseX, mouseY);
+            hovered = panelRows(context, panel, x, rowY, mouseX, mouseY);
         }
         outline(context, x, y, x + WIDTH, bottom, accent);
         return hovered;
     }
 
-    private Object rows(DrawContext context, Panel panel, int x, int[] y, int mouseX, int mouseY) {
+    private Object panelRows(DrawContext context, Panel panel, int x, int[] y, int mouseX, int mouseY) {
         Object hovered = null;
         switch (panel.type) {
             case MODULES -> {
                 for (Module module : panel.modules) {
                     if (!matches(module)) continue;
-                    boolean open = expanded.contains(module);
+                    boolean open = window != null && window.owner == module;
                     if (headRow(context, x, y[0], module.title, module.isActive(), open, mouseX, mouseY, Kind.MODULE, module)) {
                         hovered = module;
                         hint = module.description;
                     }
                     y[0] += ROW;
-                    if (open) {
-                        Object inner = settingsRows(context, module.settings, module, x + 1 + INDENT, x + WIDTH - 1, y, mouseX, mouseY);
-                        if (inner != null) hovered = inner;
-                        Object bind = bindRow(context, module, x + 1 + INDENT, x + WIDTH - 1, y, mouseX, mouseY);
-                        if (bind != null) hovered = bind;
-                        Object reset = actionRow(context, new Action("Reset", module.settings::reset, null), x + 1 + INDENT, x + WIDTH - 1, y, mouseX, mouseY, "Puts every setting of this module back to its default. The keybind stays.");
-                        if (reset != null) hovered = reset;
-                    }
                 }
             }
-            case SETTINGS -> {
+            case ACTIONS -> {
                 for (Action action : panel.actions) {
                     boolean on = action.on() != null && action.on().getAsBoolean();
                     boolean over = inside(mouseX, mouseY, x + 1, y[0], WIDTH - 2, ROW - 1);
@@ -474,25 +559,15 @@ public class CoyGuiScreen extends Screen {
                     if (over) hovered = action;
                     y[0] += ROW;
                 }
-                Object inner = settingsRows(context, panel.settings, panel.owner, x + 1, x + WIDTH - 1, y, mouseX, mouseY);
-                if (inner != null) hovered = inner;
             }
             case ELEMENTS -> {
                 for (HudElement element : Hud.get()) {
-                    boolean open = expanded.contains(element);
+                    boolean open = window != null && window.owner == element;
                     if (headRow(context, x, y[0], element.info.title, element.isActive(), open, mouseX, mouseY, Kind.ELEMENT, element)) {
                         hovered = element;
-                        hint = element.info.description;
+                        hint = element.info.description + " Right click for its settings.";
                     }
                     y[0] += ROW;
-                    if (open) {
-                        Object inner = settingsRows(context, element.settings, element, x + 1 + INDENT, x + WIDTH - 1, y, mouseX, mouseY);
-                        if (inner != null) hovered = inner;
-                        Object reset = actionRow(context, new Action("Reset", element.settings::reset, null), x + 1 + INDENT, x + WIDTH - 1, y, mouseX, mouseY, "Puts every setting of this element back to its default.");
-                        if (reset != null) hovered = reset;
-                        Object remove = actionRow(context, new Action("Remove", element::remove, null), x + 1 + INDENT, x + WIDTH - 1, y, mouseX, mouseY, "Removes this element from the HUD.");
-                        if (remove != null) hovered = remove;
-                    }
                 }
             }
             case ADD -> {
@@ -520,12 +595,12 @@ public class CoyGuiScreen extends Screen {
                     y[0] += ROW;
                     if (open && info.hasPresets()) {
                         for (HudElementInfo<?>.Preset preset : info.presets) {
-                            boolean on = inside(mouseX, mouseY, x + 1 + INDENT, y[0], WIDTH - 2 - INDENT, ROW - 1);
+                            boolean on = inside(mouseX, mouseY, x + 4, y[0], WIDTH - 5, ROW - 1);
                             if (paint) {
-                                cell(context, x + 1 + INDENT, x + WIDTH - 1, y[0], false, on);
-                                text(context, trim(preset.title, WIDTH - PAD * 2 - 8 - INDENT), x + 1 + INDENT + PAD, y[0] + 2, TEXT);
+                                cell(context, x + 4, x + WIDTH - 1, y[0], false, on);
+                                text(context, trim(preset.title, WIDTH - PAD * 2 - 11), x + 4 + PAD, y[0] + 2, TEXT);
                                 text(context, "+", x + WIDTH - PAD - width("+"), y[0] + 2, TEXT);
-                                hits.add(new Hit(x + 1 + INDENT, y[0], WIDTH - 2 - INDENT, ROW - 1, Kind.ADD_PRESET, preset, null));
+                                hits.add(new Hit(x + 4, y[0], WIDTH - 5, ROW - 1, Kind.ADD_PRESET, preset, null));
                             }
                             if (on) hovered = preset;
                             y[0] += ROW;
@@ -550,15 +625,15 @@ public class CoyGuiScreen extends Screen {
                 }
                 boolean over = inside(mouseX, mouseY, x + 1, y[0], WIDTH - 2, ROW - 1);
                 if (paint) {
-                    boolean typing = editing == Kind.FRIEND_ADD;
+                    boolean typing = editing == FRIEND_ADD;
                     cell(context, x + 1, x + WIDTH - 1, y[0], typing, over);
                     String shown = typing ? editText + cursor() : "Add friend";
-                    text(context, trim(shown, WIDTH - PAD * 2 - 8), x + PAD, y[0] + 2, typing ? TEXT : MUTED);
+                    text(context, trimStart(shown, WIDTH - PAD * 2 - 8), x + PAD, y[0] + 2, typing ? TEXT : MUTED);
                     text(context, "+", x + WIDTH - PAD - width("+"), y[0] + 2, TEXT);
                     hits.add(new Hit(x + 1, y[0], WIDTH - 2, ROW - 1, Kind.FRIEND_ADD, null, null));
                 }
                 if (over) {
-                    hovered = Kind.FRIEND_ADD;
+                    hovered = FRIEND_ADD;
                     hint = "Click, type a name and press Enter.";
                 }
                 y[0] += ROW;
@@ -580,152 +655,344 @@ public class CoyGuiScreen extends Screen {
         return over;
     }
 
-    private Object settingsRows(DrawContext context, Settings settings, Object owner, int left, int right, int[] y, int mouseX, int mouseY) {
-        Object hovered = null;
-        boolean groups = settings.groups.size() > 1;
-
-        for (SettingGroup group : settings.groups) {
+    private List<Row> windowRows(Window w) {
+        List<Row> rows = new ArrayList<>();
+        if (w.list != null) {
+            listRows(w, rows);
+            return rows;
+        }
+        boolean groups = w.settings.groups.size() > 1;
+        for (SettingGroup group : w.settings.groups) {
             if (visibleCount(group) == 0) continue;
-            if (groups) {
-                if (paint) text(context, trim(group.name, right - left - PAD * 2), left + PAD, y[0] + 2, MUTED);
-                y[0] += ROW;
-            }
+            if (groups) rows.add(new Row(RowKind.GROUP, group.name, null, null));
             for (Setting<?> setting : group) {
                 if (!setting.isVisible()) continue;
-                boolean over = inside(mouseX, mouseY, left, y[0], right - left, ROW - 1);
-                if (paint) drawSetting(context, owner, setting, left, right, y[0], over);
-                if (over) {
-                    hovered = setting;
-                    hint = setting.description + " Middle click resets it.";
-                }
-                y[0] += ROW;
+                rows.add(new Row(RowKind.SETTING, setting.title, setting, null));
                 if (setting instanceof ColorSetting color && openColors.contains(color)) {
-                    for (int channel = 0; channel < 4; channel++) {
-                        boolean on = inside(mouseX, mouseY, left + INDENT, y[0], right - left - INDENT, ROW - 1);
-                        if (paint) drawChannel(context, color, channel, left + INDENT, right, y[0], on);
-                        y[0] += ROW;
-                    }
+                    for (int channel = 0; channel < 4; channel++) rows.add(new Row(RowKind.CHANNEL, CHANNELS[channel], color, channel));
                 }
             }
         }
+        if (w.owner instanceof Module module) {
+            rows.add(new Row(RowKind.GROUP, "Module", null, null));
+            rows.add(new Row(RowKind.BIND, "Bind", module, null));
+            rows.add(new Row(RowKind.ACTION, module.isActive() ? "Turn off" : "Turn on", (Runnable) module::toggle, null));
+        }
+        if (w.owner instanceof HudElement element) {
+            rows.add(new Row(RowKind.GROUP, "Element", null, null));
+            rows.add(new Row(RowKind.ACTION, element.isActive() ? "Hide" : "Show", (Runnable) element::toggle, null));
+            rows.add(new Row(RowKind.ACTION, "Remove", (Runnable) () -> {
+                element.remove();
+                closeWindow();
+            }, null));
+        }
+        return rows;
+    }
+
+    private void listRows(Window w, List<Row> rows) {
+        Setting<?> setting = w.list;
+        rows.add(new Row(RowKind.SEARCH, "Search", setting, null));
+        Collection<?> selected = (Collection<?>) setting.get();
+        rows.add(new Row(RowKind.GROUP, "Selected (" + selected.size() + ")", null, null));
+        String query = w.listSearch.toLowerCase(Locale.ROOT);
+        for (Object entry : selected) {
+            if (!query.isEmpty() && !entryName(entry).toLowerCase(Locale.ROOT).contains(query)) continue;
+            rows.add(new Row(RowKind.ENTRY_REMOVE, entryName(entry), setting, entry));
+        }
+        if (setting instanceof StringListSetting) {
+            rows.add(new Row(RowKind.TEXT_ADD, "Add", setting, null));
+            return;
+        }
+        rows.add(new Row(RowKind.GROUP, "Add", null, null));
+        int shown = 0;
+        for (Object entry : candidates(w)) {
+            if (selected.contains(entry)) continue;
+            if (shown++ >= MAX_CANDIDATES) {
+                rows.add(new Row(RowKind.NOTE, "Type to narrow the list", null, null));
+                break;
+            }
+            rows.add(new Row(RowKind.ENTRY_ADD, entryName(entry), setting, entry));
+        }
+    }
+
+    private List<Object> candidates(Window w) {
+        String key = w.list.name + "|" + w.listSearch;
+        if (key.equals(w.cacheKey) && w.cache != null) return w.cache;
+        List<Object> all = new ArrayList<>();
+        Setting<?> setting = w.list;
+        if (setting instanceof BlockListSetting blocks) {
+            for (Block block : Registries.BLOCK) if (block != Blocks.AIR && (blocks.filter == null || blocks.filter.test(block))) all.add(block);
+        } else if (setting instanceof ItemListSetting items) {
+            for (Item item : Registries.ITEM) if (item != Items.AIR && (items.filter == null || items.filter.test(item))) all.add(item);
+        } else if (setting instanceof ModuleListSetting) {
+            all.addAll(Modules.get().getAll());
+        } else if (setting instanceof EntityTypeListSetting types) {
+            for (EntityType<?> type : Registries.ENTITY_TYPE) if (types.filter == null || types.filter.test(type)) all.add(type);
+        } else if (setting instanceof StatusEffectListSetting) {
+            for (StatusEffect effect : Registries.STATUS_EFFECT) all.add(effect);
+        }
+        String query = w.listSearch.toLowerCase(Locale.ROOT);
+        if (!query.isEmpty()) all.removeIf(entry -> !entryName(entry).toLowerCase(Locale.ROOT).contains(query));
+        all.sort((a, b) -> entryName(a).compareToIgnoreCase(entryName(b)));
+        w.cache = all;
+        w.cacheKey = key;
+        return all;
+    }
+
+    private static String entryName(Object entry) {
+        if (entry instanceof Block block) return block.getName().getString();
+        if (entry instanceof Item item) return item.getName().getString();
+        if (entry instanceof Module module) return module.title;
+        if (entry instanceof EntityType<?> type) return type.getName().getString();
+        if (entry instanceof StatusEffect effect) return effect.getName().getString();
+        return String.valueOf(entry);
+    }
+
+    private static boolean isList(Setting<?> setting) {
+        return setting instanceof BlockListSetting || setting instanceof ItemListSetting || setting instanceof ModuleListSetting
+            || setting instanceof EntityTypeListSetting || setting instanceof StatusEffectListSetting || setting instanceof StringListSetting;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void changeList(Setting<?> setting, Object entry, boolean add) {
+        Object value = setting.get();
+        if (value instanceof List<?> list) {
+            List copy = new ArrayList<>(list);
+            if (add) {
+                if (!copy.contains(entry)) copy.add(entry);
+            } else copy.remove(entry);
+            ((Setting) setting).set(copy);
+        } else if (value instanceof Set<?> set) {
+            Set copy = new LinkedHashSet<>(set);
+            if (add) copy.add(entry);
+            else copy.remove(entry);
+            ((Setting) setting).set(copy);
+        }
+    }
+
+    private Object drawWindow(DrawContext context, Window w, int mouseX, int mouseY) {
+        List<Row> rows = windowRows(w);
+        int content = rows.size() * WIN_ROW + 2;
+        int limit = height - w.y - WIN_HEAD - MARGIN * 2 - HEADER;
+        w.height = Math.max(WIN_ROW, Math.min(content, limit));
+        w.scroll = MathHelper.clamp(w.scroll, 0, Math.max(0, content - w.height));
+
+        int x = w.x;
+        int top = w.y + WIN_HEAD;
+        int bottom = top + w.height;
+        Object hovered = null;
+
+        context.fillGradient(x, w.y, x + WIN_W, top, tint(accent, 0.12f), accent);
+        int titleX = x + PAD;
+        if (w.list != null) {
+            boolean over = inside(mouseX, mouseY, x, w.y, 14, WIN_HEAD);
+            text(context, "<", x + PAD, w.y + 2, over ? TEXT : MUTED);
+            hits.add(new Hit(x, w.y, 14, WIN_HEAD, Kind.W_BACK, w, null));
+            titleX += 10;
+        }
+        String title = w.list != null ? w.list.title : w.title;
+        int right = x + WIN_W - PAD;
+        if (w.closable) {
+            boolean over = inside(mouseX, mouseY, right - 8, w.y, 12, WIN_HEAD);
+            text(context, "x", right - width("x"), w.y + 2, over ? TEXT : MUTED);
+            hits.add(new Hit(right - 8, w.y, 12, WIN_HEAD, Kind.W_CLOSE, w, null));
+            right -= 14;
+        }
+        if (w.list == null && w.resetAll != null) {
+            String label = "Reset all";
+            int lw = width(label);
+            boolean over = inside(mouseX, mouseY, right - lw - 2, w.y, lw + 4, WIN_HEAD);
+            text(context, label, right - lw, w.y + 2, over ? TEXT : MUTED);
+            hits.add(new Hit(right - lw - 2, w.y, lw + 4, WIN_HEAD, Kind.W_RESET_ALL, w, null));
+            if (over) hint = "Puts every setting here back to its default.";
+            right -= lw + 8;
+        }
+        text(context, trim(title, right - titleX - 2), titleX, w.y + 2, TEXT);
+        hits.add(new Hit(x, w.y, WIN_W, WIN_HEAD, Kind.W_HEADER, w, null));
+
+        context.fill(x, top, x + WIN_W, bottom, WIN_BODY);
+        hits.add(new Hit(x, top, WIN_W, w.height, Kind.W_AREA, w, null));
+        context.enableScissor(x, top, x + WIN_W, bottom);
+        int y = top + 1 - w.scroll;
+        for (Row row : rows) {
+            if (y + WIN_ROW > top && y < bottom) {
+                boolean over = mouseY >= top && mouseY < bottom && inside(mouseX, mouseY, x, y, WIN_W, WIN_ROW);
+                Object result = drawRow(context, w, row, x, y, over, mouseX, mouseY, top, bottom);
+                if (result != null) hovered = result;
+            }
+            y += WIN_ROW;
+        }
+        context.disableScissor();
+        if (content > w.height) {
+            int barH = Math.max(8, w.height * w.height / content);
+            int barY = top + (w.height - barH) * w.scroll / Math.max(1, content - w.height);
+            context.fill(x + WIN_W - 2, barY, x + WIN_W - 1, barY + barH, withAlpha(accent, 0xC0));
+        }
+        outline(context, x, w.y, x + WIN_W, bottom, accent);
         return hovered;
     }
 
-    private Object actionRow(DrawContext context, Action action, int left, int right, int[] y, int mouseX, int mouseY, String tip) {
-        boolean over = inside(mouseX, mouseY, left, y[0], right - left, ROW - 1);
-        if (paint) {
-            cell(context, left, right, y[0], false, over);
-            text(context, action.label(), left + PAD, y[0] + 2, TEXT);
-            hits.add(new Hit(left, y[0], right - left, ROW - 1, Kind.ACTION, action, null));
-        }
-        y[0] += ROW;
-        if (over) {
-            hint = tip;
-            return action.label();
-        }
-        return null;
-    }
+    private Object drawRow(DrawContext context, Window w, Row row, int x, int y, boolean over, int mouseX, int mouseY, int top, int bottom) {
+        int left = x + PAD;
+        int resetX = x + WIN_W - PAD - ICON;
+        int ctrlRight = resetX - 4;
+        int ctrlLeft = ctrlRight - CTRL_W;
+        int ty = y + 3;
 
-    private Object bindRow(DrawContext context, Module module, int left, int right, int[] y, int mouseX, int mouseY) {
-        boolean over = inside(mouseX, mouseY, left, y[0], right - left, ROW - 1);
-        if (paint) {
-            cell(context, left, right, y[0], false, over);
-            text(context, "Bind", left + PAD, y[0] + 2, TEXT);
-            value(context, bindText(module.keybind, module), right, y[0]);
-            hits.add(new Hit(left, y[0], right - left, ROW - 1, Kind.MODULE_BIND, module, module));
+        switch (row.kind()) {
+            case GROUP -> {
+                text(context, row.label(), left, ty, MUTED);
+                int lineX = left + width(row.label()) + 4;
+                context.fill(lineX, y + WIN_ROW / 2, x + WIN_W - PAD, y + WIN_ROW / 2 + 1, LINE);
+                return null;
+            }
+            case NOTE -> {
+                text(context, row.label(), left, ty, MUTED);
+                return null;
+            }
+            case SEARCH -> {
+                boolean typing = editing == LIST_SEARCH;
+                box(context, x + PAD, y + 1, x + WIN_W - PAD, y + WIN_ROW - 1, typing, over);
+                String shown = typing ? w.listSearch + cursor() : w.listSearch.isEmpty() ? "Search" : w.listSearch;
+                text(context, trimStart(shown, WIN_W - PAD * 4), x + PAD * 2, ty, typing || !w.listSearch.isEmpty() ? TEXT : MUTED);
+                addHit(x, y, WIN_W, WIN_ROW, top, bottom, Kind.W_LIST_SEARCH, w, null);
+                return null;
+            }
+            case ENTRY_REMOVE, ENTRY_ADD -> {
+                if (over) context.fill(x + 1, y, x + WIN_W - 1, y + WIN_ROW, ROW_HOVER);
+                text(context, trim(row.label(), WIN_W - PAD * 3 - 8), left, ty, TEXT);
+                String sign = row.kind() == RowKind.ENTRY_ADD ? "+" : "-";
+                text(context, sign, x + WIN_W - PAD - width(sign), ty, over ? TEXT : MUTED);
+                addHit(x, y, WIN_W, WIN_ROW, top, bottom, row.kind() == RowKind.ENTRY_ADD ? Kind.W_LIST_ADD : Kind.W_LIST_REMOVE, row.target(), row.extra());
+                return null;
+            }
+            case TEXT_ADD -> {
+                boolean typing = editing == LIST_TEXT;
+                box(context, x + PAD, y + 1, x + WIN_W - PAD, y + WIN_ROW - 1, typing, over);
+                String shown = typing ? editText + cursor() : "Add a line";
+                text(context, trimStart(shown, WIN_W - PAD * 4), x + PAD * 2, ty, typing ? TEXT : MUTED);
+                addHit(x, y, WIN_W, WIN_ROW, top, bottom, Kind.W_LIST_TEXT, row.target(), null);
+                if (over) hint = "Click, type and press Enter to add it.";
+                return null;
+            }
+            case ACTION -> {
+                box(context, x + PAD, y + 1, x + WIN_W - PAD, y + WIN_ROW - 1, false, over);
+                text(context, row.label(), x + (WIN_W - width(row.label())) / 2, ty, TEXT);
+                addHit(x, y, WIN_W, WIN_ROW, top, bottom, Kind.W_ACTION, row.target(), null);
+                return null;
+            }
+            case BIND -> {
+                if (over) context.fill(x + 1, y, x + WIN_W - 1, y + WIN_ROW, ROW_HOVER);
+                Module module = (Module) row.target();
+                text(context, "Bind", left, ty, TEXT);
+                box(context, ctrlLeft, y + 1, ctrlRight, y + WIN_ROW - 1, binding == module, over);
+                String key = bindText(module.keybind, module);
+                text(context, key, ctrlLeft + (CTRL_W - width(key)) / 2, ty, TEXT);
+                addHit(x, y, WIN_W, WIN_ROW, top, bottom, Kind.W_MODULE_BIND, module, null);
+                if (over) hint = "Click, then press a key or mouse button. Escape clears it.";
+                return null;
+            }
+            case CHANNEL -> {
+                ColorSetting color = (ColorSetting) row.target();
+                int channel = (Integer) row.extra();
+                text(context, row.label(), left + 6, ty, MUTED);
+                int amount = channel(color.get(), channel);
+                box(context, ctrlLeft, y + 1, ctrlRight, y + WIN_ROW - 1, false, over);
+                int filled = ctrlLeft + 1 + Math.round((CTRL_W - 2) * amount / 255f);
+                int tintColor = switch (channel) {
+                    case 0 -> 0xDCB4464E;
+                    case 1 -> 0xDC4EA45C;
+                    case 2 -> 0xDC4E64B4;
+                    default -> enabledCell;
+                };
+                if (filled > ctrlLeft + 1) context.fill(ctrlLeft + 1, y + 2, filled, y + WIN_ROW - 2, tintColor);
+                String shown = String.valueOf(amount);
+                text(context, shown, ctrlLeft + (CTRL_W - width(shown)) / 2, ty, TEXT);
+                addHit(ctrlLeft, y, CTRL_W, WIN_ROW, top, bottom, Kind.W_CHANNEL, color, new int[] {ctrlLeft + 1, ctrlRight - 1, channel});
+                return null;
+            }
+            default -> {
+            }
         }
-        y[0] += ROW;
-        if (over) {
-            hint = "Click, then press a key or mouse button. Escape clears it.";
-            return module.keybind;
-        }
-        return null;
-    }
 
-    private void drawSetting(DrawContext context, Object owner, Setting<?> setting, int left, int right, int y, boolean over) {
-        String name = setting.title;
-        int nameMax = right - left - PAD * 2;
+        Setting<?> setting = (Setting<?>) row.target();
+        if (over) {
+            context.fill(x + 1, y, x + WIN_W - 1, y + WIN_ROW, ROW_HOVER);
+            hint = setting.description;
+        }
+        int nameMax = ctrlLeft - left - 4;
+        text(context, trim(setting.title, nameMax), left, ty, TEXT);
+
+        boolean changed = !Objects.equals(setting.get(), setting.getDefaultValue());
+        boolean resetOver = mouseY >= top && mouseY < bottom && inside(mouseX, mouseY, resetX - 1, y, ICON + 2, WIN_ROW);
+        int iconColor = resetOver ? TEXT : changed ? 0xE6FFFFFF : 0x40FFFFFF;
+        context.drawTexture(RenderPipelines.GUI_TEXTURED, RESET_ICON, resetX, y + (WIN_ROW - ICON) / 2, 0, 0, ICON, ICON, 32, 32, 32, 32, iconColor);
+        addHit(resetX - 1, y, ICON + 2, WIN_ROW, top, bottom, Kind.W_RESET, setting, null);
 
         if (setting instanceof BoolSetting bool) {
-            cell(context, left, right, y, bool.get(), over);
-            text(context, trim(name, nameMax), left + PAD, y + 2, TEXT);
-            hits.add(new Hit(left, y, right - left, ROW - 1, Kind.BOOL, bool, null));
-            return;
-        }
-
-        if (setting instanceof DoubleSetting || setting instanceof IntSetting) {
-            cell(context, left, right, y, false, over);
-            int filled = left + Math.round((right - left) * sliderFraction(setting));
-            if (filled > left) context.fill(left, y, filled, y + ROW - 1, over ? enabledHover : enabledCell);
+            int size = 9;
+            int bx = ctrlRight - size;
+            int by = y + (WIN_ROW - size) / 2;
+            context.fill(bx, by, bx + size, by + size, EDGE);
+            context.fill(bx + 1, by + 1, bx + size - 1, by + size - 1, bool.get() ? accent : over ? CELL_HOVER : CELL);
+            addHit(x, y, resetX - x - 2, WIN_ROW, top, bottom, Kind.W_BOOL, bool, null);
+        } else if (setting instanceof DoubleSetting || setting instanceof IntSetting) {
+            box(context, ctrlLeft, y + 1, ctrlRight, y + WIN_ROW - 1, false, over);
+            int filled = ctrlLeft + 1 + Math.round((CTRL_W - 2) * sliderFraction(setting));
+            if (filled > ctrlLeft + 1) context.fill(ctrlLeft + 1, y + 2, filled, y + WIN_ROW - 2, over ? enabledHover : enabledCell);
             String shown = valueText(setting);
-            text(context, trim(name, nameMax - width(shown) - 4), left + PAD, y + 2, TEXT);
-            value(context, shown, right, y);
-            hits.add(new Hit(left, y, right - left, ROW - 1, Kind.SLIDER, setting, new int[] {left, right}));
-            return;
-        }
-
-        if (setting instanceof EnumSetting<?> choice) {
-            cell(context, left, right, y, false, over);
-            String shown = choice.get().toString();
-            text(context, trim(name, nameMax - width(shown) - 4), left + PAD, y + 2, TEXT);
-            value(context, shown, right, y);
-            hits.add(new Hit(left, y, right - left, ROW - 1, Kind.ENUM, choice, null));
-            return;
-        }
-
-        if (setting instanceof KeybindSetting keybind) {
-            cell(context, left, right, y, false, over);
-            String shown = bindText(keybind.get(), keybind);
-            text(context, trim(name, nameMax - width(shown) - 4), left + PAD, y + 2, TEXT);
-            value(context, shown, right, y);
-            hits.add(new Hit(left, y, right - left, ROW - 1, Kind.BIND, keybind, null));
-            return;
-        }
-
-        if (setting instanceof ColorSetting color) {
-            cell(context, left, right, y, openColors.contains(color), over);
-            text(context, trim(name, nameMax - 12), left + PAD, y + 2, TEXT);
-            int sx = right - PAD - 7;
-            int sy = y + 2;
-            context.fill(sx - 1, sy - 1, sx + 8, sy + 8, SWATCH_EDGE);
-            context.fill(sx, sy, sx + 7, sy + 7, color.get().getPacked());
-            hits.add(new Hit(left, y, right - left, ROW - 1, Kind.COLOR, color, null));
-            return;
-        }
-
-        if (setting instanceof StringSetting string) {
+            text(context, shown, ctrlLeft + (CTRL_W - width(shown)) / 2, ty, TEXT);
+            addHit(ctrlLeft, y, CTRL_W, WIN_ROW, top, bottom, Kind.W_SLIDER, setting, new int[] {ctrlLeft + 1, ctrlRight - 1});
+        } else if (setting instanceof EnumSetting<?> choice) {
+            box(context, ctrlLeft, y + 1, ctrlRight, y + WIN_ROW - 1, false, over);
+            String shown = trim(choice.get().toString(), CTRL_W - 16);
+            text(context, shown, ctrlLeft + (CTRL_W - width(shown)) / 2, ty, TEXT);
+            text(context, "<", ctrlLeft + 3, ty, FAINT);
+            text(context, ">", ctrlRight - 3 - width(">"), ty, FAINT);
+            addHit(ctrlLeft, y, CTRL_W, WIN_ROW, top, bottom, Kind.W_ENUM, choice, null);
+        } else if (setting instanceof ColorSetting color) {
+            int sw = 18;
+            int sx = ctrlRight - sw;
+            context.fill(sx, y + 2, ctrlRight, y + WIN_ROW - 2, EDGE);
+            context.fill(sx + 1, y + 3, ctrlRight - 1, y + WIN_ROW - 3, color.get().getPacked() | 0xFF000000);
+            SettingColor c = color.get();
+            String hex = String.format(Locale.ROOT, "#%02X%02X%02X", c.r, c.g, c.b);
+            text(context, hex, sx - 4 - width(hex), ty, openColors.contains(color) ? TEXT : MUTED);
+            addHit(ctrlLeft, y, CTRL_W, WIN_ROW, top, bottom, Kind.W_COLOR, color, null);
+        } else if (setting instanceof StringSetting string) {
             boolean typing = editing == string;
-            cell(context, left, right, y, typing, over);
+            box(context, ctrlLeft, y + 1, ctrlRight, y + WIN_ROW - 1, typing, over);
             String shown = typing ? editText + cursor() : string.get();
-            int nameWidth = Math.min(width(name), nameMax / 2);
-            text(context, trim(name, nameMax / 2), left + PAD, y + 2, TEXT);
-            String trimmed = trimStart(shown, nameMax - nameWidth - 6);
-            text(context, trimmed, right - PAD - width(trimmed), y + 2, typing ? TEXT : MUTED);
-            hits.add(new Hit(left, y, right - left, ROW - 1, Kind.STRING, string, null));
-            return;
+            text(context, trimStart(shown, CTRL_W - PAD * 2), ctrlLeft + PAD, ty, typing ? TEXT : MUTED);
+            addHit(ctrlLeft, y, CTRL_W, WIN_ROW, top, bottom, Kind.W_STRING, string, null);
+        } else if (setting instanceof KeybindSetting keybind) {
+            box(context, ctrlLeft, y + 1, ctrlRight, y + WIN_ROW - 1, binding == keybind, over);
+            String shown = bindText(keybind.get(), keybind);
+            text(context, shown, ctrlLeft + (CTRL_W - width(shown)) / 2, ty, TEXT);
+            addHit(ctrlLeft, y, CTRL_W, WIN_ROW, top, bottom, Kind.W_BIND, keybind, null);
+        } else if (isList(setting)) {
+            box(context, ctrlLeft, y + 1, ctrlRight, y + WIN_ROW - 1, false, over);
+            String shown = ((Collection<?>) setting.get()).size() + " selected  >";
+            text(context, shown, ctrlLeft + (CTRL_W - width(shown)) / 2, ty, TEXT);
+            addHit(ctrlLeft, y, CTRL_W, WIN_ROW, top, bottom, Kind.W_LIST, setting, null);
+        } else {
+            box(context, ctrlLeft, y + 1, ctrlRight, y + WIN_ROW - 1, false, over);
+            String shown = "Edit  >";
+            text(context, shown, ctrlLeft + (CTRL_W - width(shown)) / 2, ty, MUTED);
+            addHit(ctrlLeft, y, CTRL_W, WIN_ROW, top, bottom, Kind.W_MORE, setting, w.owner);
         }
-
-        cell(context, left, right, y, false, over);
-        text(context, trim(name, nameMax - width("...") - 4), left + PAD, y + 2, TEXT);
-        value(context, "...", right, y);
-        hits.add(new Hit(left, y, right - left, ROW - 1, Kind.MORE, setting, owner));
+        return setting;
     }
 
-    private void drawChannel(DrawContext context, ColorSetting color, int channel, int left, int right, int y, boolean over) {
-        SettingColor current = color.get();
-        int amount = channel(current, channel);
-        cell(context, left, right, y, false, over);
-        int filled = left + Math.round((right - left) * amount / 255f);
-        int tintColor = switch (channel) {
-            case 0 -> 0xDCB4464E;
-            case 1 -> 0xDC4EA45C;
-            case 2 -> 0xDC4E64B4;
-            default -> over ? enabledHover : enabledCell;
-        };
-        if (filled > left) context.fill(left, y, filled, y + ROW - 1, tintColor);
-        text(context, CHANNELS[channel], left + PAD, y + 2, TEXT);
-        value(context, String.valueOf(amount), right, y);
-        hits.add(new Hit(left, y, right - left, ROW - 1, Kind.CHANNEL, color, new int[] {left, right, channel}));
+    private void addHit(int x, int y, int w, int h, int top, int bottom, Kind kind, Object target, Object extra) {
+        int y1 = Math.max(y, top);
+        int y2 = Math.min(y + h, bottom);
+        if (y2 > y1) hits.add(new Hit(x, y1, w, y2 - y1, kind, target, extra));
+    }
+
+    private void box(DrawContext context, int x1, int y1, int x2, int y2, boolean active, boolean over) {
+        context.fill(x1, y1, x2, y2, active ? accent : EDGE);
+        context.fill(x1 + 1, y1 + 1, x2 - 1, y2 - 1, over ? CELL_HOVER : CELL);
     }
 
     private static int channel(SettingColor color, int channel) {
@@ -740,10 +1007,6 @@ public class CoyGuiScreen extends Screen {
     private void cell(DrawContext context, int left, int right, int y, boolean enabled, boolean over) {
         int fill = enabled ? (over ? enabledHover : enabledCell) : (over ? CELL_HOVER : CELL);
         context.fill(left, y, right, y + ROW - 1, fill);
-    }
-
-    private void value(DrawContext context, String shown, int right, int y) {
-        text(context, shown, right - PAD - width(shown), y + 2, MUTED);
     }
 
     private String cursor() {
@@ -789,6 +1052,7 @@ public class CoyGuiScreen extends Screen {
             case "HUD" -> View.Hud;
             case "Friends" -> View.Friends;
             case "GUI" -> View.Gui;
+            case "Baritone" -> View.Baritone;
             default -> null;
         };
     }
@@ -822,7 +1086,7 @@ public class CoyGuiScreen extends Screen {
         int y = mouseY + 4;
         if (x + w > width - 2) x = mouseX - 10 - w;
         if (y + h > height - 2) y = height - 2 - h;
-        context.fill(x, y, x + w, y + h, 0xE6120F18);
+        context.fill(x, y, x + w, y + h, 0xF0120F18);
         outline(context, x, y, x + w, y + h, accent);
         int line = y + 3;
         for (OrderedText text : lines) {
@@ -846,12 +1110,8 @@ public class CoyGuiScreen extends Screen {
         }
 
         Hit hit = hitAt(mx, my);
-        if (hit != null && button == GLFW.GLFW_MOUSE_BUTTON_MIDDLE && hit.target instanceof Setting<?> setting) {
-            setting.reset();
-            return true;
-        }
         if (hit == null || hit.kind != Kind.SEARCH) searchFocused = false;
-        if (hit == null || (hit.kind != Kind.STRING && hit.kind != Kind.FRIEND_ADD)) finishEdit(true);
+        if (hit == null || (hit.kind != Kind.W_STRING && hit.kind != Kind.FRIEND_ADD && hit.kind != Kind.W_LIST_SEARCH && hit.kind != Kind.W_LIST_TEXT)) finishEdit(true);
         if (hit == null) return super.mouseClicked(click, doubled);
 
         switch (hit.kind) {
@@ -878,15 +1138,21 @@ public class CoyGuiScreen extends Screen {
                 if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) module.toggle();
                 else if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
                     if (owner.opensSettingsWindow()) client.setScreen(GuiThemes.get().moduleScreen(module));
-                    else if (!expanded.remove(module)) expanded.add(module);
+                    else if (window != null && window.owner == module) closeWindow();
+                    else openWindow(new Window(module.title, module.settings, module, true, module.settings::reset, null));
                 }
             }
             case ELEMENT -> {
                 HudElement element = (HudElement) hit.target;
                 if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) element.toggle();
-                else if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT && !expanded.remove(element)) expanded.add(element);
+                else if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+                    if (window != null && window.owner == element) closeWindow();
+                    else openWindow(new Window(element.info.title, element.settings, element, true, element.settings::reset, null));
+                }
             }
             case FRIEND -> Friends.get().remove((Friend) hit.target);
+            case FRIEND_ADD -> startEdit(FRIEND_ADD, "", null);
+            case ACTION -> ((Action) hit.target).run().run();
             case ADD_INFO -> {
                 HudElementInfo<?> info = (HudElementInfo<?>) hit.target;
                 if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT && info.hasPresets()) {
@@ -896,36 +1162,6 @@ public class CoyGuiScreen extends Screen {
                 }
             }
             case ADD_PRESET -> Hud.get().add((HudElementInfo<?>.Preset) hit.target, client.getWindow().getFramebufferWidth() / 2, client.getWindow().getFramebufferHeight() / 2);
-            case FRIEND_ADD -> startEdit(Kind.FRIEND_ADD, "");
-            case ACTION -> ((Action) hit.target).run().run();
-            case BOOL -> {
-                BoolSetting setting = (BoolSetting) hit.target;
-                setting.set(!setting.get());
-            }
-            case SLIDER, CHANNEL -> {
-                if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-                    sliding = (Setting<?>) hit.target;
-                    slidingHit = hit;
-                    slidingChannel = hit.kind == Kind.CHANNEL ? ((int[]) hit.extra)[2] : -1;
-                    slide(mx);
-                }
-            }
-            case ENUM -> cycle((EnumSetting<?>) hit.target, button == GLFW.GLFW_MOUSE_BUTTON_RIGHT ? -1 : 1);
-            case COLOR -> {
-                ColorSetting color = (ColorSetting) hit.target;
-                if (!openColors.remove(color)) openColors.add(color);
-            }
-            case STRING -> {
-                StringSetting setting = (StringSetting) hit.target;
-                if (editing != setting) startEdit(setting, setting.get());
-            }
-            case BIND -> binding = hit.target;
-            case MODULE_BIND -> binding = hit.extra;
-            case MORE -> {
-                if (hit.extra instanceof Module module) client.setScreen(GuiThemes.get().moduleScreen(module));
-                else if (hit.extra instanceof HudElement) client.setScreen(new HudEditorScreen(GuiThemes.get()));
-                else openMeteorTab();
-            }
             case VIEW -> {
                 showView((View) hit.target);
                 arrange();
@@ -933,31 +1169,70 @@ public class CoyGuiScreen extends Screen {
             case TAB -> ((Tab) hit.target).openScreen(GuiThemes.get());
             case PAGE -> switchPage((Integer) hit.target);
             case SEARCH -> searchFocused = true;
+            case W_HEADER -> {
+                if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+                    draggingWindow = true;
+                    dragX = (int) mx - window.x;
+                    dragY = (int) my - window.y;
+                }
+            }
+            case W_CLOSE -> closeWindow();
+            case W_RESET_ALL -> {
+                if (window.resetAll != null) window.resetAll.run();
+            }
+            case W_BACK -> {
+                finishEdit(true);
+                window.list = null;
+                window.listSearch = "";
+                window.scroll = 0;
+            }
+            case W_RESET -> ((Setting<?>) hit.target).reset();
+            case W_BOOL -> {
+                BoolSetting setting = (BoolSetting) hit.target;
+                setting.set(!setting.get());
+            }
+            case W_SLIDER, W_CHANNEL -> {
+                if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+                    sliding = (Setting<?>) hit.target;
+                    slidingHit = hit;
+                    slidingChannel = hit.kind == Kind.W_CHANNEL ? ((int[]) hit.extra)[2] : -1;
+                    slide(mx);
+                }
+            }
+            case W_ENUM -> cycle((EnumSetting<?>) hit.target, button == GLFW.GLFW_MOUSE_BUTTON_RIGHT ? -1 : 1);
+            case W_COLOR -> {
+                ColorSetting color = (ColorSetting) hit.target;
+                if (!openColors.remove(color)) openColors.add(color);
+            }
+            case W_STRING -> {
+                StringSetting setting = (StringSetting) hit.target;
+                if (editing != setting) startEdit(setting, setting.get(), null);
+            }
+            case W_BIND, W_MODULE_BIND -> binding = hit.target;
+            case W_ACTION -> ((Runnable) hit.target).run();
+            case W_LIST -> {
+                window.list = (Setting<?>) hit.target;
+                window.listSearch = "";
+                window.scroll = 0;
+                window.cache = null;
+            }
+            case W_LIST_SEARCH -> startEdit(LIST_SEARCH, "", null);
+            case W_LIST_ADD -> changeList((Setting<?>) hit.target, hit.extra, true);
+            case W_LIST_REMOVE -> changeList((Setting<?>) hit.target, hit.extra, false);
+            case W_LIST_TEXT -> startEdit(LIST_TEXT, "", (Setting<?>) hit.target);
+            case W_MORE -> {
+                if (hit.extra instanceof Module module) client.setScreen(GuiThemes.get().moduleScreen(module));
+            }
+            case W_AREA -> {
+            }
         }
         return true;
     }
 
-    private void openMeteorTab() {
-        String name = switch (view) {
-            case Config -> "Config";
-            case Hud -> "HUD";
-            case Friends -> "Friends";
-            case Gui -> "GUI";
-            default -> "";
-        };
-        for (Tab tab : Tabs.get()) {
-            if (tab.name.equals(name)) {
-                passThrough = true;
-                client.setScreen(tab.createScreen(GuiThemes.get()));
-                passThrough = false;
-                return;
-            }
-        }
-    }
-
-    private void startEdit(Object target, String text) {
+    private void startEdit(Object target, String text, Setting<?> list) {
         finishEdit(true);
         editing = target;
+        editingList = list;
         editText = text;
     }
 
@@ -965,14 +1240,22 @@ public class CoyGuiScreen extends Screen {
         if (editing == null) return;
         if (commit) {
             if (editing instanceof StringSetting setting) setting.set(editText);
-            else if (editing == Kind.FRIEND_ADD && !editText.isBlank()) Friends.get().add(new Friend(editText.trim()));
+            else if (editing == FRIEND_ADD && !editText.isBlank()) Friends.get().add(new Friend(editText.trim()));
+            else if (editing == LIST_TEXT && editingList != null && !editText.isBlank()) changeList(editingList, editText, true);
         }
         editing = null;
+        editingList = null;
         editText = "";
     }
 
     @Override
     public boolean mouseDragged(Click click, double offsetX, double offsetY) {
+        if (draggingWindow && window != null) {
+            window.x = (int) click.x() - dragX;
+            window.y = (int) click.y() - dragY;
+            clampWindow();
+            return true;
+        }
         if (dragging != null) {
             custom = true;
             dragging.x = MathHelper.clamp((int) click.x() - dragX, 0, Math.max(0, width - WIDTH));
@@ -990,6 +1273,7 @@ public class CoyGuiScreen extends Screen {
     public boolean mouseReleased(Click click) {
         if (dragging != null) saveLayout();
         dragging = null;
+        draggingWindow = false;
         sliding = null;
         slidingHit = null;
         slidingChannel = -1;
@@ -998,6 +1282,10 @@ public class CoyGuiScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
+        if (window != null && inside((int) mouseX, (int) mouseY, window.x, window.y, WIN_W, WIN_HEAD + window.height)) {
+            window.scroll -= (int) Math.signum(vertical) * WIN_ROW * 3;
+            return true;
+        }
         for (int i = panels.size() - 1; i >= 0; i--) {
             Panel panel = panels.get(i);
             if (mouseX < panel.x || mouseX >= panel.x + WIDTH || !shown(panel)) continue;
@@ -1018,8 +1306,21 @@ public class CoyGuiScreen extends Screen {
             return true;
         }
         if (editing != null) {
-            if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) finishEdit(true);
-            else if (key == GLFW.GLFW_KEY_ESCAPE) finishEdit(false);
+            boolean enter = key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER;
+            if (editing == LIST_SEARCH) {
+                if (enter || key == GLFW.GLFW_KEY_ESCAPE) editing = null;
+                else if (key == GLFW.GLFW_KEY_BACKSPACE && window != null && !window.listSearch.isEmpty()) {
+                    window.listSearch = window.listSearch.substring(0, window.listSearch.length() - 1);
+                    window.scroll = 0;
+                }
+                return true;
+            }
+            if (enter) {
+                Object was = editing;
+                Setting<?> list = editingList;
+                finishEdit(true);
+                if (was == LIST_TEXT) startEdit(LIST_TEXT, "", list);
+            } else if (key == GLFW.GLFW_KEY_ESCAPE) finishEdit(false);
             else if (key == GLFW.GLFW_KEY_BACKSPACE && !editText.isEmpty()) editText = editText.substring(0, editText.length() - 1);
             return true;
         }
@@ -1030,6 +1331,18 @@ public class CoyGuiScreen extends Screen {
                 jumpToMatch();
             }
             return true;
+        }
+        if (key == GLFW.GLFW_KEY_ESCAPE && window != null) {
+            if (window.list != null) {
+                window.list = null;
+                window.listSearch = "";
+                window.scroll = 0;
+                return true;
+            }
+            if (window.closable) {
+                closeWindow();
+                return true;
+            }
         }
         if (key == GLFW.GLFW_KEY_LEFT || key == GLFW.GLFW_KEY_A) {
             switchPage(-1);
@@ -1045,6 +1358,11 @@ public class CoyGuiScreen extends Screen {
     @Override
     public boolean charTyped(CharInput input) {
         if (!input.isValidChar()) return false;
+        if (editing == LIST_SEARCH && window != null) {
+            if (window.listSearch.length() < 32) window.listSearch += input.asString();
+            window.scroll = 0;
+            return true;
+        }
         if (editing != null) {
             if (editText.length() < 64) editText += input.asString();
             return true;
@@ -1071,14 +1389,14 @@ public class CoyGuiScreen extends Screen {
 
     @Override
     public void close() {
-        finishEdit(true);
+        closeWindow();
         saveLayout();
         super.close();
     }
 
     @Override
     public void removed() {
-        finishEdit(true);
+        closeWindow();
         saveLayout();
         super.removed();
     }
@@ -1100,7 +1418,7 @@ public class CoyGuiScreen extends Screen {
     private void slide(double mx) {
         if (sliding == null || slidingHit == null) return;
         int[] range = (int[]) slidingHit.extra;
-        double t = MathHelper.clamp((mx - range[0]) / (double) (range[1] - range[0]), 0, 1);
+        double t = MathHelper.clamp((mx - range[0]) / (double) Math.max(1, range[1] - range[0]), 0, 1);
         if (sliding instanceof ColorSetting color && slidingChannel >= 0) {
             SettingColor next = new SettingColor(color.get());
             int amount = (int) Math.round(t * 255);
@@ -1171,6 +1489,7 @@ public class CoyGuiScreen extends Screen {
     }
 
     private String trim(String text, int max) {
+        if (max <= 0) return "";
         if (width(text) <= max) return text;
         String dots = "..";
         int end = text.length();

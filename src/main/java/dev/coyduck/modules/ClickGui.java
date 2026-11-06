@@ -74,7 +74,7 @@ public class ClickGui extends Module {
 
     private final Setting<Boolean> settingsWindow = sgGeneral.add(new BoolSetting.Builder()
         .name("settings-window")
-        .description("Right clicking a module opens its settings in a window instead of inside the panel.")
+        .description("Right clicking a module opens Meteor's own settings screen instead of the Coyduck settings window.")
         .defaultValue(false)
         .build()
     );
@@ -130,6 +130,14 @@ public class ClickGui extends Module {
     private final Setting<String> previousFont = sgGeneral.add(new StringSetting.Builder()
         .name("previous-font")
         .description("Custom font state to go back to when this is turned off.")
+        .defaultValue("")
+        .visible(() -> false)
+        .build()
+    );
+
+    private final Setting<String> previousFace = sgGeneral.add(new StringSetting.Builder()
+        .name("previous-font-face")
+        .description("Meteor font family to go back to when this is turned off.")
         .defaultValue("")
         .visible(() -> false)
         .build()
@@ -222,7 +230,9 @@ public class ClickGui extends Module {
             if (previousFont.get().isEmpty()) previousFont.set("vanilla");
             custom.set(true);
         }
-        if (Config.get().font.get() != face) Config.get().font.set(face);
+        FontFace current = Config.get().font.get();
+        if (previousFace.get().isEmpty() && current != null && !current.info.family().equals(choice.family)) previousFace.set(current.info.family());
+        if (current != face) Config.get().font.set(face);
     }
 
     private void restore() {
@@ -232,6 +242,12 @@ public class ClickGui extends Module {
         if (previousFont.get().equals("custom")) Config.get().customFont.set(true);
         else if (previousFont.get().equals("vanilla")) Config.get().customFont.set(false);
         previousFont.set("");
+        if (!previousFace.get().isEmpty()) {
+            FontFamily family = Fonts.getFamily(previousFace.get());
+            FontFace face = family == null ? null : family.get(FontInfo.Type.Regular);
+            if (face != null) Config.get().font.set(face);
+            previousFace.set("");
+        }
         restoreHudFont();
     }
 
