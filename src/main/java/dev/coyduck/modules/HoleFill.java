@@ -114,7 +114,7 @@ public class HoleFill extends Module {
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         if (mc.player == null || mc.world == null || !mc.player.isAlive()) return;
-        if (InventoryManager.get().isOffhandEating()) return;
+        if (InventoryManager.get().isOffhandEating() || HoleSnap.snapping()) return;
 
         target = Targets.find(targetRange.get());
         if (target == null || Targets.isHoled(Targets.columns(Targets.box(target)))) return;
