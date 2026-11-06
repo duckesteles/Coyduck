@@ -229,6 +229,18 @@ public final class MiningManager {
         return true;
     }
 
+    private void blindStop() {
+        int tool = bestTool(Blocks.OBSIDIAN.getDefaultState());
+        Runnable action = () -> {
+            InteractionManager.get().swing(swing == InteractionManager.SwingMode.None ? InteractionManager.SwingMode.Packet : swing);
+            send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
+        };
+
+        if (tool == -1) action.run();
+        else if (!InventoryManager.get().withItem(tool, switchMode, action)) return;
+        lastStopTick = ticks;
+    }
+
     public float delta(BlockState state, BlockPos at, ItemStack tool) {
         return delta(state, at, tool, mc.player.isOnGround() || AirMine.spoofing());
     }
@@ -313,6 +325,7 @@ public final class MiningManager {
             return;
         }
         if (autoStop && (brokenSinceStop || waited)) stop(owner);
+        if (autoStop && broken && pos != null && lastStopTick != ticks && mc.world.getBlockState(pos).isReplaceable()) blindStop();
         if (pos != null && !broken && lastStopTick != ticks && !mc.world.getBlockState(pos).isReplaceable()) {
             InteractionManager.get().swing(swing == InteractionManager.SwingMode.None ? InteractionManager.SwingMode.Packet : swing);
         }
