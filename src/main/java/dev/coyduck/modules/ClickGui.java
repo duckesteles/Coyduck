@@ -6,6 +6,7 @@ import dev.coyduck.gui.CoyduckTheme;
 import meteordevelopment.meteorclient.events.game.OpenScreenEvent;
 import meteordevelopment.meteorclient.gui.GuiThemes;
 import meteordevelopment.meteorclient.gui.screens.ModulesScreen;
+import meteordevelopment.meteorclient.gui.tabs.TabScreen;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;
@@ -236,8 +237,13 @@ public class ClickGui extends Module {
 
     @EventHandler
     private void onOpenScreen(OpenScreenEvent event) {
-        if (!(event.screen instanceof ModulesScreen)) return;
+        if (CoyGuiScreen.passingThrough()) return;
+        CoyGuiScreen.View view = null;
+        if (event.screen instanceof ModulesScreen) view = CoyGuiScreen.View.Modules;
+        else if (event.screen instanceof TabScreen screen) view = CoyGuiScreen.viewOf(screen.tab.name);
+        if (view == null) return;
         event.cancel();
-        mc.execute(() -> mc.setScreen(new CoyGuiScreen(this)));
+        CoyGuiScreen.View open = view;
+        mc.execute(() -> mc.setScreen(new CoyGuiScreen(this, open)));
     }
 }

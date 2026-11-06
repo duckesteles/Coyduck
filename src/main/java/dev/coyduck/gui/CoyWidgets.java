@@ -88,7 +88,6 @@ public final class CoyWidgets {
     }
 
     public static class TopBar extends WTopBar {
-        private static final double TOP = 6;
         private static final double HEIGHT = 12;
         private static final double MARGIN = 6;
         private static final double PAD = 4;
@@ -115,7 +114,7 @@ public final class CoyWidgets {
         @Override
         protected void onCalculateWidgetPositions() {
             x = mc.getWindow().getFramebufferWidth() - width - MARGIN * unit();
-            y = TOP * unit();
+            y = mc.getWindow().getFramebufferHeight() - height - MARGIN * unit();
             super.onCalculateWidgetPositions();
         }
 
