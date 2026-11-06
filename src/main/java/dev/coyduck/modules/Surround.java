@@ -79,10 +79,7 @@ public class Surround extends Module {
     private static final long REBREAK_TIME = 1_200;
     private static final double REBREAK_RANGE = 7;
     private static final float STRONG = 600;
-    private static final long FEET_WAIT = 3_000;
     private static final long FEET_RETRY = 250;
-    private static final float FEET_BUSY = 0.3f;
-    private static final int FEET_PRIORITY = 1_000;
     private static final double EDGE = 1.0E-4;
     private static final double CENTER_SPEED = 0.2;
     private static final double NEAR = 5 * 5;
@@ -144,8 +141,8 @@ public class Surround extends Module {
 
     private final Setting<Boolean> clearFeet = sgGeneral.add(new BoolSetting.Builder()
         .name("clear-feet")
-        .description("Breaks scaffolding and ladders put on you. Waits up to 3 seconds for a mine that is already under way.")
-        .defaultValue(true)
+        .description("Breaks scaffolding and ladders put on you, but only while nothing else is mining, so a ladder spam can't pull the pick off a city mine.")
+        .defaultValue(false)
         .build()
     );
 
@@ -317,8 +314,7 @@ public class Surround extends Module {
 
         long now = Util.getMeasuringTimeMs();
         if (feetSeen == 0) feetSeen = now;
-        boolean waited = now - feetSeen >= FEET_WAIT;
-        if (!waited && !mining.owns(this) && mining.pos() != null && mining.progress() >= FEET_BUSY) return;
+        if (!mining.owns(this) && mining.pos() != null) return;
 
         if (mc.world.getBlockState(climb).isOf(Blocks.SCAFFOLDING)) {
             if (now - feetHit < FEET_RETRY) return;
@@ -327,7 +323,7 @@ public class Surround extends Module {
             mc.player.swingHand(Hand.MAIN_HAND);
             return;
         }
-        mining.mine(this, waited ? FEET_PRIORITY : 1, climb, true, switchMode.get(), InteractionManager.SwingMode.Packet);
+        mining.mine(this, 1, climb, true, switchMode.get(), InteractionManager.SwingMode.Packet);
     }
 
     private BlockPos climbable() {
