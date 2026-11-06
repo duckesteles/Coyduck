@@ -489,7 +489,7 @@ public class AutoTotem extends Module {
 
         if (offhandGapple.get() && mc.options.useKey.isPressed() && mc.player.getMainHandStack().isEmpty() && !mc.player.isUsingItem()
             && mc.currentScreen == null && Util.getMeasuringTimeMs() >= emptyEatAt) {
-            eatFromEmptyHand();
+            totemIntoEmptyHand();
             return;
         }
 
@@ -508,25 +508,18 @@ public class AutoTotem extends Module {
         mainMissing = 0;
     }
 
-    private void eatFromEmptyHand() {
+    private void totemIntoEmptyHand() {
         InventoryManager inventory = InventoryManager.get();
         int selected = inventory.selectedSlot();
-        for (Item item : new Item[] {Items.ENCHANTED_GOLDEN_APPLE, Items.GOLDEN_APPLE}) {
-            for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
-                if (i != selected && inventory.stack(i).isOf(item)) {
-                    inventory.select(i);
-                    emptyEatAt = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
-                    return;
-                }
+        if (selected != slot.get() - 1) return;
+
+        int source = inventory.find(AutoTotem::isTotem, InventoryManager.HOTBAR_END, InventoryManager.MAIN_END);
+        if (source == NONE) {
+            for (int i = 0; i < InventoryManager.HOTBAR_END && source == NONE; i++) {
+                if (i != selected && isTotem(inventory.stack(i))) source = i;
             }
         }
-        for (Item item : new Item[] {Items.ENCHANTED_GOLDEN_APPLE, Items.GOLDEN_APPLE}) {
-            int source = inventory.find(stack -> stack.isOf(item), InventoryManager.HOTBAR_END, InventoryManager.MAIN_END);
-            if (source != -1 && inventory.swapWithHotbar(source, selected)) {
-                emptyEatAt = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
-                return;
-            }
-        }
+        if (source != NONE && inventory.swapWithHotbar(source, selected)) emptyEatAt = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
     }
 
     private int gappleSource() {
