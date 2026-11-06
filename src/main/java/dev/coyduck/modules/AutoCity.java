@@ -119,7 +119,7 @@ public class AutoCity extends Module {
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
         .description("How the pickaxe is put in your hand for the final break.")
-        .defaultValue(InventoryManager.SwitchMode.InvSwap)
+        .defaultValue(InventoryManager.SwitchMode.Silent)
         .build()
     );
 
