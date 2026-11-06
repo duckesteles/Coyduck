@@ -781,7 +781,7 @@ public class AutoCrystal extends Module {
                 spot = base;
                 spotChoice = choice;
             }
-            if (choice.beats(seenChoice) && InteractionManager.get().visiblePoint(base, Direction.UP, eye, Double.MAX_VALUE) != null) {
+            if (choice.beats(seenChoice) && InteractionManager.get().visiblePoint(base, InteractionManager.get().crystalFace(base), eye, Double.MAX_VALUE) != null) {
                 seen = base;
                 seenChoice = choice;
             }

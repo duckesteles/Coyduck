@@ -251,7 +251,8 @@ public final class CrystalTracker {
         long duration = LatencyManager.get().timeout() * 2L;
 
         for (Entity entity : mc.world.getEntities()) {
-            if (entity instanceof EndCrystalEntity && entity.getEntityPos().squaredDistanceTo(center) <= squared) kill(entity, duration);
+            if (entity instanceof EndCrystalEntity && entity.getEntityPos().squaredDistanceTo(center) <= squared
+                && ExplosionDamage.exposure(center, entity.getBoundingBox(), mc.world, ShapeContext.absent()) > 0) kill(entity, duration);
         }
     }
 }
