@@ -20,6 +20,7 @@ import meteordevelopment.meteorclient.systems.friends.Friend;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.hud.Hud;
 import meteordevelopment.meteorclient.systems.hud.HudElement;
+import meteordevelopment.meteorclient.systems.hud.HudElementInfo;
 import meteordevelopment.meteorclient.systems.hud.screens.HudEditorScreen;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import meteordevelopment.meteorclient.systems.modules.Module;
@@ -97,9 +98,9 @@ public class CoyGuiScreen extends Screen {
     private static final int CELL_HOVER = 0xC8352F40;
     private static final int SWATCH_EDGE = 0xFF0C0A10;
 
-    private enum Kind { HEADER, MODULE, ELEMENT, FRIEND, FRIEND_ADD, BOOL, SLIDER, CHANNEL, ENUM, COLOR, STRING, BIND, MODULE_BIND, MORE, ACTION, TAB, VIEW, PAGE, SEARCH }
+    private enum Kind { HEADER, MODULE, ELEMENT, FRIEND, FRIEND_ADD, BOOL, SLIDER, CHANNEL, ENUM, COLOR, STRING, BIND, MODULE_BIND, MORE, ACTION, TAB, VIEW, PAGE, SEARCH, ADD_INFO, ADD_PRESET }
 
-    private enum Type { MODULES, SETTINGS, ELEMENTS, FRIENDS }
+    private enum Type { MODULES, SETTINGS, ELEMENTS, FRIENDS, ADD }
 
     private record Hit(int x, int y, int w, int h, Kind kind, Object target, Object extra) {
         boolean contains(double mx, double my) {
@@ -260,6 +261,7 @@ public class CoyGuiScreen extends Screen {
     private void buildExtra() {
         Page config = new Page("Config");
         for (SettingGroup group : Config.get().settings.groups) config.panels.add(groupPanel("Config/" + group.name, group.name, group, Config.get()));
+        if (!config.panels.isEmpty()) config.panels.getFirst().actions.add(new Action("Reset Config", Config.get().settings::reset, null));
         extra.add(config);
 
         Page hud = new Page("Hud");
@@ -267,8 +269,12 @@ public class CoyGuiScreen extends Screen {
         Panel hudPanel = new Panel("Hud/Hud", "Hud", Type.SETTINGS, null, system.settings, system);
         hudPanel.actions.add(new Action("Active", () -> system.active = !system.active, () -> system.active));
         hudPanel.actions.add(new Action("Edit Layout", () -> client.setScreen(new HudEditorScreen(GuiThemes.get())), null));
+        hudPanel.actions.add(new Action("Reset Elements", system::resetToDefaultElements, null));
+        hudPanel.actions.add(new Action("Clear Elements", system::clear, null));
+        hudPanel.actions.add(new Action("Reset Settings", system.settings::reset, null));
         hud.panels.add(hudPanel);
         hud.panels.add(new Panel("Hud/Elements", "Elements", Type.ELEMENTS, null, null, system));
+        hud.panels.add(new Panel("Hud/Add", "Add Element", Type.ADD, null, null, system));
         extra.add(hud);
 
         Page friends = new Page("Friends");
@@ -276,7 +282,13 @@ public class CoyGuiScreen extends Screen {
         extra.add(friends);
 
         Page gui = new Page("Gui");
-        gui.panels.add(new Panel("Gui/" + owner.title, owner.title, Type.SETTINGS, null, owner.settings, owner));
+        Panel guiPanel = new Panel("Gui/" + owner.title, owner.title, Type.SETTINGS, null, owner.settings, owner);
+        guiPanel.actions.add(new Action("Reset", () -> {
+            String saved = owner.layout.get();
+            owner.settings.reset();
+            owner.layout.set(saved);
+        }, null));
+        gui.panels.add(guiPanel);
         extra.add(gui);
     }
 
@@ -445,6 +457,8 @@ public class CoyGuiScreen extends Screen {
                         if (inner != null) hovered = inner;
                         Object bind = bindRow(context, module, x + 1 + INDENT, x + WIDTH - 1, y, mouseX, mouseY);
                         if (bind != null) hovered = bind;
+                        Object reset = actionRow(context, new Action("Reset", module.settings::reset, null), x + 1 + INDENT, x + WIDTH - 1, y, mouseX, mouseY, "Puts every setting of this module back to its default. The keybind stays.");
+                        if (reset != null) hovered = reset;
                     }
                 }
             }
@@ -474,6 +488,48 @@ public class CoyGuiScreen extends Screen {
                     if (open) {
                         Object inner = settingsRows(context, element.settings, element, x + 1 + INDENT, x + WIDTH - 1, y, mouseX, mouseY);
                         if (inner != null) hovered = inner;
+                        Object reset = actionRow(context, new Action("Reset", element.settings::reset, null), x + 1 + INDENT, x + WIDTH - 1, y, mouseX, mouseY, "Puts every setting of this element back to its default.");
+                        if (reset != null) hovered = reset;
+                        Object remove = actionRow(context, new Action("Remove", element::remove, null), x + 1 + INDENT, x + WIDTH - 1, y, mouseX, mouseY, "Removes this element from the HUD.");
+                        if (remove != null) hovered = remove;
+                    }
+                }
+            }
+            case ADD -> {
+                String last = null;
+                for (HudElementInfo<?> info : Hud.get().infos.values()) {
+                    String group = info.group.title();
+                    if (!group.equals(last)) {
+                        if (paint) text(context, trim(group, WIDTH - PAD * 2), x + PAD, y[0] + 2, MUTED);
+                        y[0] += ROW;
+                        last = group;
+                    }
+                    boolean open = expanded.contains(info);
+                    boolean over = inside(mouseX, mouseY, x + 1, y[0], WIDTH - 2, ROW - 1);
+                    if (paint) {
+                        cell(context, x + 1, x + WIDTH - 1, y[0], false, over);
+                        text(context, trim(info.title, WIDTH - PAD * 2 - 8), x + PAD, y[0] + 2, TEXT);
+                        String sign = info.hasPresets() ? (open ? "-" : ">") : "+";
+                        text(context, sign, x + WIDTH - PAD - width(sign), y[0] + 2, TEXT);
+                        hits.add(new Hit(x + 1, y[0], WIDTH - 2, ROW - 1, Kind.ADD_INFO, info, null));
+                    }
+                    if (over) {
+                        hovered = info;
+                        hint = info.hasPresets() ? info.description + " Click to add, right click for presets." : info.description + " Click to add it to the middle of the screen.";
+                    }
+                    y[0] += ROW;
+                    if (open && info.hasPresets()) {
+                        for (HudElementInfo<?>.Preset preset : info.presets) {
+                            boolean on = inside(mouseX, mouseY, x + 1 + INDENT, y[0], WIDTH - 2 - INDENT, ROW - 1);
+                            if (paint) {
+                                cell(context, x + 1 + INDENT, x + WIDTH - 1, y[0], false, on);
+                                text(context, trim(preset.title, WIDTH - PAD * 2 - 8 - INDENT), x + 1 + INDENT + PAD, y[0] + 2, TEXT);
+                                text(context, "+", x + WIDTH - PAD - width("+"), y[0] + 2, TEXT);
+                                hits.add(new Hit(x + 1 + INDENT, y[0], WIDTH - 2 - INDENT, ROW - 1, Kind.ADD_PRESET, preset, null));
+                            }
+                            if (on) hovered = preset;
+                            y[0] += ROW;
+                        }
                     }
                 }
             }
@@ -540,7 +596,7 @@ public class CoyGuiScreen extends Screen {
                 if (paint) drawSetting(context, owner, setting, left, right, y[0], over);
                 if (over) {
                     hovered = setting;
-                    hint = setting.description;
+                    hint = setting.description + " Middle click resets it.";
                 }
                 y[0] += ROW;
                 if (setting instanceof ColorSetting color && openColors.contains(color)) {
@@ -553,6 +609,21 @@ public class CoyGuiScreen extends Screen {
             }
         }
         return hovered;
+    }
+
+    private Object actionRow(DrawContext context, Action action, int left, int right, int[] y, int mouseX, int mouseY, String tip) {
+        boolean over = inside(mouseX, mouseY, left, y[0], right - left, ROW - 1);
+        if (paint) {
+            cell(context, left, right, y[0], false, over);
+            text(context, action.label(), left + PAD, y[0] + 2, TEXT);
+            hits.add(new Hit(left, y[0], right - left, ROW - 1, Kind.ACTION, action, null));
+        }
+        y[0] += ROW;
+        if (over) {
+            hint = tip;
+            return action.label();
+        }
+        return null;
     }
 
     private Object bindRow(DrawContext context, Module module, int left, int right, int[] y, int mouseX, int mouseY) {
@@ -775,6 +846,10 @@ public class CoyGuiScreen extends Screen {
         }
 
         Hit hit = hitAt(mx, my);
+        if (hit != null && button == GLFW.GLFW_MOUSE_BUTTON_MIDDLE && hit.target instanceof Setting<?> setting) {
+            setting.reset();
+            return true;
+        }
         if (hit == null || hit.kind != Kind.SEARCH) searchFocused = false;
         if (hit == null || (hit.kind != Kind.STRING && hit.kind != Kind.FRIEND_ADD)) finishEdit(true);
         if (hit == null) return super.mouseClicked(click, doubled);
@@ -812,6 +887,15 @@ public class CoyGuiScreen extends Screen {
                 else if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT && !expanded.remove(element)) expanded.add(element);
             }
             case FRIEND -> Friends.get().remove((Friend) hit.target);
+            case ADD_INFO -> {
+                HudElementInfo<?> info = (HudElementInfo<?>) hit.target;
+                if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT && info.hasPresets()) {
+                    if (!expanded.remove(info)) expanded.add(info);
+                } else if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+                    Hud.get().add(info, client.getWindow().getFramebufferWidth() / 2, client.getWindow().getFramebufferHeight() / 2);
+                }
+            }
+            case ADD_PRESET -> Hud.get().add((HudElementInfo<?>.Preset) hit.target, client.getWindow().getFramebufferWidth() / 2, client.getWindow().getFramebufferHeight() / 2);
             case FRIEND_ADD -> startEdit(Kind.FRIEND_ADD, "");
             case ACTION -> ((Action) hit.target).run().run();
             case BOOL -> {

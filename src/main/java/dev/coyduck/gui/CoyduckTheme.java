@@ -15,17 +15,29 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
+import meteordevelopment.meteorclient.gui.GuiTheme;
+import net.minecraft.nbt.NbtCompound;
 
 public class CoyduckTheme extends MeteorGuiTheme {
     public static final String NAME = "Coyduck";
 
     public CoyduckTheme() {
         ((GuiThemeAccessor) this).coyduck$setName(NAME);
+        palette();
+    }
 
+    @Override
+    public GuiTheme fromTag(NbtCompound tag) {
+        GuiTheme theme = super.fromTag(tag);
+        palette();
+        return theme;
+    }
+
+    private void palette() {
         color("accent", 123, 98, 170, 255);
         color("checkbox", 123, 98, 170, 255);
-        color("plus", 124, 206, 154, 255);
-        color("minus", 226, 108, 122, 255);
+        color("plus", 214, 204, 240, 255);
+        color("minus", 214, 204, 240, 255);
         color("favorite", 244, 198, 96, 255);
 
         color("text", 255, 255, 255, 255);
