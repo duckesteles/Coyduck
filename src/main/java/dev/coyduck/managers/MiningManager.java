@@ -236,8 +236,9 @@ public final class MiningManager {
             send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
         };
 
+        InventoryManager.SwitchMode mode = tool < InventoryManager.HOTBAR_END ? InventoryManager.SwitchMode.Silent : switchMode;
         if (tool == -1) action.run();
-        else if (!InventoryManager.get().withItem(tool, switchMode, action)) return;
+        else if (!InventoryManager.get().withItem(tool, mode, action)) return;
         lastStopTick = ticks;
     }
 
