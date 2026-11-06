@@ -54,7 +54,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-public class Aura extends Module {
+public class KillAura extends Module {
     private static final int PRIORITY = 80;
     private static final float ROTATE_SPEED = 180.0f;
     private static final double AIM_INSET = 0.05;
@@ -97,16 +97,9 @@ public class Aura extends Module {
         .build()
     );
 
-    private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
-        .name("switch-mode")
-        .description("How the best weapon is brought into your main hand for the hit and put back. Your offhand is never touched.")
-        .defaultValue(InventoryManager.SwitchMode.Silent)
-        .build()
-    );
-
-    private final Setting<Boolean> onlyWeapon = sgGeneral.add(new BoolSetting.Builder()
-        .name("only-weapon")
-        .description("Only hits with a sword, axe or mace.")
+    private final Setting<Boolean> autoSwitch = sgGeneral.add(new BoolSetting.Builder()
+        .name("auto-switch")
+        .description("Takes your sword into your hand, or the item that hits hardest when you have no sword. It leaves a main hand totem alone while Auto Totem+ wants it there. Your offhand is never touched.")
         .defaultValue(true)
         .build()
     );
@@ -170,8 +163,8 @@ public class Aura extends Module {
     private LivingEntity target;
     private int critWait;
 
-    public Aura() {
-        super(Coyduck.CATEGORY, "aura", "Hits players in reach with the best weapon once the attack is charged.");
+    public KillAura() {
+        super(Coyduck.CATEGORY, "kill-aura+", "Takes your sword, or your hardest hitting item when you have no sword, into your hand and hits players in reach once the attack is charged.");
     }
 
     @Override
@@ -194,7 +187,9 @@ public class Aura extends Module {
 
         Choice choice = choose();
         target = choice == null ? null : choice.entity();
-        if (choice == null || paused() || !rotate.get()) return;
+        if (choice == null || paused()) return;
+        if (autoSwitch.get()) equip(choice.entity());
+        if (!rotate.get()) return;
         if (mc.player.getAttackCooldownProgress(LEAD_TICKS) < cooldown.get()) return;
         if (Util.getMeasuringTimeMs() + LEAD_TIME < HurtTracker.get().releaseTime(choice.entity())) return;
         RotationManager.get().request(PRIORITY, choice.aim(), ROTATE_SPEED, true);
@@ -243,9 +238,7 @@ public class Aura extends Module {
             InteractionManager.get().swing(swing);
         };
 
-        InventoryManager inventory = InventoryManager.get();
-        if (weapon.slot() == inventory.selectedSlot()) hit.run();
-        else if (!inventory.withItem(weapon.slot(), switchMode.get(), hit)) return;
+        hit.run();
 
         critWait = 0;
         if (!entity.isBlocking()) HurtTracker.get().expect(entity, weapon.raw());
@@ -365,34 +358,58 @@ public class Aura extends Module {
         InventoryManager inventory = InventoryManager.get();
         int selected = inventory.selectedSlot();
         ItemStack held = inventory.stack(selected);
-        float base = base(held);
-        boolean blocking = entity.isBlocking();
+        if (!usable(held)) return null;
+        if (autoSwitch.get() && best(entity) != selected) return null;
 
-        Weapon best = null;
-        if (usable(held) && (!onlyWeapon.get() || isWeapon(held))) {
-            best = new Weapon(selected, damage(held, base, entity, progress, crit), breaksShield(held));
-        }
+        Weapon weapon = new Weapon(selected, damage(held, base(held), entity, progress, crit), breaksShield(held));
+        return weapon.raw() <= 0 ? null : weapon;
+    }
+
+    private int best(LivingEntity entity) {
+        InventoryManager inventory = InventoryManager.get();
+        int selected = inventory.selectedSlot();
+        boolean blocking = entity.isBlocking();
+        int best = -1;
+        Weapon bestWeapon = null;
+        boolean bestSword = false;
+        float fist = damage(ItemStack.EMPTY, base(ItemStack.EMPTY), entity, 1.0f, false);
 
         for (int i = 0; i < InventoryManager.MAIN_END; i++) {
-            if (i == selected) continue;
             ItemStack stack = inventory.stack(i);
-            if (!isWeapon(stack) || !usable(stack)) continue;
+            if (stack.isEmpty() || !usable(stack)) continue;
 
-            Weapon option = new Weapon(i, damage(stack, base, entity, progress, crit), breaksShield(stack));
-            if (beats(option, best, blocking)) best = option;
+            Weapon option = new Weapon(i, damage(stack, base(stack), entity, 1.0f, false), breaksShield(stack));
+            boolean sword = stack.isIn(ItemTags.SWORDS);
+            if (option.raw() <= fist + CHOICE_EPSILON && !sword) continue;
+
+            boolean better;
+            if (bestWeapon == null) better = true;
+            else if (blocking && option.breaksShield() != bestWeapon.breaksShield()) better = option.breaksShield();
+            else if (sword != bestSword) better = sword;
+            else if (Math.abs(option.raw() - bestWeapon.raw()) <= CHOICE_EPSILON) better = i == selected;
+            else better = option.raw() > bestWeapon.raw();
+
+            if (better) {
+                best = i;
+                bestWeapon = option;
+                bestSword = sword;
+            }
         }
 
-        return best == null || best.raw() <= 0 ? null : best;
+        return best == -1 ? selected : best;
     }
 
-    private static boolean beats(Weapon a, Weapon b, boolean blocking) {
-        if (b == null) return true;
-        if (blocking && a.breaksShield() != b.breaksShield()) return a.breaksShield();
-        return a.raw() > b.raw() + CHOICE_EPSILON;
-    }
+    private void equip(LivingEntity entity) {
+        InventoryManager inventory = InventoryManager.get();
+        if (inventory.isEating() || mc.player.isUsingItem() || MiningManager.get().isHolding()) return;
 
-    private static boolean isWeapon(ItemStack stack) {
-        return stack.isIn(ItemTags.SWORDS) || stack.isIn(ItemTags.AXES) || stack.isOf(Items.MACE);
+        int selected = inventory.selectedSlot();
+        int best = best(entity);
+        if (best == selected) return;
+        if (inventory.stack(selected).contains(DataComponentTypes.DEATH_PROTECTION) && AutoTotem.wantsMainTotem()) return;
+
+        if (best < InventoryManager.HOTBAR_END) inventory.select(best);
+        else inventory.swapWithHotbar(best, selected);
     }
 
     private boolean usable(ItemStack stack) {

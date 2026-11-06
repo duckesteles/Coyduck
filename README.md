@@ -9,7 +9,7 @@
 - AutoCrystal
 - AutoAnchor
 - AutoTotem
-- Aura
+- KillAura
 - Surround
 - AutoTrap
 - AutoWeb
@@ -17,7 +17,6 @@
 - LadderTrap
 - ElytraFly
 - ElytraPilot
-- FireworkBoost
 - SelfTrap
 - HoleSnap
 - HoleFill
