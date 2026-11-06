@@ -29,6 +29,10 @@ import meteordevelopment.meteorclient.systems.hud.Hud;
 import meteordevelopment.meteorclient.systems.hud.HudElement;
 import meteordevelopment.meteorclient.systems.hud.HudElementInfo;
 import meteordevelopment.meteorclient.systems.hud.screens.HudEditorScreen;
+import meteordevelopment.meteorclient.systems.macros.Macro;
+import meteordevelopment.meteorclient.systems.macros.Macros;
+import meteordevelopment.meteorclient.systems.profiles.Profile;
+import meteordevelopment.meteorclient.systems.profiles.Profiles;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
@@ -69,7 +73,7 @@ import java.util.Objects;
 import java.util.Set;
 
 public class CoyGuiScreen extends Screen {
-    public enum View { Modules, Config, Hud, Friends, Gui, Baritone }
+    public enum View { Modules, Config, Hud, Friends, Gui, Baritone, Macros, Profiles }
 
     private static boolean passThrough;
 
@@ -97,6 +101,7 @@ public class CoyGuiScreen extends Screen {
     private static final Object LIST_SEARCH = new Object();
     private static final Object LIST_TEXT = new Object();
     private static final Object FRIEND_ADD = new Object();
+    private static final Object SEARCH_EDIT = new Object();
 
     private static final int WIDTH = 96;
     private static final int HEADER = 12;
@@ -129,12 +134,12 @@ public class CoyGuiScreen extends Screen {
     private static final int LINE = 0x30FFFFFF;
 
     private enum Kind {
-        HEADER, MODULE, ELEMENT, FRIEND, FRIEND_ADD, ACTION, ADD_INFO, ADD_PRESET, TAB, VIEW, PAGE, SEARCH,
+        HEADER, MODULE, ELEMENT, FRIEND, FRIEND_ADD, ACTION, ADD_INFO, ADD_PRESET, TAB, VIEW, PAGE, SEARCH, MACRO, PROFILE, CREATE,
         W_HEADER, W_CLOSE, W_RESET_ALL, W_BACK, W_RESET, W_BOOL, W_SLIDER, W_CHANNEL, W_ENUM, W_COLOR, W_STRING, W_BIND,
         W_MODULE_BIND, W_LIST, W_MORE, W_ACTION, W_LIST_SEARCH, W_LIST_ADD, W_LIST_REMOVE, W_LIST_TEXT, W_AREA
     }
 
-    private enum Type { MODULES, ELEMENTS, FRIENDS, ADD, ACTIONS }
+    private enum Type { MODULES, ELEMENTS, FRIENDS, ADD, ACTIONS, MACROS, PROFILES }
 
     private enum RowKind { GROUP, SETTING, CHANNEL, BIND, ACTION, SEARCH, ENTRY_REMOVE, ENTRY_ADD, TEXT_ADD, NOTE }
 
@@ -232,8 +237,8 @@ public class CoyGuiScreen extends Screen {
     private Object editing;
     private Setting<?> editingList;
     private String editText = "";
+    private int editCursor;
     private String search = "";
-    private boolean searchFocused;
 
     private Object hoverKey;
     private long hoverSince;
@@ -345,6 +350,14 @@ public class CoyGuiScreen extends Screen {
 
         extra.add(new Page("Gui"));
         extra.add(new Page("Baritone"));
+
+        Page macros = new Page("Macros");
+        macros.panels.add(new Panel("Macros/Macros", "Macros", Type.MACROS, null));
+        extra.add(macros);
+
+        Page profiles = new Page("Profiles");
+        profiles.panels.add(new Panel("Profiles/Profiles", "Profiles", Type.PROFILES, null));
+        extra.add(profiles);
     }
 
     private static String addonName(Module module) {
@@ -366,6 +379,8 @@ public class CoyGuiScreen extends Screen {
             case Friends -> extra.get(2).panels;
             case Gui -> extra.get(3).panels;
             case Baritone -> extra.get(4).panels;
+            case Macros -> extra.get(5).panels;
+            case Profiles -> extra.get(6).panels;
         };
         switch (view) {
             case Config -> openWindow(new Window("Config", Config.get().settings, Config.get(), false, Config.get().settings::reset, null));
@@ -421,6 +436,18 @@ public class CoyGuiScreen extends Screen {
                 x += WIDTH + GAP;
             }
         }
+    }
+
+    private void resetLayout() {
+        custom = false;
+        for (Page each : allPages()) {
+            for (Panel panel : each.panels) {
+                panel.placed = false;
+                panel.collapsed = false;
+            }
+        }
+        arrange();
+        saveLayout();
     }
 
     private void switchPage(int step) {
@@ -608,6 +635,28 @@ public class CoyGuiScreen extends Screen {
                     }
                 }
             }
+            case MACROS -> {
+                for (Macro macro : Macros.get()) {
+                    boolean open = window != null && window.owner == macro;
+                    if (headRow(context, x, y[0], macro.name.get().isEmpty() ? "Unnamed" : macro.name.get(), false, open, mouseX, mouseY, Kind.MACRO, macro)) {
+                        hovered = macro;
+                        hint = "Click to edit.";
+                    }
+                    y[0] += ROW;
+                }
+                if (createRow(context, x, y, mouseX, mouseY, "New macro")) hovered = Kind.CREATE;
+            }
+            case PROFILES -> {
+                for (Profile profile : Profiles.get()) {
+                    boolean open = window != null && window.owner == profile;
+                    if (headRow(context, x, y[0], profile.name.get().isEmpty() ? "Unnamed" : profile.name.get(), false, open, mouseX, mouseY, Kind.PROFILE, profile)) {
+                        hovered = profile;
+                        hint = "Click to edit, save or load.";
+                    }
+                    y[0] += ROW;
+                }
+                if (createRow(context, x, y, mouseX, mouseY, "New profile")) hovered = Kind.CREATE;
+            }
             case FRIENDS -> {
                 for (Friend friend : Friends.get()) {
                     boolean over = inside(mouseX, mouseY, x + 1, y[0], WIDTH - 2, ROW - 1);
@@ -627,8 +676,8 @@ public class CoyGuiScreen extends Screen {
                 if (paint) {
                     boolean typing = editing == FRIEND_ADD;
                     cell(context, x + 1, x + WIDTH - 1, y[0], typing, over);
-                    String shown = typing ? editText + cursor() : "Add friend";
-                    text(context, trimStart(shown, WIDTH - PAD * 2 - 8), x + PAD, y[0] + 2, typing ? TEXT : MUTED);
+                    if (typing) drawEdit(context, x + PAD, y[0] + 2, WIDTH - PAD * 2 - 8);
+                    else text(context, "Add friend", x + PAD, y[0] + 2, MUTED);
                     text(context, "+", x + WIDTH - PAD - width("+"), y[0] + 2, TEXT);
                     hits.add(new Hit(x + 1, y[0], WIDTH - 2, ROW - 1, Kind.FRIEND_ADD, null, null));
                 }
@@ -640,6 +689,18 @@ public class CoyGuiScreen extends Screen {
             }
         }
         return hovered;
+    }
+
+    private boolean createRow(DrawContext context, int x, int[] y, int mouseX, int mouseY, String label) {
+        boolean over = inside(mouseX, mouseY, x + 1, y[0], WIDTH - 2, ROW - 1);
+        if (paint) {
+            cell(context, x + 1, x + WIDTH - 1, y[0], false, over);
+            text(context, label, x + PAD, y[0] + 2, MUTED);
+            text(context, "+", x + WIDTH - PAD - width("+"), y[0] + 2, TEXT);
+            hits.add(new Hit(x + 1, y[0], WIDTH - 2, ROW - 1, Kind.CREATE, label, null));
+        }
+        y[0] += ROW;
+        return over;
     }
 
     private boolean headRow(DrawContext context, int x, int y, String title, boolean active, boolean open, int mouseX, int mouseY, Kind kind, Object target) {
@@ -677,6 +738,27 @@ public class CoyGuiScreen extends Screen {
             rows.add(new Row(RowKind.GROUP, "Module", null, null));
             rows.add(new Row(RowKind.BIND, "Bind", module, null));
             rows.add(new Row(RowKind.ACTION, module.isActive() ? "Turn off" : "Turn on", (Runnable) module::toggle, null));
+        }
+        if (w.owner instanceof Macro macro) {
+            rows.add(new Row(RowKind.GROUP, "Macro", null, null));
+            rows.add(new Row(RowKind.ACTION, "Delete", (Runnable) () -> {
+                Macros.get().remove(macro);
+                closeWindow();
+            }, null));
+        }
+        if (w.owner instanceof Profile profile) {
+            rows.add(new Row(RowKind.GROUP, "Profile", null, null));
+            rows.add(new Row(RowKind.ACTION, "Save current setup into it", (Runnable) profile::save, null));
+            rows.add(new Row(RowKind.ACTION, "Load it", (Runnable) profile::load, null));
+            rows.add(new Row(RowKind.ACTION, "Delete", (Runnable) () -> {
+                profile.delete();
+                Profiles.get().remove(profile);
+                closeWindow();
+            }, null));
+        }
+        if (w.owner == owner) {
+            rows.add(new Row(RowKind.GROUP, "Layout", null, null));
+            rows.add(new Row(RowKind.ACTION, "Reset panel layout", (Runnable) this::resetLayout, null));
         }
         if (w.owner instanceof HudElement element) {
             rows.add(new Row(RowKind.GROUP, "Element", null, null));
@@ -783,6 +865,7 @@ public class CoyGuiScreen extends Screen {
         Object hovered = null;
 
         context.fillGradient(x, w.y, x + WIN_W, top, tint(accent, 0.12f), accent);
+        hits.add(new Hit(x, w.y, WIN_W, WIN_HEAD, Kind.W_HEADER, w, null));
         int titleX = x + PAD;
         if (w.list != null) {
             boolean over = inside(mouseX, mouseY, x, w.y, 14, WIN_HEAD);
@@ -808,7 +891,6 @@ public class CoyGuiScreen extends Screen {
             right -= lw + 8;
         }
         text(context, trim(title, right - titleX - 2), titleX, w.y + 2, TEXT);
-        hits.add(new Hit(x, w.y, WIN_W, WIN_HEAD, Kind.W_HEADER, w, null));
 
         context.fill(x, top, x + WIN_W, bottom, WIN_BODY);
         hits.add(new Hit(x, top, WIN_W, w.height, Kind.W_AREA, w, null));
@@ -853,8 +935,8 @@ public class CoyGuiScreen extends Screen {
             case SEARCH -> {
                 boolean typing = editing == LIST_SEARCH;
                 box(context, x + PAD, y + 1, x + WIN_W - PAD, y + WIN_ROW - 1, typing, over);
-                String shown = typing ? w.listSearch + cursor() : w.listSearch.isEmpty() ? "Search" : w.listSearch;
-                text(context, trimStart(shown, WIN_W - PAD * 4), x + PAD * 2, ty, typing || !w.listSearch.isEmpty() ? TEXT : MUTED);
+                if (typing) drawEdit(context, x + PAD * 2, ty, WIN_W - PAD * 4);
+                else text(context, trimStart(w.listSearch.isEmpty() ? "Search" : w.listSearch, WIN_W - PAD * 4), x + PAD * 2, ty, w.listSearch.isEmpty() ? MUTED : TEXT);
                 addHit(x, y, WIN_W, WIN_ROW, top, bottom, Kind.W_LIST_SEARCH, w, null);
                 return null;
             }
@@ -869,8 +951,8 @@ public class CoyGuiScreen extends Screen {
             case TEXT_ADD -> {
                 boolean typing = editing == LIST_TEXT;
                 box(context, x + PAD, y + 1, x + WIN_W - PAD, y + WIN_ROW - 1, typing, over);
-                String shown = typing ? editText + cursor() : "Add a line";
-                text(context, trimStart(shown, WIN_W - PAD * 4), x + PAD * 2, ty, typing ? TEXT : MUTED);
+                if (typing) drawEdit(context, x + PAD * 2, ty, WIN_W - PAD * 4);
+                else text(context, "Add a line", x + PAD * 2, ty, MUTED);
                 addHit(x, y, WIN_W, WIN_ROW, top, bottom, Kind.W_LIST_TEXT, row.target(), null);
                 if (over) hint = "Click, type and press Enter to add it.";
                 return null;
@@ -962,8 +1044,8 @@ public class CoyGuiScreen extends Screen {
         } else if (setting instanceof StringSetting string) {
             boolean typing = editing == string;
             box(context, ctrlLeft, y + 1, ctrlRight, y + WIN_ROW - 1, typing, over);
-            String shown = typing ? editText + cursor() : string.get();
-            text(context, trimStart(shown, CTRL_W - PAD * 2), ctrlLeft + PAD, ty, typing ? TEXT : MUTED);
+            if (typing) drawEdit(context, ctrlLeft + PAD, ty, CTRL_W - PAD * 2);
+            else text(context, trimStart(string.get(), CTRL_W - PAD * 2), ctrlLeft + PAD, ty, MUTED);
             addHit(ctrlLeft, y, CTRL_W, WIN_ROW, top, bottom, Kind.W_STRING, string, null);
         } else if (setting instanceof KeybindSetting keybind) {
             box(context, ctrlLeft, y + 1, ctrlRight, y + WIN_ROW - 1, binding == keybind, over);
@@ -1009,8 +1091,30 @@ public class CoyGuiScreen extends Screen {
         context.fill(left, y, right, y + ROW - 1, fill);
     }
 
-    private String cursor() {
-        return (Util.getMeasuringTimeMs() / 500) % 2 == 0 ? "_" : " ";
+    private void drawEdit(DrawContext context, int x, int y, int max) {
+        int start = 0;
+        while (start < editCursor && width(editText.substring(start, editCursor)) > max - 2) start++;
+        String visible = editText.substring(start);
+        int end = visible.length();
+        while (end > 0 && width(visible.substring(0, end)) > max) end--;
+        visible = visible.substring(0, end);
+        text(context, visible, x, y, TEXT);
+        if ((Util.getMeasuringTimeMs() / 500) % 2 == 0) {
+            int cx = x + width(editText.substring(start, Math.min(editCursor, start + end)));
+            context.fill(cx, y - 1, cx + 1, y + 9, TEXT);
+        }
+    }
+
+    private void setEditText(String text, int cursor) {
+        editText = text;
+        editCursor = MathHelper.clamp(cursor, 0, text.length());
+        if (editing == SEARCH_EDIT) {
+            search = editText;
+            jumpToMatch();
+        } else if (editing == LIST_SEARCH && window != null) {
+            window.listSearch = editText;
+            window.scroll = 0;
+        }
     }
 
     private void drawSearch(DrawContext context, int mouseX, int mouseY) {
@@ -1018,10 +1122,11 @@ public class CoyGuiScreen extends Screen {
         int x = MARGIN;
         int y = height - MARGIN - HEADER;
         boolean over = inside(mouseX, mouseY, x, y, SEARCH_WIDTH, HEADER);
-        context.fill(x, y, x + SEARCH_WIDTH, y + HEADER, searchFocused ? enabledCell : over ? CELL_HOVER : CELL);
+        boolean typing = editing == SEARCH_EDIT;
+        context.fill(x, y, x + SEARCH_WIDTH, y + HEADER, typing ? enabledCell : over ? CELL_HOVER : CELL);
         outline(context, x, y, x + SEARCH_WIDTH, y + HEADER, accent);
-        String shown = searchFocused ? search + cursor() : search.isEmpty() ? "Search" : search;
-        text(context, trimStart(shown, SEARCH_WIDTH - PAD * 2), x + PAD, y + 2, searchFocused || !search.isEmpty() ? TEXT : MUTED);
+        if (typing) drawEdit(context, x + PAD, y + 2, SEARCH_WIDTH - PAD * 2);
+        else text(context, trimStart(search.isEmpty() ? "Search" : search, SEARCH_WIDTH - PAD * 2), x + PAD, y + 2, search.isEmpty() ? MUTED : TEXT);
         hits.add(new Hit(x, y, SEARCH_WIDTH, HEADER, Kind.SEARCH, null, null));
     }
 
@@ -1053,6 +1158,8 @@ public class CoyGuiScreen extends Screen {
             case "Friends" -> View.Friends;
             case "GUI" -> View.Gui;
             case "Baritone" -> View.Baritone;
+            case "Macros" -> View.Macros;
+            case "Profiles" -> View.Profiles;
             default -> null;
         };
     }
@@ -1110,8 +1217,7 @@ public class CoyGuiScreen extends Screen {
         }
 
         Hit hit = hitAt(mx, my);
-        if (hit == null || hit.kind != Kind.SEARCH) searchFocused = false;
-        if (hit == null || (hit.kind != Kind.W_STRING && hit.kind != Kind.FRIEND_ADD && hit.kind != Kind.W_LIST_SEARCH && hit.kind != Kind.W_LIST_TEXT)) finishEdit(true);
+        if (hit == null || (hit.kind != Kind.W_STRING && hit.kind != Kind.FRIEND_ADD && hit.kind != Kind.W_LIST_SEARCH && hit.kind != Kind.W_LIST_TEXT && hit.kind != Kind.SEARCH)) finishEdit(true);
         if (hit == null) return super.mouseClicked(click, doubled);
 
         switch (hit.kind) {
@@ -1168,7 +1274,32 @@ public class CoyGuiScreen extends Screen {
             }
             case TAB -> ((Tab) hit.target).openScreen(GuiThemes.get());
             case PAGE -> switchPage((Integer) hit.target);
-            case SEARCH -> searchFocused = true;
+            case SEARCH -> {
+                if (editing != SEARCH_EDIT) startEdit(SEARCH_EDIT, search, null);
+            }
+            case MACRO -> {
+                Macro macro = (Macro) hit.target;
+                if (window != null && window.owner == macro) closeWindow();
+                else openWindow(new Window(macro.name.get().isEmpty() ? "Macro" : macro.name.get(), macro.settings, macro, true, null, () -> Macros.get().save()));
+            }
+            case PROFILE -> {
+                Profile profile = (Profile) hit.target;
+                if (window != null && window.owner == profile) closeWindow();
+                else openWindow(new Window(profile.name.get().isEmpty() ? "Profile" : profile.name.get(), profile.settings, profile, true, null, () -> Profiles.get().save()));
+            }
+            case CREATE -> {
+                if (view == View.Macros) {
+                    Macro macro = new Macro();
+                    macro.name.set("Macro " + (Macros.get().getAll().size() + 1));
+                    Macros.get().add(macro);
+                    openWindow(new Window(macro.name.get(), macro.settings, macro, true, null, () -> Macros.get().save()));
+                } else if (view == View.Profiles) {
+                    Profile profile = new Profile();
+                    profile.name.set("Profile " + (Profiles.get().getAll().size() + 1));
+                    Profiles.get().add(profile);
+                    openWindow(new Window(profile.name.get(), profile.settings, profile, true, null, () -> Profiles.get().save()));
+                }
+            }
             case W_HEADER -> {
                 if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
                     draggingWindow = true;
@@ -1216,7 +1347,9 @@ public class CoyGuiScreen extends Screen {
                 window.scroll = 0;
                 window.cache = null;
             }
-            case W_LIST_SEARCH -> startEdit(LIST_SEARCH, "", null);
+            case W_LIST_SEARCH -> {
+                if (editing != LIST_SEARCH) startEdit(LIST_SEARCH, window.listSearch, null);
+            }
             case W_LIST_ADD -> changeList((Setting<?>) hit.target, hit.extra, true);
             case W_LIST_REMOVE -> changeList((Setting<?>) hit.target, hit.extra, false);
             case W_LIST_TEXT -> startEdit(LIST_TEXT, "", (Setting<?>) hit.target);
@@ -1234,6 +1367,7 @@ public class CoyGuiScreen extends Screen {
         editing = target;
         editingList = list;
         editText = text;
+        editCursor = text.length();
     }
 
     private void finishEdit(boolean commit) {
@@ -1246,6 +1380,7 @@ public class CoyGuiScreen extends Screen {
         editing = null;
         editingList = null;
         editText = "";
+        editCursor = 0;
     }
 
     @Override
@@ -1307,28 +1442,39 @@ public class CoyGuiScreen extends Screen {
         }
         if (editing != null) {
             boolean enter = key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER;
-            if (editing == LIST_SEARCH) {
-                if (enter || key == GLFW.GLFW_KEY_ESCAPE) editing = null;
-                else if (key == GLFW.GLFW_KEY_BACKSPACE && window != null && !window.listSearch.isEmpty()) {
-                    window.listSearch = window.listSearch.substring(0, window.listSearch.length() - 1);
-                    window.scroll = 0;
-                }
-                return true;
-            }
+            boolean control = (input.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
+            boolean live = editing == SEARCH_EDIT || editing == LIST_SEARCH;
             if (enter) {
                 Object was = editing;
                 Setting<?> list = editingList;
-                finishEdit(true);
+                if (live) {
+                    editing = null;
+                    editText = "";
+                } else finishEdit(true);
                 if (was == LIST_TEXT) startEdit(LIST_TEXT, "", list);
-            } else if (key == GLFW.GLFW_KEY_ESCAPE) finishEdit(false);
-            else if (key == GLFW.GLFW_KEY_BACKSPACE && !editText.isEmpty()) editText = editText.substring(0, editText.length() - 1);
-            return true;
-        }
-        if (searchFocused) {
-            if (key == GLFW.GLFW_KEY_ESCAPE || key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) searchFocused = false;
-            else if (key == GLFW.GLFW_KEY_BACKSPACE && !search.isEmpty()) {
-                search = (input.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0 ? "" : search.substring(0, search.length() - 1);
-                jumpToMatch();
+            } else if (key == GLFW.GLFW_KEY_ESCAPE) {
+                if (live) {
+                    editing = null;
+                    editText = "";
+                } else finishEdit(false);
+            } else if (key == GLFW.GLFW_KEY_LEFT) {
+                editCursor = control ? wordLeft() : Math.max(0, editCursor - 1);
+            } else if (key == GLFW.GLFW_KEY_RIGHT) {
+                editCursor = control ? wordRight() : Math.min(editText.length(), editCursor + 1);
+            } else if (key == GLFW.GLFW_KEY_HOME) {
+                editCursor = 0;
+            } else if (key == GLFW.GLFW_KEY_END) {
+                editCursor = editText.length();
+            } else if (key == GLFW.GLFW_KEY_BACKSPACE && editCursor > 0) {
+                int from = control ? wordLeft() : editCursor - 1;
+                setEditText(editText.substring(0, from) + editText.substring(editCursor), from);
+            } else if (key == GLFW.GLFW_KEY_DELETE && editCursor < editText.length()) {
+                int to = control ? wordRight() : editCursor + 1;
+                setEditText(editText.substring(0, editCursor) + editText.substring(to), editCursor);
+            } else if (control && key == GLFW.GLFW_KEY_V) {
+                insert(client.keyboard.getClipboard().replace("\n", " "));
+            } else if (control && key == GLFW.GLFW_KEY_C) {
+                client.keyboard.setClipboard(editText);
             }
             return true;
         }
@@ -1357,22 +1503,28 @@ public class CoyGuiScreen extends Screen {
 
     @Override
     public boolean charTyped(CharInput input) {
-        if (!input.isValidChar()) return false;
-        if (editing == LIST_SEARCH && window != null) {
-            if (window.listSearch.length() < 32) window.listSearch += input.asString();
-            window.scroll = 0;
-            return true;
-        }
-        if (editing != null) {
-            if (editText.length() < 64) editText += input.asString();
-            return true;
-        }
-        if (searchFocused) {
-            if (search.length() < 24) search += input.asString();
-            jumpToMatch();
-            return true;
-        }
-        return false;
+        if (!input.isValidChar() || editing == null) return false;
+        insert(input.asString());
+        return true;
+    }
+
+    private void insert(String typed) {
+        if (typed.isEmpty() || editText.length() + typed.length() > 256) return;
+        setEditText(editText.substring(0, editCursor) + typed + editText.substring(editCursor), editCursor + typed.length());
+    }
+
+    private int wordLeft() {
+        int i = editCursor;
+        while (i > 0 && editText.charAt(i - 1) == ' ') i--;
+        while (i > 0 && editText.charAt(i - 1) != ' ') i--;
+        return i;
+    }
+
+    private int wordRight() {
+        int i = editCursor;
+        while (i < editText.length() && editText.charAt(i) == ' ') i++;
+        while (i < editText.length() && editText.charAt(i) != ' ') i++;
+        return i;
     }
 
     private void jumpToMatch() {
