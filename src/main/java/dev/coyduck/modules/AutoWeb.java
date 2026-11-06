@@ -29,6 +29,7 @@ import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 
 import java.util.ArrayList;
@@ -225,6 +226,7 @@ public class AutoWeb extends Module {
                     BlockPos pos = new BlockPos(x, y, z);
                     BlockState state = mc.world.getBlockState(pos);
                     if (state.isReplaceable() || state.isOf(Blocks.COBWEB)) {
+                        if (!state.isOf(Blocks.COBWEB) && washed(pos)) continue;
                         cells.add(pos.asLong());
                         break;
                     }
@@ -235,6 +237,14 @@ public class AutoWeb extends Module {
         }
 
         return cells;
+    }
+
+    private boolean washed(BlockPos pos) {
+        if (!mc.world.getFluidState(pos).isEmpty() || !mc.world.getFluidState(pos.up()).isEmpty()) return true;
+        for (Direction direction : Direction.Type.HORIZONTAL) {
+            if (!mc.world.getFluidState(pos.offset(direction)).isEmpty()) return true;
+        }
+        return false;
     }
 
     private Box selfBox() {
