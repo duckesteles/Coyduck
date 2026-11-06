@@ -94,6 +94,8 @@ public class AutoCrystal extends Module {
     private static final double PREDICT_CLEAR_RANGE = 8.0;
     private static final double CLEAR_RANGE = 4.0;
 
+    private BlockPos stoppedAt;
+
     private record Target(PlayerEntity player, Box box, Vec3d feet, float health, float minDamage, LongSet gaps) {}
 
     private static final int FOCUS_TICKS = 20;
@@ -679,7 +681,12 @@ public class AutoCrystal extends Module {
     @EventHandler
     private void onMineStop(MineStopEvent event) {
         clearCache();
-        pass();
+        stoppedAt = event.pos;
+        try {
+            pass();
+        } finally {
+            stoppedAt = null;
+        }
     }
 
     private void clearCache() {
@@ -789,6 +796,17 @@ public class AutoCrystal extends Module {
         if (seen != null && seenChoice.score() >= spotChoice.score() - HIDDEN_PENALTY) {
             spot = seen;
             spotChoice = seenChoice;
+        }
+        if (mined != null && mined.equals(stoppedAt)) {
+            BlockPos base = mined.down();
+            if (inPlaceRange(base) && isBase(mc.world.getBlockState(base)) && !blocked(base) && !overlapsOwnCells(base) && canUse(base)
+                && !CrystalTracker.get().placingOverlaps(base) && !CrystalTracker.get().isBlacklisted(base)) {
+                Choice choice = evaluate(targets, crystalCenter(base), health, 0, minedView);
+                if (choice != null && choice.beats(spotChoice)) {
+                    spot = base;
+                    spotChoice = choice;
+                }
+            }
         }
 
         if (spot != null) {
