@@ -6,6 +6,7 @@ import dev.coyduck.mixin.ClientWorldAccessor;
 import dev.coyduck.utils.BlockRules;
 import dev.coyduck.utils.PacketBatch;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -74,9 +75,12 @@ public final class InteractionManager {
 
     private record Pending(int sequence, long expiry) {}
 
+    private static final long PLACED_MEMORY = 10_000;
+
     private record OwnBreak(Vec3d position, long time) {}
 
     private final Long2ObjectOpenHashMap<Pending> pending = new Long2ObjectOpenHashMap<>();
+    private final Long2LongOpenHashMap placedAt = new Long2LongOpenHashMap();
     private static final int STUCK_HITS = 3;
     private static final long STUCK_TIME = 1_500;
 
@@ -205,7 +209,13 @@ public final class InteractionManager {
         int sequence = ((ClientWorldAccessor) mc.world).coyduck$getPendingUpdateManager().getSequence();
         swing(swing);
         pending.put(pos.asLong(), new Pending(sequence, Util.getMeasuringTimeMs() + LatencyManager.get().timeout()));
+        placedAt.put(pos.asLong(), Util.getMeasuringTimeMs());
         return true;
+    }
+
+    public boolean placedByUs(BlockPos pos, long within) {
+        long at = placedAt.get(pos.asLong());
+        return at != 0 && Util.getMeasuringTimeMs() - at <= within;
     }
 
     public boolean aimed(Vec3d point, Box box, int priority) {
@@ -507,6 +517,7 @@ public final class InteractionManager {
 
         long now = Util.getMeasuringTimeMs();
         pending.values().removeIf(entry -> entry.expiry <= now);
+        placedAt.values().removeIf(at -> now - at > PLACED_MEMORY);
 
         long lifetime = LatencyManager.get().timeout();
         attacked.int2LongEntrySet().removeIf(entry -> now - entry.getLongValue() >= lifetime);
@@ -529,6 +540,7 @@ public final class InteractionManager {
 
     private void reset() {
         pending.clear();
+        placedAt.clear();
         attacked.clear();
         firstHit.clear();
         hits.clear();

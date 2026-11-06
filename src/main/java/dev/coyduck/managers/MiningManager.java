@@ -53,6 +53,7 @@ public final class MiningManager {
     private static final float HOLD_MIN_HEALTH = 10;
     private static final int MAX_STOPS = 1;
     private static final double REBREAK_ENEMY_RANGE = 6;
+    private static final long OWN_BLOCK_TIME = 2_000;
 
     private BlockPos background;
     private int backgroundStart;
@@ -232,10 +233,15 @@ public final class MiningManager {
     }
 
     private void blindStop() {
-        if (!enemyNear(pos) || bestTool(Blocks.OBSIDIAN.getDefaultState()) != -1) return;
+        if (!enemyNear(pos) || ownBlock(pos) || bestTool(Blocks.OBSIDIAN.getDefaultState()) != -1) return;
         InteractionManager.get().swing(swing == InteractionManager.SwingMode.None ? InteractionManager.SwingMode.Packet : swing);
         send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
         lastStopTick = ticks;
+    }
+
+    private boolean ownBlock(BlockPos cell) {
+        InteractionManager interaction = InteractionManager.get();
+        return interaction.isPending(cell) || interaction.placedByUs(cell, OWN_BLOCK_TIME);
     }
 
     private boolean enemyNear(BlockPos cell) {
@@ -330,7 +336,7 @@ public final class MiningManager {
             restart();
             return;
         }
-        if (autoStop && (brokenSinceStop || waited)) stop(owner);
+        if (autoStop && (brokenSinceStop || waited) && !(broken && ownBlock(pos))) stop(owner);
         if (autoStop && broken && pos != null && lastStopTick != ticks && mc.world.getBlockState(pos).isReplaceable()) blindStop();
         if (pos != null && !broken && lastStopTick != ticks && !mc.world.getBlockState(pos).isReplaceable()) {
             InteractionManager.get().swing(swing == InteractionManager.SwingMode.None ? InteractionManager.SwingMode.Packet : swing);
@@ -495,7 +501,7 @@ public final class MiningManager {
             broken = true;
             brokenSinceStop = true;
             stops = 0;
-        } else if (autoStop && brokenSinceStop) {
+        } else if (autoStop && brokenSinceStop && !ownBlock(pos)) {
             stop(owner, state);
         }
     }
