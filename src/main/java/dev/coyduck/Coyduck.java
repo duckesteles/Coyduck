@@ -36,6 +36,7 @@ import dev.coyduck.modules.ElytraPilot;
 import dev.coyduck.modules.HideRich;
 import dev.coyduck.modules.HoleEsp;
 import dev.coyduck.modules.HoleSnap;
+import dev.coyduck.modules.HoleFill;
 import dev.coyduck.modules.KillEffects;
 import dev.coyduck.modules.NoExplosion;
 import dev.coyduck.modules.NoRotate;
@@ -98,6 +99,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new Burrow());
         Modules.get().add(new SelfTrap());
         Modules.get().add(new HoleSnap());
+        Modules.get().add(new HoleFill());
         Modules.get().add(new CustomFov());
         Modules.get().add(new AirMine());
         Modules.get().add(new PopCounter());
