@@ -22,23 +22,16 @@ import meteordevelopment.meteorclient.utils.render.color.Color;
 import net.minecraft.util.math.MathHelper;
 import org.lwjgl.glfw.GLFW;
 
-import java.util.Locale;
-
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 public final class CoyWidgets {
-    static final int PANEL = 0xA60F0F14;
-    static final int HEAD = 0xCC16161D;
-    static final int OUTLINE = 0x22FFFFFF;
-    static final int HOVER = 0x16FFFFFF;
-    static final int PRESS = 0x24FFFFFF;
-    static final int TITLE = 0xFFEDEDF3;
-    static final int TEXT = 0xFFA4A4B0;
-    static final int BRIGHT = 0xFFFFFFFF;
-    static final int MUTED = 0xFF6E6E7A;
-    static final int VALUE = 0xFFDADAE2;
-    static final int TRACK = 0x30FFFFFF;
-    static final int BOX = 0xFF3A3A45;
+    static final int BODY = 0x8C120F18;
+    static final int CELL = 0xB42A2533;
+    static final int CELL_HOVER = 0xC8352F40;
+    static final int EDGE = 0xFF0C0A10;
+    static final int TEXT = 0xFFFFFFFF;
+    static final int MUTED = 0xFFB4B0BE;
+    static final int LINE = 0x40FFFFFF;
 
     private CoyWidgets() {
     }
@@ -51,18 +44,33 @@ public final class CoyWidgets {
         return ClickGui.accentColor();
     }
 
-    static int alpha(int argb, double factor) {
-        int a = (int) Math.round(((argb >>> 24) & 0xFF) * MathHelper.clamp(factor, 0, 1));
-        return (a << 24) | (argb & 0xFFFFFF);
+    static int enabled() {
+        return withAlpha(shade(accent(), 0.72f), 0xDC);
     }
 
-    static int blend(int from, int to, double t) {
-        t = MathHelper.clamp(t, 0, 1);
-        int a = (int) Math.round(((from >>> 24) & 0xFF) + (((to >>> 24) & 0xFF) - ((from >>> 24) & 0xFF)) * t);
-        int r = (int) Math.round(((from >> 16) & 0xFF) + (((to >> 16) & 0xFF) - ((from >> 16) & 0xFF)) * t);
-        int g = (int) Math.round(((from >> 8) & 0xFF) + (((to >> 8) & 0xFF) - ((from >> 8) & 0xFF)) * t);
-        int b = (int) Math.round((from & 0xFF) + ((to & 0xFF) - (from & 0xFF)) * t);
-        return (a << 24) | (r << 16) | (g << 8) | b;
+    static int enabledHover() {
+        return withAlpha(shade(accent(), 0.82f), 0xE6);
+    }
+
+    static int shade(int color, float factor) {
+        int r = Math.round(((color >> 16) & 0xFF) * factor);
+        int g = Math.round(((color >> 8) & 0xFF) * factor);
+        int b = Math.round((color & 0xFF) * factor);
+        return (color & 0xFF000000) | (r << 16) | (g << 8) | b;
+    }
+
+    static int tint(int color, float amount) {
+        int r = (color >> 16) & 0xFF;
+        int g = (color >> 8) & 0xFF;
+        int b = color & 0xFF;
+        r += Math.round((255 - r) * amount);
+        g += Math.round((255 - g) * amount);
+        b += Math.round((255 - b) * amount);
+        return (color & 0xFF000000) | (r << 16) | (g << 8) | b;
+    }
+
+    static int withAlpha(int color, int alpha) {
+        return (alpha << 24) | (color & 0xFFFFFF);
     }
 
     static void outline(GuiRenderer r, double x, double y, double w, double h, double t, int argb) {
@@ -73,15 +81,17 @@ public final class CoyWidgets {
         r.quad(x + w - t, y + t, t, h - t * 2, c);
     }
 
-    static double approach(double value, double target, double delta, double speed) {
-        return value + (target - value) * Math.min(1, delta * speed);
+    static void header(GuiRenderer r, double x, double y, double w, double h, float lift) {
+        Color top = color(tint(accent(), lift));
+        Color bottom = color(lift > 0.12f ? tint(accent(), lift - 0.12f) : accent());
+        r.quad(x, y, w, h, top, top, bottom, bottom);
     }
 
     public static class TopBar extends WTopBar {
-        private static final double TOP = 8;
-        private static final double HEIGHT = 15;
-        private static final double MARGIN = 12;
-        private static final double GAP = 12;
+        private static final double TOP = 6;
+        private static final double HEIGHT = 12;
+        private static final double MARGIN = 6;
+        private static final double PAD = 4;
 
         private static double unit() {
             return mc.getWindow().getScaleFactor();
@@ -104,7 +114,7 @@ public final class CoyWidgets {
 
         @Override
         protected void onCalculateWidgetPositions() {
-            x = mc.getWindow().getFramebufferWidth() - width - (MARGIN - GAP / 2) * unit();
+            x = mc.getWindow().getFramebufferWidth() - width - MARGIN * unit();
             y = TOP * unit();
             super.onCalculateWidgetPositions();
         }
@@ -122,7 +132,7 @@ public final class CoyWidgets {
 
             @Override
             protected void onCalculateSize() {
-                width = theme.textWidth(tab.name) + GAP * unit();
+                width = theme.textWidth(tab.name) + PAD * 2 * unit() + 4 * unit();
                 height = HEIGHT * unit();
             }
 
@@ -137,10 +147,12 @@ public final class CoyWidgets {
 
             @Override
             protected void onRender(GuiRenderer r, double mouseX, double mouseY, double delta) {
+                double px = unit();
+                double bw = width - 4 * px;
                 boolean current = current();
-                double textX = x + GAP * unit() / 2;
-                r.text(tab.name, textX, y + (height - theme.textHeight()) / 2, color(current || mouseOver ? BRIGHT : MUTED), false);
-                if (current) r.quad(textX, y + height - unit(), theme.textWidth(tab.name), unit(), color(accent()));
+                header(r, x, y, bw, height, current ? 0.3f : mouseOver ? 0.22f : 0.12f);
+                outline(r, x, y, bw, height, px, accent());
+                r.text(tab.name, x + PAD * px, y + (height - theme.textHeight()) / 2, color(current || mouseOver ? TEXT : MUTED), true);
             }
         }
     }
@@ -157,13 +169,11 @@ public final class CoyWidgets {
 
         @Override
         protected void onRender(GuiRenderer r, double mouseX, double mouseY, double delta) {
-            if (!expanded && animProgress <= 0) return;
             double px = theme.scale(1);
             double top = y + header.height;
             double h = height - header.height;
-            if (h <= 0) return;
-            r.quad(x, top, width, h, color(PANEL));
-            outline(r, x, top - px, width, h + px, px, OUTLINE);
+            if (expanded && h > 0) r.quad(x, top, width, h, color(BODY));
+            outline(r, x, y, width, expanded ? height : header.height, px, accent());
         }
 
         private class Header extends WHeader {
@@ -175,41 +185,30 @@ public final class CoyWidgets {
             protected void onCalculateWidgetPositions() {
                 super.onCalculateWidgetPositions();
                 for (Cell<?> cell : cells) {
-                    if (cell.widget() instanceof WLabel) cell.widget().x = x + theme.scale(6);
+                    if (cell.widget() instanceof WLabel) cell.widget().x = x + theme.scale(4);
                 }
             }
 
             @Override
             protected void onRender(GuiRenderer r, double mouseX, double mouseY, double delta) {
-                double px = theme.scale(1);
-                r.quad(x + px, y, width - px * 2, px, color(HEAD));
-                r.quad(x, y + px, width, height - px, color(HEAD));
-                r.quad(x, y + height - px, width, px, color(alpha(accent(), expanded ? 0.6 : 0.25)));
+                CoyWidgets.header(r, x, y, width, height, 0.12f);
             }
         }
     }
 
     public static class Checkbox extends WCheckbox {
-        private double progress = -1;
-
         public Checkbox(boolean checked) {
             super(checked);
         }
 
         @Override
         protected void onRender(GuiRenderer r, double mouseX, double mouseY, double delta) {
-            if (progress < 0) progress = checked ? 1 : 0;
-            progress = approach(progress, checked ? 1 : 0, delta, 14);
             double px = theme.scale(1);
             double size = Math.min(width, height) * 0.62;
             double bx = x + (width - size) / 2;
             double by = y + (height - size) / 2;
-            int edge = blend(mouseOver ? 0xFF4C4C5A : BOX, accent(), progress);
-            outline(r, bx, by, size, size, px, edge);
-            if (progress > 0.01) {
-                double inner = size - px * 4;
-                r.quad(bx + px * 2, by + px * 2, inner, inner, color(alpha(accent(), progress)));
-            }
+            r.quad(bx, by, size, size, color(EDGE));
+            r.quad(bx + px, by + px, size - px * 2, size - px * 2, color(checked ? accent() : mouseOver ? CELL_HOVER : CELL));
         }
     }
 
@@ -225,12 +224,13 @@ public final class CoyWidgets {
             double left = x + handle / 2;
             double span = width - handle;
             double t = max > min ? MathHelper.clamp((value - min) / (max - min), 0, 1) : 0;
-            double cy = y + height / 2;
-            r.quad(left, cy - px / 2, span, px, color(TRACK));
-            r.quad(left, cy - px / 2, span * t, px, color(accent()));
-            double knob = theme.scale(5);
+            double track = px * 4;
+            double ty = y + (height - track) / 2;
             boolean hot = dragging || handleMouseOver;
-            r.quad(left + span * t - knob / 2, cy - knob / 2, knob, knob, color(hot ? BRIGHT : VALUE));
+            r.quad(left, ty, span, track, color(hot ? CELL_HOVER : CELL));
+            r.quad(left, ty, span * t, track, color(hot ? enabledHover() : enabled()));
+            double knob = px * 2;
+            r.quad(left + span * t - knob / 2, ty - px, knob, track + px * 2, color(TEXT));
         }
     }
 
@@ -252,19 +252,16 @@ public final class CoyWidgets {
             @Override
             protected void onCalculateSize() {
                 super.onCalculateSize();
-                width = Math.max(width, theme.textWidth(title.toUpperCase(Locale.ROOT)) + theme.scale(16));
-                height = Math.max(height, theme.textHeight() + theme.scale(6));
+                width = Math.max(width, theme.textWidth(title) + theme.scale(16));
+                height = Math.max(height, theme.textHeight() + theme.scale(4));
             }
 
             @Override
             protected void onRender(GuiRenderer r, double mouseX, double mouseY, double delta) {
-                String label = title.toUpperCase(Locale.ROOT);
                 double ty = y + (height - theme.textHeight()) / 2;
-                r.text(label, x, ty, color(mouseOver ? TEXT : MUTED), false);
-                double lineX = x + theme.textWidth(label) + theme.scale(6);
-                double sign = theme.textWidth("-");
-                r.quad(lineX, y + height / 2, Math.max(0, x + width - lineX - sign - theme.scale(6)), theme.scale(1), color(OUTLINE));
-                r.text(isExpanded() ? "-" : "+", x + width - sign, ty, color(MUTED), false);
+                r.text(title, x, ty, color(mouseOver ? TEXT : MUTED), true);
+                String sign = isExpanded() ? "-" : "+";
+                r.text(sign, x + width - theme.textWidth(sign), ty, color(MUTED), true);
             }
         }
     }
@@ -276,16 +273,14 @@ public final class CoyWidgets {
 
         @Override
         protected void onRender(GuiRenderer r, double mouseX, double mouseY, double delta) {
-            double px = theme.scale(1);
-            int fill = pressed ? alpha(accent(), 0.3) : mouseOver ? PRESS : HOVER;
+            int fill = pressed ? enabled() : mouseOver ? CELL_HOVER : CELL;
             r.quad(x, y, width, height, color(fill));
-            outline(r, x, y, width, height, px, mouseOver ? alpha(accent(), 0.6) : OUTLINE);
             double pad = pad();
             if (text != null) {
-                r.text(text, x + width / 2 - textWidth / 2, y + pad, color(mouseOver ? BRIGHT : VALUE), false);
+                r.text(text, x + width / 2 - textWidth / 2, y + pad, color(TEXT), true);
             } else if (texture != null) {
                 double ts = theme.textHeight();
-                r.quad(x + width / 2 - ts / 2, y + pad, ts, ts, texture, color(mouseOver ? BRIGHT : VALUE));
+                r.quad(x + width / 2 - ts / 2, y + pad, ts, ts, texture, color(TEXT));
             }
         }
     }
@@ -293,8 +288,6 @@ public final class CoyWidgets {
     public static class ModuleRow extends WPressable {
         private final Module module;
         private final String title;
-        private double lit = -1;
-        private double hover;
 
         public ModuleRow(Module module, String title) {
             this.module = module;
@@ -304,13 +297,13 @@ public final class CoyWidgets {
 
         @Override
         public double pad() {
-            return theme.scale(4);
+            return theme.scale(3);
         }
 
         @Override
         protected void onCalculateSize() {
             double pad = pad();
-            width = pad + theme.textWidth(title) + pad + theme.scale(4);
+            width = pad + theme.textWidth(title) + pad + theme.textWidth("+") + pad;
             height = pad + theme.textHeight() + pad;
         }
 
@@ -322,17 +315,11 @@ public final class CoyWidgets {
 
         @Override
         protected void onRender(GuiRenderer r, double mouseX, double mouseY, double delta) {
-            if (lit < 0) lit = module.isActive() ? 1 : 0;
-            lit = approach(lit, module.isActive() ? 1 : 0, delta, 12);
-            hover = approach(hover, mouseOver ? 1 : 0, delta, 14);
-            double px = theme.scale(1);
-            if (hover > 0.01) r.quad(x, y, width, height, color(alpha(HOVER, hover)));
-            if (lit > 0.01) {
-                r.quad(x, y, width, height, color(alpha(accent(), 0.16 * lit)));
-                r.quad(x, y + px * 2, px * 2, height - px * 4, color(alpha(accent(), lit)));
-            }
-            int text = blend(TEXT, BRIGHT, Math.max(lit, hover * 0.6));
-            r.text(title, x + pad() + px * 2 * lit, y + pad(), color(text), false);
+            boolean active = module.isActive();
+            int fill = active ? (mouseOver ? enabledHover() : enabled()) : (mouseOver ? CELL_HOVER : CELL);
+            r.quad(x, y, width, height - theme.scale(1), color(fill));
+            r.text(title, x + pad(), y + pad(), color(TEXT), true);
+            r.text("+", x + width - pad() - theme.textWidth("+"), y + pad(), color(TEXT), true);
         }
     }
 
@@ -346,16 +333,15 @@ public final class CoyWidgets {
             double px = theme.scale(1);
             double cy = y + height / 2;
             if (text == null) {
-                r.quad(x, cy, width, px, color(OUTLINE));
+                r.quad(x, cy, width, px, color(LINE));
                 return;
             }
-            String label = text.toUpperCase(Locale.ROOT);
-            double tw = theme.textWidth(label);
-            double gap = theme.scale(6);
+            double tw = theme.textWidth(text);
+            double gap = theme.scale(4);
             double tx = x + width / 2 - tw / 2;
-            r.quad(x, cy, Math.max(0, tx - gap - x), px, color(OUTLINE));
-            r.text(label, tx, y + (height - theme.textHeight()) / 2, color(MUTED), false);
-            r.quad(tx + tw + gap, cy, Math.max(0, x + width - (tx + tw + gap)), px, color(OUTLINE));
+            r.quad(x, cy, Math.max(0, tx - gap - x), px, color(LINE));
+            r.text(text, tx, y + (height - theme.textHeight()) / 2, color(MUTED), true);
+            r.quad(tx + tw + gap, cy, Math.max(0, x + width - (tx + tw + gap)), px, color(LINE));
         }
     }
 }

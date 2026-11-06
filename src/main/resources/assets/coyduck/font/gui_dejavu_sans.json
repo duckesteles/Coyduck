@@ -5,7 +5,7 @@
       "file": "coyduck:dejavu_sans.ttf",
       "shift": [0.0, 0.5],
       "size": 8.5,
-      "oversample": 4.0
+      "oversample": 2.0
     }
   ]
 }

@@ -33,12 +33,29 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 public class CoyGuiScreen extends Screen {
-    private static final Style FONT = Style.EMPTY.withFont(new StyleSpriteSource.Font(Identifier.of("coyduck", "gui")));
+    private static final List<String> GROUPS = List.of("Combat", "Player", "Movement", "Render", "World", "Misc");
+    private static final Map<String, String> SPLIT = Map.ofEntries(
+        Map.entry("anti-piston", "Combat"), Map.entry("auto-anchor", "Combat"), Map.entry("auto-city+", "Combat"),
+        Map.entry("auto-crystal", "Combat"), Map.entry("auto-totem+", "Combat"), Map.entry("auto-trap+", "Combat"),
+        Map.entry("auto-web+", "Combat"), Map.entry("burrow+", "Combat"), Map.entry("hole-fill", "Combat"),
+        Map.entry("kill-aura+", "Combat"), Map.entry("ladder-trap", "Combat"), Map.entry("pearl-phase", "Combat"),
+        Map.entry("self-trap+", "Combat"), Map.entry("surround+", "Combat"),
+        Map.entry("air-mine", "Player"), Map.entry("auto-xp", "Player"), Map.entry("no-rotate+", "Player"),
+        Map.entry("elytra-fly+", "Movement"), Map.entry("elytra-pilot", "Movement"), Map.entry("hole-snap", "Movement"),
+        Map.entry("speed+", "Movement"),
+        Map.entry("break-esp+", "Render"), Map.entry("crystal-chams", "Render"), Map.entry("custom-fov", "Render"),
+        Map.entry("esp+", "Render"), Map.entry("hide-rich", "Render"), Map.entry("hole-esp+", "Render"),
+        Map.entry("kill-effects", "Render"), Map.entry("no-explosion", "Render"), Map.entry("shaders+", "Render"),
+        Map.entry("schem-builder", "World")
+    );
+    private static final long SWITCH_TIME = 220;
 
     private static final int WIDTH = 96;
     private static final int HEADER = 12;
@@ -58,7 +75,7 @@ public class CoyGuiScreen extends Screen {
     private static final int CELL_HOVER = 0xC8352F40;
     private static final int SWATCH_EDGE = 0xFF0C0A10;
 
-    private enum Kind { HEADER, MODULE, BOOL, SLIDER, ENUM, COLOR, BIND, MODULE_BIND, MORE, TAB }
+    private enum Kind { HEADER, MODULE, BOOL, SLIDER, ENUM, COLOR, BIND, MODULE_BIND, MORE, TAB, PAGE }
 
     private record Hit(int x, int y, int w, int h, Kind kind, Object target, Object extra) {
         boolean contains(double mx, double my) {
@@ -67,20 +84,37 @@ public class CoyGuiScreen extends Screen {
     }
 
     private static final class Panel {
-        final Category category;
+        final String key;
+        final String title;
         final List<Module> modules;
         int x;
         int y;
         boolean collapsed;
 
-        Panel(Category category, List<Module> modules) {
-            this.category = category;
+        Panel(String key, String title, List<Module> modules) {
+            this.key = key;
+            this.title = title;
             this.modules = modules;
         }
     }
 
+    private static final class Page {
+        final String name;
+        final List<Panel> panels = new ArrayList<>();
+
+        Page(String name) {
+            this.name = name;
+        }
+    }
+
     private final ClickGui owner;
-    private final List<Panel> panels = new ArrayList<>();
+    private final List<Page> pages = new ArrayList<>();
+    private List<Panel> panels = new ArrayList<>();
+    private int page;
+    private int previousPage = -1;
+    private int direction;
+    private long switchedAt;
+    private Style font = Style.EMPTY;
     private final List<Hit> hits = new ArrayList<>();
     private final Set<Module> expanded = new HashSet<>();
 
@@ -107,36 +141,97 @@ public class CoyGuiScreen extends Screen {
 
     @Override
     protected void init() {
-        if (panels.isEmpty()) {
-            List<Category> categories = new ArrayList<>();
-            for (Category category : Modules.loopCategories()) {
-                if (category == Coyduck.CATEGORY) categories.addFirst(category);
-                else categories.add(category);
-            }
-            for (Category category : categories) {
-                List<Module> modules = new ArrayList<>(Modules.get().getGroup(category));
-                if (modules.isEmpty()) continue;
-                modules.sort((a, b) -> a.title.compareToIgnoreCase(b.title));
-                panels.add(new Panel(category, modules));
-            }
+        if (pages.isEmpty()) {
+            build();
             loadLayout();
+            page = 0;
+            panels = pages.get(0).panels;
         }
         if (!custom) arrange();
-        for (Panel panel : panels) panel.x = MathHelper.clamp(panel.x, 0, Math.max(0, width - WIDTH));
+        for (Page each : pages) {
+            for (Panel panel : each.panels) panel.x = MathHelper.clamp(panel.x, 0, Math.max(0, width - WIDTH));
+        }
+    }
+
+    private void build() {
+        List<Module> all = new ArrayList<>(Modules.get().getAll());
+        if (!owner.usesPages()) {
+            Page single = new Page("");
+            addPanels(single, all, false);
+            pages.add(single);
+            return;
+        }
+
+        Map<String, List<Module>> byAddon = new LinkedHashMap<>();
+        for (String name : owner.pageOrder()) byAddon.put(name, new ArrayList<>());
+        for (Module module : all) byAddon.computeIfAbsent(addonName(module), name -> new ArrayList<>()).add(module);
+        for (Map.Entry<String, List<Module>> entry : byAddon.entrySet()) {
+            if (entry.getValue().isEmpty()) continue;
+            Page addon = new Page(entry.getKey());
+            addPanels(addon, entry.getValue(), true);
+            pages.add(addon);
+        }
+        if (pages.isEmpty()) pages.add(new Page(""));
+    }
+
+    private void addPanels(Page target, List<Module> modules, boolean paged) {
+        List<Category> categories = new ArrayList<>();
+        for (Category category : Modules.loopCategories()) {
+            if (category == Coyduck.CATEGORY) categories.addFirst(category);
+            else categories.add(category);
+        }
+        String prefix = paged ? target.name + "/" : "";
+        for (Category category : categories) {
+            List<Module> inCategory = new ArrayList<>();
+            for (Module module : modules) if (module.category == category) inCategory.add(module);
+            if (inCategory.isEmpty()) continue;
+            inCategory.sort((a, b) -> a.title.compareToIgnoreCase(b.title));
+
+            if (category == Coyduck.CATEGORY && owner.splitsCoyduck()) {
+                for (String group : GROUPS) {
+                    List<Module> grouped = new ArrayList<>();
+                    for (Module module : inCategory) if (SPLIT.getOrDefault(module.name, "Misc").equals(group)) grouped.add(module);
+                    if (grouped.isEmpty()) continue;
+                    String title = paged ? group : "Coyduck " + group;
+                    target.panels.add(new Panel(prefix + title, title, grouped));
+                }
+                continue;
+            }
+            target.panels.add(new Panel(prefix + category.name, category.name, inCategory));
+        }
+    }
+
+    private static String addonName(Module module) {
+        return module.addon == null || module.addon.name == null ? "Meteor Client" : module.addon.name;
     }
 
     private void arrange() {
-        int x = MARGIN;
-        int y = MARGIN;
-        for (Panel panel : panels) {
-            if (x + WIDTH > width - MARGIN && x > MARGIN) {
-                x = MARGIN;
-                y += height / 2;
+        for (Page each : pages) {
+            int x = MARGIN;
+            int y = MARGIN;
+            for (Panel panel : each.panels) {
+                if (x + WIDTH > width - MARGIN && x > MARGIN) {
+                    x = MARGIN;
+                    y += height / 2;
+                }
+                panel.x = x;
+                panel.y = y;
+                x += WIDTH + GAP;
             }
-            panel.x = x;
-            panel.y = y;
-            x += WIDTH + GAP;
         }
+    }
+
+    private void switchPage(int step) {
+        int next = MathHelper.clamp(page + step, 0, pages.size() - 1);
+        if (next == page) return;
+        previousPage = page;
+        direction = Integer.signum(step);
+        page = next;
+        panels = pages.get(page).panels;
+        switchedAt = Util.getMeasuringTimeMs();
+        dragging = null;
+        sliding = null;
+        binding = null;
     }
 
     @Override
@@ -156,17 +251,34 @@ public class CoyGuiScreen extends Screen {
         accent = owner.accent.get().getPacked() | 0xFF000000;
         enabledCell = withAlpha(shade(accent, 0.72f), 0xDC);
         enabledHover = withAlpha(shade(accent, 0.82f), 0xE6);
+        Identifier id = owner.fontId();
+        font = id == null ? Style.EMPTY : Style.EMPTY.withFont(new StyleSpriteSource.Font(id));
         hits.clear();
         hint = null;
         Object hovered = null;
 
-        for (Panel panel : panels) {
-            Object over = drawPanel(context, panel, mouseX, mouseY);
-            if (over != null) hovered = over;
+        long now = Util.getMeasuringTimeMs();
+        float t = previousPage < 0 ? 1 : MathHelper.clamp((now - switchedAt) / (float) SWITCH_TIME, 0, 1);
+        if (t >= 1) previousPage = -1;
+
+        if (previousPage >= 0) {
+            float eased = 1 - (1 - t) * (1 - t) * (1 - t);
+            int out = Math.round(-direction * eased * width);
+            int in = Math.round(direction * (1 - eased) * width);
+            List<Hit> kept = new ArrayList<>(hits);
+            for (Panel panel : pages.get(previousPage).panels) drawPanel(context, panel, out, -1, -1);
+            for (Panel panel : panels) drawPanel(context, panel, in, -1, -1);
+            hits.clear();
+            hits.addAll(kept);
+        } else {
+            for (Panel panel : panels) {
+                Object over = drawPanel(context, panel, 0, mouseX, mouseY);
+                if (over != null) hovered = over;
+            }
         }
         drawTabs(context, mouseX, mouseY);
+        drawPages(context, mouseX, mouseY);
 
-        long now = Util.getMeasuringTimeMs();
         if (hovered != hoverKey) {
             hoverKey = hovered;
             hoverSince = now;
@@ -174,8 +286,8 @@ public class CoyGuiScreen extends Screen {
         if (hint != null && !hint.isEmpty() && dragging == null && sliding == null && now - hoverSince >= TIP_DELAY) drawTip(context, mouseX, mouseY);
     }
 
-    private Object drawPanel(DrawContext context, Panel panel, int mouseX, int mouseY) {
-        int x = panel.x;
+    private Object drawPanel(DrawContext context, Panel panel, int offset, int mouseX, int mouseY) {
+        int x = panel.x + offset;
         int y = panel.y;
         int bodyHeight = panel.collapsed ? 0 : bodyHeight(panel);
         int bottom = y + HEADER + bodyHeight;
@@ -183,7 +295,7 @@ public class CoyGuiScreen extends Screen {
 
         if (!panel.collapsed) context.fill(x, y + HEADER, x + WIDTH, bottom, BODY);
         context.fillGradient(x, y, x + WIDTH, y + HEADER, tint(accent, 0.12f), accent);
-        text(context, panel.category.name, x + PAD, y + 2, TEXT);
+        text(context, trim(panel.title, WIDTH - PAD * 2), x + PAD, y + 2, TEXT);
         hits.add(new Hit(x, y, WIDTH, HEADER, Kind.HEADER, panel, null));
 
         if (!panel.collapsed) {
@@ -337,8 +449,27 @@ public class CoyGuiScreen extends Screen {
         }
     }
 
+    private void drawPages(DrawContext context, int mouseX, int mouseY) {
+        if (pages.size() < 2) return;
+        String name = pages.get(page).name;
+        String label = name + "  " + (page + 1) + "/" + pages.size();
+        int arrow = width("<") + PAD * 2;
+        int w = width(label) + PAD * 2 + arrow * 2;
+        int x = (width - w) / 2;
+        int y = height - MARGIN - HEADER;
+        context.fillGradient(x, y, x + w, y + HEADER, tint(accent, 0.12f), accent);
+        outline(context, x, y, x + w, y + HEADER, accent);
+        boolean left = page > 0;
+        boolean right = page < pages.size() - 1;
+        text(context, "<", x + PAD, y + 2, left ? (inside(mouseX, mouseY, x, y, arrow, HEADER) ? TEXT : MUTED) : 0x55FFFFFF);
+        text(context, label, x + arrow + PAD, y + 2, TEXT);
+        text(context, ">", x + w - arrow + PAD, y + 2, right ? (inside(mouseX, mouseY, x + w - arrow, y, arrow, HEADER) ? TEXT : MUTED) : 0x55FFFFFF);
+        if (left) hits.add(new Hit(x, y, arrow, HEADER, Kind.PAGE, -1, null));
+        if (right) hits.add(new Hit(x + w - arrow, y, arrow, HEADER, Kind.PAGE, 1, null));
+    }
+
     private void drawTip(DrawContext context, int mouseX, int mouseY) {
-        List<OrderedText> lines = textRenderer.wrapLines(StringVisitable.styled(hint, FONT), TIP_WIDTH);
+        List<OrderedText> lines = textRenderer.wrapLines(StringVisitable.styled(hint, font), TIP_WIDTH);
         int w = 0;
         for (OrderedText line : lines) w = Math.max(w, textRenderer.getWidth(line));
         w += PAD * 2;
@@ -430,6 +561,7 @@ public class CoyGuiScreen extends Screen {
             case MODULE_BIND -> binding = hit.extra;
             case COLOR, MORE -> client.setScreen(GuiThemes.get().moduleScreen((Module) hit.extra));
             case TAB -> ((Tab) hit.target).openScreen(GuiThemes.get());
+            case PAGE -> switchPage((Integer) hit.target);
         }
         return true;
     }
@@ -477,6 +609,14 @@ public class CoyGuiScreen extends Screen {
         if (binding != null) {
             if (key == GLFW.GLFW_KEY_ESCAPE || key == GLFW.GLFW_KEY_BACKSPACE || key == GLFW.GLFW_KEY_DELETE) applyBind(Keybind.none());
             else applyBind(Keybind.fromKeys(key, input.modifiers()));
+            return true;
+        }
+        if (key == GLFW.GLFW_KEY_LEFT || key == GLFW.GLFW_KEY_A) {
+            switchPage(-1);
+            return true;
+        }
+        if (key == GLFW.GLFW_KEY_RIGHT || key == GLFW.GLFW_KEY_D) {
+            switchPage(1);
             return true;
         }
         return super.keyPressed(input);
@@ -564,11 +704,11 @@ public class CoyGuiScreen extends Screen {
     }
 
     private int width(String text) {
-        return textRenderer.getWidth(Text.literal(text).setStyle(FONT));
+        return textRenderer.getWidth(Text.literal(text).setStyle(font));
     }
 
     private void text(DrawContext context, String text, int x, int y, int color) {
-        context.drawText(textRenderer, Text.literal(text).setStyle(FONT), x, y, color, true);
+        context.drawText(textRenderer, Text.literal(text).setStyle(font), x, y, color, true);
     }
 
     private String trim(String text, int max) {
@@ -609,8 +749,10 @@ public class CoyGuiScreen extends Screen {
 
     private void saveLayout() {
         StringBuilder out = new StringBuilder(custom ? "custom" : "auto");
-        for (Panel panel : panels) {
-            out.append('|').append(panel.category.name).append(':').append(panel.x).append(':').append(panel.y).append(':').append(panel.collapsed ? 1 : 0);
+        for (Page each : pages) {
+            for (Panel panel : each.panels) {
+                out.append('|').append(panel.key).append(':').append(panel.x).append(':').append(panel.y).append(':').append(panel.collapsed ? 1 : 0);
+            }
         }
         owner.layout.set(out.toString());
     }
@@ -622,8 +764,8 @@ public class CoyGuiScreen extends Screen {
         for (String entry : saved.substring(saved.indexOf('|') + 1).split("\\|")) {
             String[] parts = entry.split(":");
             if (parts.length != 4) continue;
-            for (Panel panel : panels) {
-                if (!panel.category.name.equals(parts[0])) continue;
+            for (Page each : pages) for (Panel panel : each.panels) {
+                if (!panel.key.equals(parts[0])) continue;
                 try {
                     panel.x = Integer.parseInt(parts[1]);
                     panel.y = Integer.parseInt(parts[2]);

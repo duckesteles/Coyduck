@@ -8,20 +8,44 @@ import meteordevelopment.meteorclient.gui.GuiThemes;
 import meteordevelopment.meteorclient.gui.screens.ModulesScreen;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
+import meteordevelopment.meteorclient.settings.EnumSetting;
+import meteordevelopment.meteorclient.settings.StringListSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.settings.StringSetting;
+import meteordevelopment.meteorclient.renderer.Fonts;
+import meteordevelopment.meteorclient.renderer.text.FontFace;
+import meteordevelopment.meteorclient.renderer.text.FontFamily;
+import meteordevelopment.meteorclient.renderer.text.FontInfo;
 import meteordevelopment.meteorclient.systems.config.Config;
 import meteordevelopment.meteorclient.systems.hud.Hud;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.util.Identifier;
+
+import java.util.List;
 
 public class ClickGui extends Module {
+    public enum GuiFont {
+        NotoSans("Noto Sans", "gui_noto_sans"),
+        DejaVuSans("DejaVu Sans", "gui_dejavu_sans"),
+        Minecraft(null, null);
+
+        private final String family;
+        private final String id;
+
+        GuiFont(String family, String id) {
+            this.family = family;
+            this.id = id;
+        }
+    }
+
     private static final int DEFAULT_ACCENT = 0xFF7B62AA;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
+    private final SettingGroup sgPages = settings.createGroup("Pages");
 
     public final Setting<SettingColor> accent = sgGeneral.add(new ColorSetting.Builder()
         .name("accent")
@@ -54,13 +78,35 @@ public class ClickGui extends Module {
         .build()
     );
 
-    private final Setting<Boolean> minecraftFont = sgGeneral.add(new BoolSetting.Builder()
-        .name("minecraft-font")
-        .description("Uses the Minecraft font in every menu while this is on. The HUD keeps its own font.")
-        .defaultValue(true)
+    private final Setting<GuiFont> font = sgGeneral.add(new EnumSetting.Builder<GuiFont>()
+        .name("font")
+        .description("Font of the module menu and the other menus. The HUD keeps its own font.")
+        .defaultValue(GuiFont.NotoSans)
         .onChanged(value -> {
             if (isActive()) apply();
         })
+        .build()
+    );
+
+    private final Setting<Boolean> splitCoyduck = sgGeneral.add(new BoolSetting.Builder()
+        .name("split-coyduck")
+        .description("Sorts Coyduck modules into Combat, Player, Movement, Render, World and Misc panels like Meteor's own.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> pages = sgPages.add(new BoolSetting.Builder()
+        .name("pages")
+        .description("Gives every addon its own page. Switch pages with the left and right arrow keys or A and D.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<List<String>> pageOrder = sgPages.add(new StringListSetting.Builder()
+        .name("page-order")
+        .description("Addon names in page order. Addons left out come after these.")
+        .defaultValue(List.of("Meteor Client", "Coyduck"))
+        .visible(pages::get)
         .build()
     );
 
@@ -104,6 +150,22 @@ public class ClickGui extends Module {
         return settingsWindow.get();
     }
 
+    public Identifier fontId() {
+        return font.get().id == null ? null : Identifier.of("coyduck", font.get().id);
+    }
+
+    public boolean splitsCoyduck() {
+        return splitCoyduck.get();
+    }
+
+    public boolean usesPages() {
+        return pages.get();
+    }
+
+    public List<String> pageOrder() {
+        return pageOrder.get();
+    }
+
     public static int accentColor() {
         ClickGui module = Modules.get().get(ClickGui.class);
         return module == null ? DEFAULT_ACCENT : module.accent.get().getPacked() | 0xFF000000;
@@ -130,7 +192,7 @@ public class ClickGui extends Module {
             GuiThemes.select(previousTheme.get().isEmpty() ? "Meteor" : previousTheme.get());
         }
 
-        font(Config.get().customFont, previousFont);
+        applyFont();
         restoreHudFont();
     }
 
@@ -141,26 +203,34 @@ public class ClickGui extends Module {
         }
     }
 
-    private void font(Setting<Boolean> custom, Setting<String> previous) {
-        if (minecraftFont.get()) {
+    private void applyFont() {
+        Setting<Boolean> custom = Config.get().customFont;
+        GuiFont choice = font.get();
+        if (choice.family == null) {
             if (custom.get()) {
-                previous.set("custom");
+                if (previousFont.get().isEmpty()) previousFont.set("custom");
                 custom.set(false);
             }
-        } else if (previous.get().equals("custom") && !custom.get()) {
-            custom.set(true);
-            previous.set("");
+            return;
         }
+
+        FontFamily family = Fonts.getFamily(choice.family);
+        FontFace face = family == null ? null : family.get(FontInfo.Type.Regular);
+        if (face == null) return;
+        if (!custom.get()) {
+            if (previousFont.get().isEmpty()) previousFont.set("vanilla");
+            custom.set(true);
+        }
+        if (Config.get().font.get() != face) Config.get().font.set(face);
     }
 
     private void restore() {
         if (GuiThemes.get().name.equals(CoyduckTheme.NAME)) {
             GuiThemes.select(previousTheme.get().isEmpty() ? "Meteor" : previousTheme.get());
         }
-        if (previousFont.get().equals("custom")) {
-            Config.get().customFont.set(true);
-            previousFont.set("");
-        }
+        if (previousFont.get().equals("custom")) Config.get().customFont.set(true);
+        else if (previousFont.get().equals("vanilla")) Config.get().customFont.set(false);
+        previousFont.set("");
         restoreHudFont();
     }
 

@@ -22,31 +22,31 @@ public class CoyduckTheme extends MeteorGuiTheme {
     public CoyduckTheme() {
         ((GuiThemeAccessor) this).coyduck$setName(NAME);
 
-        color("accent", 141, 126, 248, 255);
-        color("checkbox", 141, 126, 248, 255);
+        color("accent", 123, 98, 170, 255);
+        color("checkbox", 123, 98, 170, 255);
         color("plus", 124, 206, 154, 255);
         color("minus", 226, 108, 122, 255);
         color("favorite", 244, 198, 96, 255);
 
-        color("text", 196, 196, 206, 255);
-        color("text-secondary-text", 150, 150, 162, 255);
-        color("text-highlight", 141, 126, 248, 100);
-        color("title-text", 237, 237, 243, 255);
+        color("text", 255, 255, 255, 255);
+        color("text-secondary-text", 180, 176, 190, 255);
+        color("text-highlight", 123, 98, 170, 120);
+        color("title-text", 255, 255, 255, 255);
         color("logged-in-text", 124, 206, 154, 255);
-        color("placeholder", 110, 110, 122, 255);
+        color("placeholder", 130, 126, 140, 255);
 
-        states("background", 15, 15, 20, 166, 255, 255, 255, 22, 255, 255, 255, 34);
-        color("module-background", 141, 126, 248, 40);
-        states("outline", 255, 255, 255, 30, 255, 255, 255, 52, 141, 126, 248, 160);
+        states("background", 42, 37, 51, 180, 53, 47, 64, 200, 89, 71, 122, 220);
+        color("module-background", 89, 71, 122, 220);
+        states("outline", 12, 10, 16, 255, 12, 10, 16, 255, 123, 98, 170, 255);
 
-        color("separator-text", 150, 150, 162, 255);
-        color("separator-center", 255, 255, 255, 40);
-        color("separator-edges", 255, 255, 255, 14);
+        color("separator-text", 180, 176, 190, 255);
+        color("separator-center", 255, 255, 255, 64);
+        color("separator-edges", 255, 255, 255, 24);
 
-        states("scrollbar", 255, 255, 255, 50, 255, 255, 255, 80, 141, 126, 248, 200);
-        states("slider-handle", 236, 236, 242, 255, 255, 255, 255, 255, 141, 126, 248, 255);
-        color("slider-left", 141, 126, 248, 255);
-        color("slider-right", 255, 255, 255, 48);
+        states("scrollbar", 42, 37, 51, 200, 53, 47, 64, 220, 123, 98, 170, 255);
+        states("slider-handle", 255, 255, 255, 255, 255, 255, 255, 255, 123, 98, 170, 255);
+        color("slider-left", 89, 71, 122, 220);
+        color("slider-right", 42, 37, 51, 180);
     }
 
     @Override
