@@ -799,7 +799,7 @@ public class AutoCrystal extends Module {
         }
         if (mined != null && mined.equals(stoppedAt)) {
             BlockPos base = mined.down();
-            if (inPlaceRange(base) && isBase(mc.world.getBlockState(base)) && !blocked(base) && !overlapsOwnCells(base) && canUse(base)
+            if (inPlaceRange(base) && isBase(mc.world.getBlockState(base)) && !blocked(base) && !overlapsOwnCells(base)
                 && !CrystalTracker.get().placingOverlaps(base) && !CrystalTracker.get().isBlacklisted(base)) {
                 Choice choice = evaluate(targets, crystalCenter(base), health, 0, minedView);
                 if (choice != null && choice.beats(spotChoice)) {
