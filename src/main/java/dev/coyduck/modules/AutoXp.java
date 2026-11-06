@@ -104,7 +104,7 @@ public class AutoXp extends Module {
         else if (lowest >= stop.get()) mending = false;
         if (!mending) return;
 
-        if (InventoryManager.get().isEating()) return;
+        if (InventoryManager.get().isEating() || InventoryManager.get().isOffhandEating()) return;
         if (pauseMining.get() && MiningManager.get().pos() != null) return;
         if (onlyHoled.get() && !Targets.isHoled(Targets.columns(mc.player.getBoundingBox()))) return;
         if (enemyRange.get() > 0 && Targets.find(enemyRange.get()) != null) return;

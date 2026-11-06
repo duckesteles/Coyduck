@@ -66,7 +66,7 @@ public class FireworkBoost extends Module {
         ticks++;
         if (mc.player == null || mc.interactionManager == null || !mc.player.isGliding()) return;
         if (Modules.get().isActive(ElytraFly.class) || Modules.get().isActive(ElytraPilot.class)) return;
-        if (InventoryManager.get().isEating() || ticks - lastBoost < cooldown.get()) return;
+        if (InventoryManager.get().isEating() || InventoryManager.get().isOffhandEating() || ticks - lastBoost < cooldown.get()) return;
         if (needForward.get() && !mc.options.forwardKey.isPressed()) return;
         if (lookingUp.get() && mc.player.getPitch() > 40) return;
 
