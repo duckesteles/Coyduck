@@ -9,6 +9,7 @@
 - AutoCrystal
 - AutoAnchor
 - AutoTotem
+- Aura
 - Surround
 - AutoTrap
 - AutoWeb
@@ -16,13 +17,19 @@
 - LadderTrap
 - ElytraFly
 - ElytraPilot
+- FireworkBoost
 - SelfTrap
 - HoleSnap
+- HoleFill
+- AntiPiston
 - CustomFov
 - AirMine
 - PopCounter
 - KillEffects
 - PearlPhase
+- SpeedPlus
+- NoRotate
+- AutoXp
 - Burrow
 - ESP
 - HoleESP
