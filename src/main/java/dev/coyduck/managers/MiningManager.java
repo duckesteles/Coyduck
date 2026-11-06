@@ -313,6 +313,9 @@ public final class MiningManager {
             return;
         }
         if (autoStop && (brokenSinceStop || waited)) stop(owner);
+        if (pos != null && !broken && lastStopTick != ticks && !mc.world.getBlockState(pos).isReplaceable()) {
+            InteractionManager.get().swing(swing == InteractionManager.SwingMode.None ? InteractionManager.SwingMode.Packet : swing);
+        }
     }
 
     private void restart() {

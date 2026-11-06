@@ -133,7 +133,7 @@ public class HoleSnap extends Module {
     private final Setting<Double> timer = sgSpeed.add(new DoubleSetting.Builder()
         .name("timer")
         .description("Speeds up the game while snapping, so you are in the hole almost instantly. 1 leaves it alone.")
-        .defaultValue(10)
+        .defaultValue(1)
         .range(1, 20)
         .sliderRange(1, 20)
         .build()

@@ -77,7 +77,12 @@ public final class InteractionManager {
     private record OwnBreak(Vec3d position, long time) {}
 
     private final Long2ObjectOpenHashMap<Pending> pending = new Long2ObjectOpenHashMap<>();
+    private static final int STUCK_HITS = 3;
+    private static final long STUCK_TIME = 1_500;
+
     private final Int2LongOpenHashMap attacked = new Int2LongOpenHashMap();
+    private final Int2LongOpenHashMap firstHit = new Int2LongOpenHashMap();
+    private final it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap hits = new it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap();
     private int ticks;
     private Item heldItem;
     private ItemStack heldStack = ItemStack.EMPTY;
@@ -125,7 +130,7 @@ public final class InteractionManager {
         for (Direction direction : Direction.values()) {
             BlockPos neighbor = pos.offset(direction);
             BlockState state = mc.world.getBlockState(neighbor);
-            if (state.isReplaceable() || BlockRules.isInteractable(state.getBlock()) || isPending(neighbor)) continue;
+            if (state.isReplaceable() || BlockRules.isInteractable(state.getBlock())) continue;
 
             double distance = new Box(neighbor).squaredMagnitude(eye);
             if (distance >= reachSquared) continue;
@@ -300,6 +305,7 @@ public final class InteractionManager {
     }
 
     public boolean attack(Entity target, InventoryManager.SwitchMode mode, SwingMode swing, boolean whileEating, boolean rotate, Vec3d aim) {
+        if (target instanceof EndCrystalEntity && stuck(target)) return false;
         if (rotate && !aimed(aim, target.getBoundingBox(), CLEAR_PRIORITY)) return false;
         Runnable hit = () -> {
             mc.interactionManager.attackEntity(mc.player, target);
@@ -320,6 +326,10 @@ public final class InteractionManager {
         }
 
         attacked.put(target.getId(), Util.getMeasuringTimeMs());
+        if (target instanceof EndCrystalEntity) {
+            firstHit.putIfAbsent(target.getId(), Util.getMeasuringTimeMs());
+            hits.addTo(target.getId(), 1);
+        }
         if (target instanceof EndCrystalEntity) {
             noteOwnBreak(target.getEntityPos());
             if (trackDrops && dropRisk(target.getEntityPos())) lastDropRisk = Util.getMeasuringTimeMs();
@@ -434,6 +444,12 @@ public final class InteractionManager {
         return 0;
     }
 
+    public boolean stuck(Entity crystal) {
+        int id = crystal.getId();
+        if (hits.get(id) < STUCK_HITS) return false;
+        return Util.getMeasuringTimeMs() - firstHit.get(id) < STUCK_TIME;
+    }
+
     public boolean recentlyAttacked(Entity entity) {
         long time = attacked.getOrDefault(entity.getId(), Long.MIN_VALUE);
         return time != Long.MIN_VALUE && Util.getMeasuringTimeMs() - time < LatencyManager.get().timeout();
@@ -494,6 +510,11 @@ public final class InteractionManager {
 
         long lifetime = LatencyManager.get().timeout();
         attacked.int2LongEntrySet().removeIf(entry -> now - entry.getLongValue() >= lifetime);
+        firstHit.int2LongEntrySet().removeIf(entry -> {
+            boolean old = now - entry.getLongValue() >= STUCK_TIME;
+            if (old) hits.remove(entry.getIntKey());
+            return old;
+        });
     }
 
     @EventHandler
@@ -509,5 +530,7 @@ public final class InteractionManager {
     private void reset() {
         pending.clear();
         attacked.clear();
+        firstHit.clear();
+        hits.clear();
     }
 }
