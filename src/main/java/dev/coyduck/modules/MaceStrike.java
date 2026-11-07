@@ -41,10 +41,8 @@ public class MaceStrike extends Module {
     private enum Phase {
         Idle,
         Lift,
-        Drop,
         Ground,
-        Dive,
-        Rise
+        Dive
     }
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -65,6 +63,15 @@ public class MaceStrike extends Module {
         .defaultValue(8.0)
         .range(MIN_DROP, 9.5)
         .sliderRange(MIN_DROP, 9.5)
+        .build()
+    );
+
+    private final Setting<Double> step = sgGeneral.add(new DoubleSetting.Builder()
+        .name("step")
+        .description("Longest move in one packet. The trip down and back is cut into packets of at most this length, all sent in the same tick.")
+        .defaultValue(2.0)
+        .range(0.5, 10)
+        .sliderRange(0.5, 5)
         .build()
     );
 
@@ -134,7 +141,7 @@ public class MaceStrike extends Module {
     private boolean sending;
 
     public MaceStrike() {
-        super(Coyduck.CATEGORY, "mace-strike", "Smashes players with a mace from your hotbar or inventory. On foot the server is told you went up and fell back down. While flying with elytra-fly+ it stays over the target and dives for each hit. One move packet per tick either way.");
+        super(Coyduck.CATEGORY, "mace-strike", "Smashes players with a mace from your hotbar or inventory. On foot the server is told you went up and fell back down. While flying with elytra-fly+ it stays over the target and dives for each hit. The trip is sent as short moves inside one tick.");
     }
 
     @Override
@@ -271,36 +278,37 @@ public class MaceStrike extends Module {
 
         switch (phase) {
             case Lift -> {
-                move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y + lift, z, false, collision));
-                phase = Phase.Drop;
-            }
-            case Drop -> {
                 phase = Phase.Idle;
-                boolean strike = ready();
-                move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, !strike && mc.player.isOnGround(), collision));
-                if (strike) strike();
+                if (!ready()) return;
+                path(x, y, y + lift, z, collision);
+                path(x, y + lift, y, z, collision);
+                strike();
             }
             case Ground -> {
                 move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, true, collision));
                 phase = Phase.Dive;
             }
             case Dive -> {
-                phase = Phase.Rise;
+                phase = Phase.Idle;
                 if (!ready()) {
                     move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, false, collision));
                     return;
                 }
-                move(new PlayerMoveC2SPacket.PositionAndOnGround(x, strikeY, z, false, collision));
+                path(x, y, strikeY, z, collision);
                 strike();
-            }
-            case Rise -> {
-                phase = Phase.Idle;
-                move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, false, collision));
+                path(x, strikeY, y, z, collision);
                 if (stopGlide.get() && mc.player.isGliding()) {
                     mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
                 }
             }
             default -> phase = Phase.Idle;
+        }
+    }
+
+    private void path(double x, double from, double to, double z, boolean collision) {
+        int steps = Math.max(1, (int) Math.ceil(Math.abs(to - from) / step.get()));
+        for (int i = 1; i <= steps; i++) {
+            move(new PlayerMoveC2SPacket.PositionAndOnGround(x, from + (to - from) * i / steps, z, false, collision));
         }
     }
 
