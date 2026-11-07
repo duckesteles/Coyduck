@@ -153,10 +153,10 @@ public class MaceStrike extends Module {
 
     private final Setting<Double> hover = sgAir.add(new DoubleSetting.Builder()
         .name("hover")
-        .description("How far above the target's feet you stay while following.")
-        .defaultValue(10.0)
-        .range(5, 11.5)
-        .sliderRange(5, 11.5)
+        .description("How far above the target's feet you stay while following. Every extra block of fall adds about 5 damage to a charged smash, and the dive still fits in the time the mace needs to charge.")
+        .defaultValue(16.0)
+        .range(5, 30)
+        .sliderRange(5, 30)
         .visible(follow::get)
         .build()
     );
