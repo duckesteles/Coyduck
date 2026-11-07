@@ -50,6 +50,7 @@ import dev.coyduck.modules.PopCounter;
 import dev.coyduck.modules.SelfTrap;
 import dev.coyduck.modules.Shaders;
 import dev.coyduck.modules.Surround;
+import dev.coyduck.modules.UpdateChecker;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
@@ -121,6 +122,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new HoleEsp());
         Modules.get().add(new BreakEsp());
         Modules.get().add(new Shaders());
+        Modules.get().add(new UpdateChecker());
 
         Commands.add(new PilotCommand());
     }
