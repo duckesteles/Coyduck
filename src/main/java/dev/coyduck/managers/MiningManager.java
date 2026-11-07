@@ -56,6 +56,7 @@ public final class MiningManager {
     private static final double MIN_EYE = 0.4;
     private static final double MAX_EYE = 1.62;
     private static final long OWN_BLOCK_TIME = 2_000;
+    private static final long START_GAP = 600;
 
     private BlockPos background;
     private int backgroundStart;
@@ -84,6 +85,8 @@ public final class MiningManager {
     private boolean broken;
     private int stops;
     private boolean sending;
+    private boolean startPending;
+    private long lastStopAt;
 
     private MiningManager() {}
 
@@ -121,21 +124,32 @@ public final class MiningManager {
         this.swing = swing;
 
         if (same) return true;
-        if (pos != null && !broken) send(PlayerActionC2SPacket.Action.ABORT_DESTROY_BLOCK);
+        if (pos != null && !broken && !startPending) send(PlayerActionC2SPacket.Action.ABORT_DESTROY_BLOCK);
 
         pos = target.toImmutable();
-        side = facing(pos);
-        startTick = ticks;
-        startTime = Util.getMeasuringTimeMs();
         lastStop = 0;
         lastStopTick = -1;
         brokenSinceStop = false;
         broken = false;
         stops = 0;
+        begin();
+        return true;
+    }
 
+    private void begin() {
+        startPending = true;
+        startTick = ticks;
+        startTime = Util.getMeasuringTimeMs();
+        if (Util.getMeasuringTimeMs() - lastStopAt >= START_GAP) sendStart();
+    }
+
+    private void sendStart() {
+        startPending = false;
+        side = facing(pos);
+        startTick = ticks;
+        startTime = Util.getMeasuringTimeMs();
         send(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK);
         InteractionManager.get().swing(swing);
-        return true;
     }
 
     public BlockPos background() {
@@ -167,7 +181,7 @@ public final class MiningManager {
     public void release(Object owner) {
         if (!owns(owner)) return;
 
-        if (!broken && mc.getNetworkHandler() != null) send(PlayerActionC2SPacket.Action.ABORT_DESTROY_BLOCK);
+        if (!broken && !startPending && mc.getNetworkHandler() != null) send(PlayerActionC2SPacket.Action.ABORT_DESTROY_BLOCK);
         reset();
     }
 
@@ -343,6 +357,10 @@ public final class MiningManager {
             reset();
             return;
         }
+        if (startPending) {
+            if (Util.getMeasuringTimeMs() - lastStopAt < START_GAP) return;
+            sendStart();
+        }
 
         boolean waited = Util.getMeasuringTimeMs() - lastStop > LatencyManager.get().timeout();
         if (stops >= MAX_STOPS && waited && !mc.world.getBlockState(pos).isReplaceable()) {
@@ -357,16 +375,11 @@ public final class MiningManager {
     }
 
     private void restart() {
-        side = facing(pos);
-        startTick = ticks;
-        startTime = Util.getMeasuringTimeMs();
         lastStop = 0;
         lastStopTick = -1;
         brokenSinceStop = false;
         stops = 0;
-
-        send(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK);
-        InteractionManager.get().swing(swing);
+        begin();
     }
 
     @EventHandler(priority = EventPriority.HIGH)
@@ -529,6 +542,7 @@ public final class MiningManager {
     }
 
     private void send(PlayerActionC2SPacket.Action action, BlockPos target, Direction face, boolean predict) {
+        if (action == PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK) lastStopAt = Util.getMeasuringTimeMs();
         sending = true;
         try {
             ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).coyduck$sendSequencedPacket(mc.world, sequence -> {
@@ -548,12 +562,14 @@ public final class MiningManager {
     }
 
     private float elapsed() {
+        if (startPending) return 0;
         float rate = Math.min(TickRate.INSTANCE.getTickRate() / 20.0f, 1.0f);
         return (Util.getMeasuringTimeMs() - startTime) / 50.0f * rate;
     }
 
     private void reset() {
         clearBackground();
+        startPending = false;
         pos = null;
         owner = null;
         priority = 0;
