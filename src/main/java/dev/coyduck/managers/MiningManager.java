@@ -200,6 +200,12 @@ public final class MiningManager {
         return pos != null && stop(owner, mc.world.getBlockState(pos));
     }
 
+    private boolean readyUnheld(BlockState state, int tool) {
+        float raw = delta(state, pos, InventoryManager.get().stack(tool), mc.player.isOnGround() || AirMine.spoofing(), false);
+        float margin = (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
+        return raw * (elapsed() - margin) >= STOP_THRESHOLD;
+    }
+
     private boolean isReady(BlockState state) {
         if (state.isReplaceable()) return false;
 
@@ -215,6 +221,7 @@ public final class MiningManager {
             hold(state, pos);
             return false;
         }
+        if (tool != -1 && !readyUnheld(state, tool)) return false;
         Runnable action = () -> {
             InteractionManager.get().swing(swing == InteractionManager.SwingMode.None ? InteractionManager.SwingMode.Packet : swing);
             send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
@@ -258,12 +265,16 @@ public final class MiningManager {
     }
 
     private float delta(BlockState state, BlockPos at, ItemStack tool, boolean ground) {
+        return delta(state, at, tool, ground, true);
+    }
+
+    private float delta(BlockState state, BlockPos at, ItemStack tool, boolean ground, boolean efficiencyCounts) {
         float hardness = state.getHardness(mc.world, at);
         if (hardness < 0) return 0;
         if (hardness == 0) return Float.MAX_VALUE;
 
         float speed = tool.getMiningSpeedMultiplier(state);
-        if (speed > 1) {
+        if (speed > 1 && efficiencyCounts) {
             int efficiency = enchantmentLevel(tool);
             if (efficiency > 0) speed += efficiency * efficiency + 1;
         }
