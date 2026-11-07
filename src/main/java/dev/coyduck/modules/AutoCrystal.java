@@ -1165,6 +1165,10 @@ public class AutoCrystal extends Module {
     }
 
     private void placeCrystal(BlockPos base, Choice choice) {
+        if (!mc.player.getOffHandStack().isOf(Items.END_CRYSTAL) && MiningManager.get().wantsQuiet()) {
+            status = "mining";
+            return;
+        }
         Box box = new Box(base);
         Vec3d aim = InteractionManager.get().crystalAim(base);
         if (!rotationReady(box, aim, placeRange.get() + 1, PLACE_PRIORITY)) {

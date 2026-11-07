@@ -57,6 +57,8 @@ public final class MiningManager {
     private static final double MAX_EYE = 1.62;
     private static final long OWN_BLOCK_TIME = 2_000;
     private static final long START_GAP = 600;
+    private static final long QUIET = 150;
+    private static final long QUIET_CAP = 400;
 
     private BlockPos background;
     private int backgroundStart;
@@ -87,6 +89,7 @@ public final class MiningManager {
     private boolean sending;
     private boolean startPending;
     private long lastStopAt;
+    private long readySince;
 
     private MiningManager() {}
 
@@ -136,7 +139,12 @@ public final class MiningManager {
         return true;
     }
 
+    public boolean wantsQuiet() {
+        return pos != null && !broken && !startPending && readySince != 0 && Util.getMeasuringTimeMs() - readySince < QUIET_CAP;
+    }
+
     private void begin() {
+        readySince = 0;
         startPending = true;
         startTick = ticks;
         startTime = Util.getMeasuringTimeMs();
@@ -238,6 +246,11 @@ public final class MiningManager {
             return false;
         }
         if (tool != -1 && !readyUnheld(state, tool)) return false;
+        if (!broken) {
+            long now = Util.getMeasuringTimeMs();
+            if (readySince == 0) readySince = now;
+            if (InventoryManager.get().sinceSelectChange() < QUIET && now - readySince < QUIET_CAP) return false;
+        }
         Runnable action = () -> {
             InteractionManager.get().swing(swing == InteractionManager.SwingMode.None ? InteractionManager.SwingMode.Packet : swing);
             send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
@@ -246,6 +259,7 @@ public final class MiningManager {
         if (tool == -1) action.run();
         else if (!InventoryManager.get().withItem(tool, switchMode, action)) return false;
 
+        readySince = 0;
         lastStop = Util.getMeasuringTimeMs();
         lastStopTick = ticks;
         brokenSinceStop = false;

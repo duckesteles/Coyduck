@@ -102,6 +102,8 @@ public final class InventoryManager {
         return sentSlot != -1 ? sentSlot : ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).coyduck$getLastSelectedSlot();
     }
 
+    private long lastSelectChangeAt;
+
     public boolean isEating() {
         return mc.player.isUsingItem() && mc.player.getActiveHand() == Hand.MAIN_HAND;
     }
@@ -310,7 +312,14 @@ public final class InventoryManager {
         int slot = packet.getSelectedSlot();
         int previous = sentSlot != -1 ? sentSlot : slot;
         sentSlot = slot;
-        if (slot != previous) noteSelectChange(previous, slot);
+        if (slot != previous) {
+            lastSelectChangeAt = Util.getMeasuringTimeMs();
+            noteSelectChange(previous, slot);
+        }
+    }
+
+    public long sinceSelectChange() {
+        return Util.getMeasuringTimeMs() - lastSelectChangeAt;
     }
 
     @EventHandler
