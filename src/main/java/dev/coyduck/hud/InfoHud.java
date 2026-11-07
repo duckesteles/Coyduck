@@ -23,6 +23,7 @@ public class InfoHud extends HudElement {
     public static final HudElementInfo<InfoHud> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-info", "FPS, ping, TPS, speed and coordinates in one panel.", InfoHud::new);
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
+    private final CoyHud.Background background = new CoyHud.Background(settings);
 
     private final Setting<Boolean> fps = add("fps", "Frames per second.");
     private final Setting<Boolean> ping = add("ping", "Your ping.");
@@ -114,9 +115,11 @@ public class InfoHud extends HudElement {
         double w = pad * 2 + labelWidth + gap + valueWidth;
         double h = pad * 2 + rowHeight * lines.size() - 3;
         setSize(Math.max(w, 40), Math.max(h, rowHeight));
+        int x = box.getRenderX();
+        int y = box.getRenderY();
         if (lines.isEmpty()) return;
 
-        CoyHud.panel(r, x, y, w, h, 1);
+        CoyHud.panel(r, x, y, w, h, background.alpha());
         boolean right = getX() + getWidth() / 2.0 > Utils.getWindowWidth() / 2.0;
         double rowY = y + pad;
         for (Line line : lines) {

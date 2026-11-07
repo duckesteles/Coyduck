@@ -1,6 +1,11 @@
 package dev.coyduck.hud;
 
 import dev.coyduck.modules.ClickGui;
+import meteordevelopment.meteorclient.settings.BoolSetting;
+import meteordevelopment.meteorclient.settings.IntSetting;
+import meteordevelopment.meteorclient.settings.Setting;
+import meteordevelopment.meteorclient.settings.SettingGroup;
+import meteordevelopment.meteorclient.settings.Settings;
 import meteordevelopment.meteorclient.systems.hud.HudGroup;
 import meteordevelopment.meteorclient.systems.hud.HudRenderer;
 import meteordevelopment.meteorclient.utils.render.color.Color;
@@ -21,6 +26,34 @@ public final class CoyHud {
     private CoyHud() {
     }
 
+    public static final class Background {
+        private final Setting<Boolean> enabled;
+        private final Setting<Integer> opacity;
+
+        public Background(Settings settings) {
+            SettingGroup group = settings.createGroup("Background");
+            enabled = group.add(new BoolSetting.Builder()
+                .name("background")
+                .description("Draws the dark box behind this element.")
+                .defaultValue(true)
+                .build()
+            );
+            opacity = group.add(new IntSetting.Builder()
+                .name("background-opacity")
+                .description("How see-through the box is, in percent. 100 is fully dark.")
+                .defaultValue(65)
+                .range(0, 100)
+                .sliderRange(0, 100)
+                .visible(enabled::get)
+                .build()
+            );
+        }
+
+        public double alpha() {
+            return enabled.get() ? opacity.get() / 100.0 : 0;
+        }
+    }
+
     public static int accent() {
         return ClickGui.accentColor();
     }
@@ -35,7 +68,8 @@ public final class CoyHud {
     }
 
     public static void panel(HudRenderer r, double x, double y, double w, double h, double alpha) {
-        round(r, x, y, w, h, 3, color(BACKGROUND, alpha));
+        if (alpha <= 0) return;
+        round(r, x, y, w, h, 3, color(BACKGROUND | 0xFF000000, alpha));
     }
 
     public static void round(HudRenderer r, double x, double y, double w, double h, int radius, Color c) {

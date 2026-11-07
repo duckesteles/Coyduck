@@ -33,6 +33,7 @@ public class PlayersHud extends HudElement {
     }
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
+    private final CoyHud.Background background = new CoyHud.Background(settings);
 
     private final Setting<Show> show = sgGeneral.add(new EnumSetting.Builder<Show>()
         .name("show")
@@ -109,15 +110,17 @@ public class PlayersHud extends HudElement {
         double w = pad * 2 + head + headGap + nameWidth + (sideWidth > 0 ? gap + sideWidth : 0);
         double h = pad * 2 + line * Math.max(1, rows.size()) - 4;
         setSize(w, h);
+        int x = box.getRenderX();
+        int y = box.getRenderY();
 
         if (rows.isEmpty()) {
             if (!isInEditor()) return;
-            CoyHud.panel(r, x, y, w, h, 1);
+            CoyHud.panel(r, x, y, w, h, background.alpha());
             r.text("No players", x + pad, y + pad, CoyHud.color(CoyHud.MUTED), false);
             return;
         }
 
-        CoyHud.panel(r, x, y, w, h, 1);
+        CoyHud.panel(r, x, y, w, h, background.alpha());
         boolean right = getX() + getWidth() / 2.0 > Utils.getWindowWidth() / 2.0;
         double rowY = y + pad;
         for (Row row : rows) {

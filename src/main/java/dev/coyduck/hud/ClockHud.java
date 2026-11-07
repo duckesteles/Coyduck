@@ -24,6 +24,7 @@ public class ClockHud extends HudElement {
     public static final HudElementInfo<ClockHud> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-clock", "Real time and date in any time zone, with your session length.", ClockHud::new);
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
+    private final CoyHud.Background background = new CoyHud.Background(settings);
 
     private final Setting<Double> size = sgGeneral.add(new DoubleSetting.Builder()
         .name("size")
@@ -136,8 +137,10 @@ public class ClockHud extends HudElement {
         double w = pad * 2 + bar + width;
         double h = pad * 2 + timeHeight + (small.isEmpty() ? 0 : 2 * scale + lineHeight * small.size() - 2 * scale);
         setSize(w, h);
+        int x = box.getRenderX();
+        int y = box.getRenderY();
 
-        CoyHud.panel(r, x, y, w, h, 1);
+        CoyHud.panel(r, x, y, w, h, background.alpha());
         CoyHud.round(r, x, y + 3 * scale, 2 * scale, h - 6 * scale, 1, CoyHud.color(CoyHud.accent()));
 
         double tx = x + pad + bar;

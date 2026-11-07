@@ -37,8 +37,11 @@ public class ModuleList extends HudElement {
         .build()
     );
 
+    private final CoyHud.Background background = new CoyHud.Background(settings);
+
     private final Map<Module, Double> shown = new HashMap<>();
     private long last;
+    private double shownWidth = -1;
 
     public ModuleList() {
         super(INFO);
@@ -73,12 +76,17 @@ public class ModuleList extends HudElement {
             widest = r.textWidth("Modules") + 14;
             total = rowHeight;
         }
-        setSize(Math.max(widest, 40), Math.max(total, rowHeight));
+        double target = Math.max(widest, 40);
+        shownWidth = shownWidth < 0 ? target : CoyHud.approach(shownWidth, target, delta, 14);
+        if (Math.abs(shownWidth - target) < 0.5) shownWidth = target;
+        setSize(Math.max(shownWidth, target), Math.max(total, rowHeight));
+        int x = box.getRenderX();
+        int y = box.getRenderY();
 
         boolean right = getX() + getWidth() / 2.0 > Utils.getWindowWidth() / 2.0;
         double rowY = y;
         if (list.isEmpty() && isInEditor()) {
-            CoyHud.panel(r, x, y, getWidth(), rowHeight, 1);
+            CoyHud.panel(r, x, y, getWidth(), rowHeight, background.alpha());
             r.text("Modules", x + 7, y + 3, CoyHud.color(CoyHud.SUBTLE), false);
             return;
         }
@@ -90,7 +98,8 @@ public class ModuleList extends HudElement {
             double slide = (1 - t) * (w * 0.6);
             double rowX = right ? x + getWidth() - w + slide : x - slide;
 
-            r.quad(rowX, rowY, w, h, CoyHud.color(CoyHud.BACKGROUND, t));
+            double alpha = background.alpha();
+            if (alpha > 0) r.quad(rowX, rowY, w, h, CoyHud.color(CoyHud.BACKGROUND | 0xFF000000, t * alpha));
             double barX = right ? rowX + w - 2 : rowX;
             r.quad(barX, rowY, 2, h, CoyHud.color(CoyHud.accent(), t));
 
