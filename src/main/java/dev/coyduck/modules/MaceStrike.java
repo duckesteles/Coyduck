@@ -6,6 +6,7 @@ import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.RotationManager;
 import dev.coyduck.utils.Targets;
+import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
@@ -28,6 +29,7 @@ import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.network.packet.c2s.play.ClientTickEndC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
+import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
@@ -49,6 +51,7 @@ public class MaceStrike extends Module {
     private static final double STILL_SPEED = 0.08;
     private static final double ALIGN = 0.35;
     private static final double MIN_HOVER = 4.0;
+    private static final long SETBACK_PAUSE = 1000;
 
     private enum Phase {
         Idle,
@@ -191,6 +194,7 @@ public class MaceStrike extends Module {
     private PlayerEntity lastTarget;
     private int heldFrom = -1;
     private int owed;
+    private long pausedUntil;
 
     public MaceStrike() {
         super(Coyduck.CATEGORY, "mace-strike", "Smashes players with a mace from your hotbar or inventory. On foot the server is told you went up and fell back down. While flying with elytra-fly+ it stays over the target and dives for each hit with fake moves of a few blocks per tick while you stay put on screen.");
@@ -212,6 +216,7 @@ public class MaceStrike extends Module {
     @EventHandler(priority = EventPriority.LOW)
     private void onTickPre(TickEvent.Pre event) {
         if (phase != Phase.Idle) return;
+        if (Util.getMeasuringTimeMs() < pausedUntil) return;
         if (!canAct() || maceSlot() == -1) {
             target = null;
             return;
@@ -368,6 +373,24 @@ public class MaceStrike extends Module {
             event.cancel();
             owed--;
         }
+    }
+
+    @EventHandler
+    private void onReceive(PacketEvent.Receive event) {
+        if (!(event.packet instanceof PlayerPositionLookS2CPacket)) return;
+        mc.execute(() -> {
+            phase = Phase.Idle;
+            owed = 0;
+            pausedUntil = Util.getMeasuringTimeMs() + SETBACK_PAUSE;
+        });
+    }
+
+    @EventHandler
+    private void onGameLeft(GameLeftEvent event) {
+        phase = Phase.Idle;
+        owed = 0;
+        target = null;
+        heldFrom = -1;
     }
 
     @EventHandler(priority = EventPriority.LOW)
