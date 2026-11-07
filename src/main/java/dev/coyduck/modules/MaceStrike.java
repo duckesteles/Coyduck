@@ -112,6 +112,20 @@ public class MaceStrike extends Module {
         .build()
     );
 
+    private final Setting<Boolean> smash = sgGeneral.add(new BoolSetting.Builder()
+        .name("smash")
+        .description("Stops the glide right before the hit and starts it again right after, inside the same tick. A mace only smashes when you are not gliding, and the next move is a glide again.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> holdMace = sgGeneral.add(new BoolSetting.Builder()
+        .name("hold-mace")
+        .description("Takes a hotbar mace in hand when the dive starts instead of swapping in the hit tick, so the server counts the mace's own damage. Your slot comes back right after the hit.")
+        .defaultValue(true)
+        .build()
+    );
+
     private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
         .name("rotate")
         .description("Faces the target before the smash starts.")
@@ -161,6 +175,7 @@ public class MaceStrike extends Module {
     private long lastStrike;
     private boolean sending;
     private double serverY;
+    private int heldFrom = -1;
 
     public MaceStrike() {
         super(Coyduck.CATEGORY, "mace-strike", "Smashes players with a mace from your hotbar or inventory. On foot the server is told you went up and fell back down. While flying with elytra-fly+ it stays over the target and dives for each hit with fake moves of a few blocks per tick while you stay put on screen.");
@@ -170,6 +185,7 @@ public class MaceStrike extends Module {
     public void onDeactivate() {
         phase = Phase.Idle;
         target = null;
+        giveBack();
     }
 
     @Override
@@ -233,6 +249,7 @@ public class MaceStrike extends Module {
 
         strikeY = y;
         serverY = mc.player.getY();
+        takeMace();
         if (stopGlide.get()) phase = Phase.Ground;
         else phase = mode.get() == Mode.Ticks ? Phase.Descend : Phase.Dive;
     }
@@ -320,6 +337,7 @@ public class MaceStrike extends Module {
                 phase = Phase.Ascend;
             }
             case Ascend -> {
+                giveBack();
                 serverY = Math.min(y, serverY + step.get());
                 move(new PlayerMoveC2SPacket.PositionAndOnGround(x, serverY, z, false, collision));
                 if (serverY >= y) {
@@ -365,11 +383,37 @@ public class MaceStrike extends Module {
 
     private void strike() {
         PlayerEntity victim = target;
-        InventoryManager.get().withItem(maceSlot(), switchMode.get(), () -> {
+        int slot = maceSlot();
+        Runnable hit = () -> {
+            boolean toggle = smash.get() && mc.player.isGliding();
+            if (toggle) glideCommand();
             mc.interactionManager.attackEntity(mc.player, victim);
             InteractionManager.get().swing(InteractionManager.SwingMode.Packet);
-        });
+            if (toggle) glideCommand();
+        };
+        if (InventoryManager.get().selectedSlot() == slot) hit.run();
+        else InventoryManager.get().withItem(slot, switchMode.get(), hit);
         lastStrike = Util.getMeasuringTimeMs();
+        giveBack();
+    }
+
+    private void glideCommand() {
+        mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
+    }
+
+    private void takeMace() {
+        if (!holdMace.get() || heldFrom != -1) return;
+        int slot = maceSlot();
+        int selected = InventoryManager.get().selectedSlot();
+        if (slot < 0 || slot >= InventoryManager.HOTBAR_END || slot == selected) return;
+        if (InventoryManager.get().select(slot)) heldFrom = selected;
+    }
+
+    private void giveBack() {
+        if (heldFrom == -1 || mc.player == null) return;
+        int back = heldFrom;
+        heldFrom = -1;
+        InventoryManager.get().select(back);
     }
 
     private void move(PlayerMoveC2SPacket packet) {
