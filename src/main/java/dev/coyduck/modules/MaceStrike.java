@@ -19,6 +19,11 @@ import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.entity.player.PlayerEntity;
+import meteordevelopment.meteorclient.utils.Utils;
+import meteordevelopment.meteorclient.utils.entity.DamageUtils;
+import net.minecraft.enchantment.Enchantments;
+import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
@@ -39,6 +44,7 @@ public class MaceStrike extends Module {
     private static final double OVER_RANGE = 1.0;
     private static final double LEAD_TICKS = 2;
     private static final double HOVER_SLACK = 0.75;
+    private static final float CRIT_CHARGE = 0.9f;
     private static final double STILL_SPEED = 0.08;
     private static final double ALIGN = 0.35;
     private static final double MIN_HOVER = 4.0;
@@ -126,7 +132,7 @@ public class MaceStrike extends Module {
 
     private final Setting<Boolean> holdMace = sgGeneral.add(new BoolSetting.Builder()
         .name("hold-mace")
-        .description("Takes a hotbar mace in hand when the dive starts instead of swapping in the hit tick, so the server counts the mace's own damage. Your slot comes back right after the hit.")
+        .description("Keeps a hotbar mace in hand while you follow a target so it charges. Each dive waits until the charged hit would pop the target, or until the mace is charged enough for a critical hit. Auto Totem+ still gets the main hand when it wants a totem there. Your slot comes back when there is no target.")
         .defaultValue(true)
         .build()
     );
@@ -238,9 +244,11 @@ public class MaceStrike extends Module {
         target = choose(followRange.get(), false);
         if (target == null) {
             lastTargetPos = null;
+            giveBack();
             return;
         }
 
+        takeMace();
         Vec3d now = target.getEntityPos();
         Vec3d motion = lastTargetPos == null || lastTarget != target ? Vec3d.ZERO : now.subtract(lastTargetPos);
         lastTargetPos = now;
@@ -264,6 +272,17 @@ public class MaceStrike extends Module {
         if (Double.isNaN(y)) return;
         int diveTicks = (int) Math.ceil((mc.player.getY() - y) / step.get());
         if (HurtTracker.get().releaseTime(target) > Util.getMeasuringTimeMs() + diveTicks * 50L) return;
+        if (mc.player.getMainHandStack().isOf(Items.MACE)) {
+            float charge = mc.player.getAttackCooldownProgress(diveTicks + 0.5f);
+            float health = target.getHealth() + target.getAbsorptionAmount();
+            if (charge <= CRIT_CHARGE && smashDamage(mc.player.getY() - y, charge) < health) {
+                Box box = Targets.box(target);
+                Vec3d eye = new Vec3d(mc.player.getX(), y + STANDING_EYE, mc.player.getZ());
+                float[] rotation = rotationTo(eye, aim(box, eye));
+                RotationManager.get().request(PRIORITY, rotation[0], rotation[1], ROTATE_SPEED, false);
+                return;
+            }
+        }
 
         Box box = Targets.box(target);
         Vec3d eye = new Vec3d(mc.player.getX(), y + STANDING_EYE, mc.player.getZ());
@@ -273,7 +292,6 @@ public class MaceStrike extends Module {
 
         strikeY = y;
         serverY = mc.player.getY();
-        takeMace();
         if (stopGlide.get()) phase = Phase.Ground;
         else phase = mode.get() == Mode.Ticks ? Phase.Descend : Phase.Dive;
     }
@@ -372,7 +390,6 @@ public class MaceStrike extends Module {
                 phase = Phase.Ascend;
             }
             case Ascend -> {
-                giveBack();
                 serverY = Math.min(y, serverY + step.get());
                 move(new PlayerMoveC2SPacket.PositionAndOnGround(x, serverY, z, false, collision));
                 if (serverY >= y) {
@@ -421,15 +438,28 @@ public class MaceStrike extends Module {
         int slot = maceSlot();
         Runnable hit = () -> {
             boolean toggle = smash.get() && mc.player.isGliding();
+            boolean sprinting = mc.player.isSprinting();
+            if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
             if (toggle) glideCommand();
             mc.interactionManager.attackEntity(mc.player, victim);
             InteractionManager.get().swing(InteractionManager.SwingMode.Packet);
             if (toggle) glideCommand();
+            if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_SPRINTING));
         };
         if (InventoryManager.get().selectedSlot() == slot) hit.run();
         else InventoryManager.get().withItem(slot, switchMode.get(), hit);
         lastStrike = Util.getMeasuringTimeMs();
-        giveBack();
+        if (!holdMace.get()) giveBack();
+    }
+
+    private float smashDamage(double fall, float charge) {
+        ItemStack mace = mc.player.getMainHandStack();
+        float base = (float) mc.player.getAttributeValue(EntityAttributes.ATTACK_DAMAGE);
+        double bonus = fall <= 3 ? 4 * fall : fall <= 8 ? 12 + 2 * (fall - 3) : 22 + (fall - 8);
+        bonus += 0.5 * Utils.getEnchantmentLevel(mace, Enchantments.DENSITY) * fall;
+        float damage = base * (0.2f + charge * charge * 0.8f) + (float) bonus;
+        if (charge > CRIT_CHARGE) damage *= 1.5f;
+        return DamageUtils.calculateReductions(damage, target, mc.world.getDamageSources().playerAttack(mc.player));
     }
 
     private void glideCommand() {
@@ -437,11 +467,11 @@ public class MaceStrike extends Module {
     }
 
     private void takeMace() {
-        if (!holdMace.get() || heldFrom != -1) return;
+        if (!holdMace.get() || AutoTotem.wantsMainTotem()) return;
         int slot = maceSlot();
         int selected = InventoryManager.get().selectedSlot();
         if (slot < 0 || slot >= InventoryManager.HOTBAR_END || slot == selected) return;
-        if (InventoryManager.get().select(slot)) heldFrom = selected;
+        if (InventoryManager.get().select(slot) && heldFrom == -1) heldFrom = selected;
     }
 
     private void giveBack() {
