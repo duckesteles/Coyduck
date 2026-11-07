@@ -43,6 +43,7 @@ import dev.coyduck.modules.AutoXp;
 import dev.coyduck.modules.HoleFill;
 import dev.coyduck.modules.KillEffects;
 import dev.coyduck.modules.NoExplosion;
+import dev.coyduck.modules.NoClimb;
 import dev.coyduck.modules.NoRotate;
 import dev.coyduck.modules.SpeedPlus;
 import dev.coyduck.modules.StepPlus;
@@ -119,6 +120,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new KillEffects());
         Modules.get().add(new NoExplosion());
         Modules.get().add(new NoRotate());
+        Modules.get().add(new NoClimb());
         Modules.get().add(new SpeedPlus());
         Modules.get().add(new StepPlus());
         Modules.get().add(new Esp());
