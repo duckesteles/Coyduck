@@ -3,11 +3,15 @@ package dev.coyduck.utils;
 import dev.coyduck.modules.Shaders;
 import meteordevelopment.meteorclient.renderer.Renderer3D;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
+import meteordevelopment.meteorclient.renderer.text.TextRenderer;
+import meteordevelopment.meteorclient.utils.render.NametagUtils;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
+import org.joml.Vector3d;
 
 public final class DuckRender {
     public static final long HOLD = 250;
@@ -47,6 +51,22 @@ public final class DuckRender {
             shade(EDGE, line, 0, 1, alpha);
             renderer.boxLines(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ, EDGE, 0);
         }
+    }
+
+    private static final Color LABEL = new Color();
+
+    public static void label(Vec3d at, String text, Color color, double alpha) {
+        if (at == null || alpha <= 0.01) return;
+        Vector3d pos = new Vector3d(at.x, at.y, at.z);
+        if (!NametagUtils.to2D(pos, 1.0)) return;
+        LABEL.set(color);
+        LABEL.a = (int) MathHelper.clamp(color.a * alpha, 0, 255);
+        TextRenderer renderer = TextRenderer.get();
+        NametagUtils.begin(pos);
+        renderer.beginBig();
+        renderer.render(text, -renderer.getWidth(text) / 2, -renderer.getHeight() / 2, LABEL, true);
+        renderer.end();
+        NametagUtils.end();
     }
 
     public static double alpha(long age) {
@@ -93,6 +113,15 @@ public final class DuckRender {
         private Box shown;
         private long appearedAt;
         private long lastFrame;
+        private double shownAlpha;
+
+        public Vec3d center() {
+            return shown == null ? null : shown.getCenter();
+        }
+
+        public double alpha() {
+            return shown == null ? 0 : shownAlpha;
+        }
 
         public void show(BlockPos pos) {
             long now = Util.getMeasuringTimeMs();
@@ -128,7 +157,8 @@ public final class DuckRender {
             );
 
             double fadeIn = ease((now - appearedAt) / (double) FADE_IN);
-            box(renderer, shown, side, line, mode, fadeIn * DuckRender.alpha(now - refreshedAt));
+            shownAlpha = fadeIn * DuckRender.alpha(now - refreshedAt);
+            box(renderer, shown, side, line, mode, shownAlpha);
         }
     }
 

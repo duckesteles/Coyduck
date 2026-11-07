@@ -19,6 +19,7 @@ import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
+import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
@@ -32,6 +33,7 @@ import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.systems.modules.combat.AnchorAura;
+import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
@@ -240,6 +242,14 @@ public class AutoAnchor extends Module {
         .build()
     );
 
+    private final Setting<Boolean> damageText = sgRender.add(new BoolSetting.Builder()
+        .name("damage-text")
+        .description("Writes the damage the anchor deals to the target on its box.")
+        .defaultValue(true)
+        .visible(render::get)
+        .build()
+    );
+
     private final Setting<ShapeMode> shapeMode = sgRender.add(new EnumSetting.Builder<ShapeMode>()
         .name("shape-mode")
         .description("How the highlight is drawn.")
@@ -274,6 +284,7 @@ public class AutoAnchor extends Module {
     private List<Vec3d> ownCrystals;
     private PlayerEntity focus;
     private final DuckRender.Slide slide = new DuckRender.Slide();
+    private float renderDamage;
 
     public AutoAnchor() {
         super(Coyduck.CATEGORY, "auto-anchor", "Places, charges and sets off respawn anchors in one go, where crystals cannot reach.");
@@ -334,6 +345,12 @@ public class AutoAnchor extends Module {
         releaseAt = 0;
         focus = null;
         slide.reset();
+    }
+
+    @EventHandler
+    private void onRender2D(Render2DEvent event) {
+        if (!render.get() || !damageText.get() || renderDamage <= 0) return;
+        DuckRender.label(slide.center(), String.format("%.1f", renderDamage), Color.WHITE, slide.alpha());
     }
 
     @EventHandler
@@ -575,6 +592,7 @@ public class AutoAnchor extends Module {
     private void mark(Choice choice) {
         focus = choice.target.player;
         status = String.format("%.1f dmg", choice.damage);
+        renderDamage = (float) choice.damage;
     }
 
     private Choice evaluate(List<Target> targets, BlockPos pos, float health, long arrival, BlockView view, boolean charged) {

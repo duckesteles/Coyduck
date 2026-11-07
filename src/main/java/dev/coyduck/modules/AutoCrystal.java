@@ -25,6 +25,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.entity.EntityAddedEvent;
+import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
@@ -40,6 +41,7 @@ import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.systems.modules.combat.CrystalAura;
+import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
@@ -436,6 +438,14 @@ public class AutoCrystal extends Module {
         .build()
     );
 
+    private final Setting<Boolean> damageText = sgRender.add(new BoolSetting.Builder()
+        .name("damage-text")
+        .description("Writes the damage the crystal deals to the target on its box.")
+        .defaultValue(true)
+        .visible(render::get)
+        .build()
+    );
+
     private final Setting<ShapeMode> shapeMode = sgRender.add(new EnumSetting.Builder<ShapeMode>()
         .name("shape-mode")
         .description("How the highlight is drawn.")
@@ -474,6 +484,7 @@ public class AutoCrystal extends Module {
     private final Long2ObjectOpenHashMap<Int2FloatOpenHashMap> rawCache = new Long2ObjectOpenHashMap<>();
     private List<BlockPos> ownCells = List.of();
     private final DuckRender.Slide slide = new DuckRender.Slide();
+    private float renderDamage;
     private long cacheSignature;
     private final IntOpenHashSet predictedIds = new IntOpenHashSet();
     private long predictedBase;
@@ -692,6 +703,12 @@ public class AutoCrystal extends Module {
     private void clearCache() {
         selfCache.clear();
         rawCache.clear();
+    }
+
+    @EventHandler
+    private void onRender2D(Render2DEvent event) {
+        if (!render.get() || !damageText.get() || renderDamage <= 0) return;
+        DuckRender.label(slide.center(), String.format("%.1f", renderDamage), Color.WHITE, slide.alpha());
     }
 
     @EventHandler
@@ -1165,6 +1182,7 @@ public class AutoCrystal extends Module {
         status = String.format("%.1f dmg", choice.damage);
         lastTarget = choice.target.player;
         slide.show(base);
+        renderDamage = (float) choice.damage;
     }
 
     private void placeBase(List<Target> targets, float health) {
