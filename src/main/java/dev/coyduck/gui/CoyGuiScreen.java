@@ -3,6 +3,11 @@ package dev.coyduck.gui;
 import dev.coyduck.Coyduck;
 import dev.coyduck.modules.ClickGui;
 import meteordevelopment.meteorclient.gui.GuiThemes;
+import meteordevelopment.meteorclient.gui.utils.Cell;
+import meteordevelopment.meteorclient.gui.widgets.WLabel;
+import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.containers.WContainer;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.gui.tabs.Tab;
 import meteordevelopment.meteorclient.gui.tabs.Tabs;
 import meteordevelopment.meteorclient.pathing.PathManagers;
@@ -197,6 +202,8 @@ public class CoyGuiScreen extends Screen {
         String listSearch = "";
         List<Object> cache;
         String cacheKey;
+        List<Row> extras = new ArrayList<>();
+        boolean more;
 
         Window(String title, Settings settings, Object owner, boolean closable, Runnable resetAll, Runnable onClose) {
             this.title = title;
@@ -402,8 +409,42 @@ public class CoyGuiScreen extends Screen {
         }
     }
 
+    private void collectExtras(Window w) {
+        w.extras = new ArrayList<>();
+        w.more = false;
+        if (!(w.owner instanceof Module module)) return;
+        WWidget root;
+        try {
+            root = module.getWidget(GuiThemes.get());
+        } catch (RuntimeException e) {
+            w.more = true;
+            return;
+        }
+        if (root != null) collect(w, root);
+    }
+
+    private void collect(Window w, WWidget widget) {
+        if (widget instanceof WContainer container) {
+            for (Cell<?> cell : container.cells) collect(w, cell.widget());
+        } else if (widget instanceof WButton button) {
+            Runnable action = button.action;
+            String text = button.getText();
+            String label = text == null || text.isBlank() ? "Remove" : text;
+            if (action != null) w.extras.add(new Row(RowKind.ACTION, label, (Runnable) () -> {
+                action.run();
+                collectExtras(w);
+            }, null));
+        } else if (widget instanceof WLabel label) {
+            String text = label.get();
+            if (text != null && !text.isBlank()) w.extras.add(new Row(RowKind.NOTE, text, null, null));
+        } else if (widget != null) {
+            w.more = true;
+        }
+    }
+
     private void openWindow(Window next) {
         closeWindow();
+        collectExtras(next);
         window = next;
         window.x = (width - WIN_W) / 2;
         window.y = MARGIN + 8;
@@ -774,6 +815,13 @@ public class CoyGuiScreen extends Screen {
                     for (int channel = 0; channel < 4; channel++) rows.add(new Row(RowKind.CHANNEL, CHANNELS[channel], color, channel));
                 }
             }
+        }
+        if (!w.extras.isEmpty()) {
+            rows.add(new Row(RowKind.GROUP, "Actions", null, null));
+            rows.addAll(w.extras);
+        }
+        if (w.more && w.owner instanceof Module module) {
+            rows.add(new Row(RowKind.ACTION, "More options", (Runnable) () -> client.setScreen(GuiThemes.get().moduleScreen(module)), null));
         }
         if (w.owner instanceof Module module) {
             rows.add(new Row(RowKind.GROUP, "Module", null, null));
