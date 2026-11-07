@@ -53,6 +53,8 @@ public final class MiningManager {
     private static final float HOLD_MIN_HEALTH = 10;
     private static final int MAX_STOPS = 1;
     private static final double REBREAK_ENEMY_RANGE = 6;
+    private static final double MIN_EYE = 0.4;
+    private static final double MAX_EYE = 1.62;
     private static final long OWN_BLOCK_TIME = 2_000;
 
     private BlockPos background;
@@ -560,8 +562,28 @@ public final class MiningManager {
     }
 
     private static Direction facing(BlockPos target) {
-        Vec3d offset = mc.player.getEyePos().subtract(Vec3d.ofCenter(target));
-        return Direction.getFacing(offset.x, offset.y, offset.z);
+        Direction best = Direction.UP;
+        double bestMargin = -Double.MAX_VALUE;
+        for (Direction direction : Direction.values()) {
+            double margin = Math.min(faceMargin(direction, target, mc.player.getX(), mc.player.getY(), mc.player.getZ()),
+                faceMargin(direction, target, mc.player.lastX, mc.player.lastY, mc.player.lastZ));
+            if (margin > bestMargin) {
+                bestMargin = margin;
+                best = direction;
+            }
+        }
+        return best;
+    }
+
+    private static double faceMargin(Direction direction, BlockPos target, double x, double y, double z) {
+        return switch (direction) {
+            case UP -> y + MAX_EYE - (target.getY() + 1);
+            case DOWN -> target.getY() - (y + MIN_EYE);
+            case EAST -> x - (target.getX() + 1);
+            case WEST -> target.getX() - x;
+            case SOUTH -> z - (target.getZ() + 1);
+            case NORTH -> target.getZ() - z;
+        };
     }
 
     private static int enchantmentLevel(ItemStack stack) {
