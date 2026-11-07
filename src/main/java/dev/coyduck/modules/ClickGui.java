@@ -81,7 +81,7 @@ public class ClickGui extends Module {
 
     private final Setting<GuiFont> font = sgGeneral.add(new EnumSetting.Builder<GuiFont>()
         .name("font")
-        .description("Font of the module menu and the other menus. The HUD keeps its own font.")
+        .description("Font of the Coyduck module menu. Meteor's own menus and the HUD keep the font chosen in Meteor.")
         .defaultValue(GuiFont.NotoSans)
         .onChanged(value -> {
             if (isActive()) apply();
@@ -213,32 +213,10 @@ public class ClickGui extends Module {
     }
 
     private void applyFont() {
-        Setting<Boolean> custom = Config.get().customFont;
-        GuiFont choice = font.get();
-        if (choice.family == null) {
-            if (custom.get()) {
-                if (previousFont.get().isEmpty()) previousFont.set("custom");
-                custom.set(false);
-            }
-            return;
-        }
-
-        FontFamily family = Fonts.getFamily(choice.family);
-        FontFace face = family == null ? null : family.get(FontInfo.Type.Regular);
-        if (face == null) return;
-        if (!custom.get()) {
-            if (previousFont.get().isEmpty()) previousFont.set("vanilla");
-            custom.set(true);
-        }
-        FontFace current = Config.get().font.get();
-        if (previousFace.get().isEmpty() && current != null && !current.info.family().equals(choice.family)) previousFace.set(current.info.family());
-        if (current != face) Config.get().font.set(face);
+        giveFontBack();
     }
 
-    private void restore() {
-        if (GuiThemes.get().name.equals(CoyduckTheme.NAME)) {
-            GuiThemes.select(previousTheme.get().isEmpty() ? "Meteor" : previousTheme.get());
-        }
+    private void giveFontBack() {
         if (previousFont.get().equals("custom")) Config.get().customFont.set(true);
         else if (previousFont.get().equals("vanilla")) Config.get().customFont.set(false);
         previousFont.set("");
@@ -248,6 +226,13 @@ public class ClickGui extends Module {
             if (face != null) Config.get().font.set(face);
             previousFace.set("");
         }
+    }
+
+    private void restore() {
+        if (GuiThemes.get().name.equals(CoyduckTheme.NAME)) {
+            GuiThemes.select(previousTheme.get().isEmpty() ? "Meteor" : previousTheme.get());
+        }
+        giveFontBack();
         restoreHudFont();
     }
 
