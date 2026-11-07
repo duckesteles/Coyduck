@@ -11,6 +11,13 @@ import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.gui.tabs.Tab;
 import meteordevelopment.meteorclient.gui.tabs.Tabs;
 import meteordevelopment.meteorclient.pathing.PathManagers;
+import meteordevelopment.meteorclient.renderer.Fonts;
+import meteordevelopment.meteorclient.renderer.text.FontFace;
+import meteordevelopment.meteorclient.renderer.text.FontFamily;
+import meteordevelopment.meteorclient.renderer.text.FontInfo;
+import meteordevelopment.meteorclient.settings.BlockSetting;
+import meteordevelopment.meteorclient.settings.FontFaceSetting;
+import meteordevelopment.meteorclient.settings.ItemSetting;
 import meteordevelopment.meteorclient.settings.BlockListSetting;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
@@ -34,6 +41,7 @@ import meteordevelopment.meteorclient.systems.hud.Hud;
 import meteordevelopment.meteorclient.systems.hud.HudElement;
 import meteordevelopment.meteorclient.systems.hud.HudElementInfo;
 import meteordevelopment.meteorclient.systems.hud.screens.HudEditorScreen;
+import meteordevelopment.meteorclient.systems.hud.screens.HudElementScreen;
 import meteordevelopment.meteorclient.systems.macros.Macro;
 import meteordevelopment.meteorclient.systems.macros.Macros;
 import meteordevelopment.meteorclient.systems.profiles.Profile;
@@ -142,12 +150,12 @@ public class CoyGuiScreen extends Screen {
     private enum Kind {
         HEADER, MODULE, ELEMENT, FRIEND, FRIEND_ADD, ACTION, ADD_INFO, ADD_PRESET, TAB, VIEW, PAGE, SEARCH, MACRO, PROFILE, CREATE,
         W_HEADER, W_CLOSE, W_RESET_ALL, W_BACK, W_RESET, W_BOOL, W_SLIDER, W_CHANNEL, W_ENUM, W_COLOR, W_STRING, W_BIND,
-        W_MODULE_BIND, W_LIST, W_MORE, W_ACTION, W_LIST_SEARCH, W_LIST_ADD, W_LIST_REMOVE, W_LIST_TEXT, W_AREA
+        W_MODULE_BIND, W_LIST, W_MORE, W_ACTION, W_LIST_SEARCH, W_LIST_ADD, W_LIST_REMOVE, W_LIST_TEXT, W_LIST_PICK, W_AREA
     }
 
     private enum Type { MODULES, ELEMENTS, FRIENDS, ADD, ACTIONS, MACROS, PROFILES }
 
-    private enum RowKind { GROUP, SETTING, CHANNEL, BIND, ACTION, SEARCH, ENTRY_REMOVE, ENTRY_ADD, TEXT_ADD, NOTE }
+    private enum RowKind { GROUP, SETTING, CHANNEL, BIND, ACTION, SEARCH, ENTRY_REMOVE, ENTRY_ADD, ENTRY_PICK, TEXT_ADD, NOTE }
 
     private record Hit(int x, int y, int w, int h, Kind kind, Object target, Object extra) {
         boolean contains(double mx, double my) {
@@ -863,6 +871,10 @@ public class CoyGuiScreen extends Screen {
     private void listRows(Window w, List<Row> rows) {
         Setting<?> setting = w.list;
         rows.add(new Row(RowKind.SEARCH, "Search", setting, null));
+        if (isPicker(setting)) {
+            pickerRows(w, rows);
+            return;
+        }
         Collection<?> selected = (Collection<?>) setting.get();
         rows.add(new Row(RowKind.GROUP, "Selected (" + selected.size() + ")", null, null));
         String query = w.listSearch.toLowerCase(Locale.ROOT);
@@ -886,6 +898,81 @@ public class CoyGuiScreen extends Screen {
         }
     }
 
+    private void pickerRows(Window w, List<Row> rows) {
+        Setting<?> setting = w.list;
+        if (setting instanceof FontFaceSetting) {
+            List<Object> builtin = new ArrayList<>();
+            List<Object> system = new ArrayList<>();
+            for (Object entry : candidates(w)) {
+                if (isBuiltinFont((FontFamily) entry)) builtin.add(entry);
+                else system.add(entry);
+            }
+            if (!builtin.isEmpty()) {
+                rows.add(new Row(RowKind.GROUP, "Built in", null, null));
+                for (Object entry : builtin) rows.add(new Row(RowKind.ENTRY_PICK, entryName(entry), setting, entry));
+            }
+            if (!system.isEmpty()) {
+                rows.add(new Row(RowKind.GROUP, "System", null, null));
+                rows.add(new Row(RowKind.NOTE, "Some system fonts can crash Meteor's font loader", null, null));
+                int shown = 0;
+                for (Object entry : system) {
+                    if (shown++ >= MAX_CANDIDATES) {
+                        rows.add(new Row(RowKind.NOTE, "Type to narrow the list", null, null));
+                        break;
+                    }
+                    rows.add(new Row(RowKind.ENTRY_PICK, entryName(entry), setting, entry));
+                }
+            }
+            return;
+        }
+        int shown = 0;
+        for (Object entry : candidates(w)) {
+            if (shown++ >= MAX_CANDIDATES) {
+                rows.add(new Row(RowKind.NOTE, "Type to narrow the list", null, null));
+                break;
+            }
+            rows.add(new Row(RowKind.ENTRY_PICK, entryName(entry), setting, entry));
+        }
+    }
+
+    private static boolean isBuiltinFont(FontFamily family) {
+        for (String name : Fonts.BUILTIN_FONTS) if (name.equalsIgnoreCase(family.getName())) return true;
+        return false;
+    }
+
+    private static boolean isPicker(Setting<?> setting) {
+        return setting instanceof FontFaceSetting || setting instanceof BlockSetting || setting instanceof ItemSetting;
+    }
+
+    private static boolean picked(Setting<?> setting, Object entry) {
+        Object value = setting.get();
+        if (entry instanceof FontFamily family) return value instanceof FontFace face && face.info.family().equals(family.getName());
+        return Objects.equals(value, entry);
+    }
+
+    private static String pickerValue(Setting<?> setting) {
+        Object value = setting.get();
+        if (value instanceof FontFace face) return face.info.family();
+        if (value == null) return "None";
+        return entryName(value);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void pick(Setting<?> setting, Object entry) {
+        if (entry instanceof FontFamily family) {
+            FontFace face = family.get(FontInfo.Type.Regular);
+            if (face == null) {
+                for (FontInfo.Type type : FontInfo.Type.values()) {
+                    face = family.get(type);
+                    if (face != null) break;
+                }
+            }
+            if (face != null) ((Setting) setting).set(face);
+            return;
+        }
+        ((Setting) setting).set(entry);
+    }
+
     private List<Object> candidates(Window w) {
         String key = w.list.name + "|" + w.listSearch;
         if (key.equals(w.cacheKey) && w.cache != null) return w.cache;
@@ -901,6 +988,12 @@ public class CoyGuiScreen extends Screen {
             for (EntityType<?> type : Registries.ENTITY_TYPE) if (types.filter == null || types.filter.test(type)) all.add(type);
         } else if (setting instanceof StatusEffectListSetting) {
             for (StatusEffect effect : Registries.STATUS_EFFECT) all.add(effect);
+        } else if (setting instanceof FontFaceSetting) {
+            all.addAll(Fonts.FONT_FAMILIES);
+        } else if (setting instanceof BlockSetting block) {
+            for (Block entry : Registries.BLOCK) if (block.filter == null || block.filter.test(entry)) all.add(entry);
+        } else if (setting instanceof ItemSetting item) {
+            for (Item entry : Registries.ITEM) if (item.filter == null || item.filter.test(entry)) all.add(entry);
         }
         String query = w.listSearch.toLowerCase(Locale.ROOT);
         if (!query.isEmpty()) all.removeIf(entry -> !entryName(entry).toLowerCase(Locale.ROOT).contains(query));
@@ -916,6 +1009,7 @@ public class CoyGuiScreen extends Screen {
         if (entry instanceof Module module) return module.title;
         if (entry instanceof EntityType<?> type) return type.getName().getString();
         if (entry instanceof StatusEffect effect) return effect.getName().getString();
+        if (entry instanceof FontFamily family) return family.getName();
         return String.valueOf(entry);
     }
 
@@ -1027,6 +1121,15 @@ public class CoyGuiScreen extends Screen {
                 if (typing) drawEdit(context, x + PAD * 2, ty, WIN_W - PAD * 4);
                 else text(context, trimStart(w.listSearch.isEmpty() ? "Search" : w.listSearch, WIN_W - PAD * 4), x + PAD * 2, ty, w.listSearch.isEmpty() ? MUTED : TEXT);
                 addHit(x, y, WIN_W, WIN_ROW, top, bottom, Kind.W_LIST_SEARCH, w, null);
+                return null;
+            }
+            case ENTRY_PICK -> {
+                boolean current = picked(row.target() instanceof Setting<?> set ? set : w.list, row.extra());
+                if (current) context.fill(x + 1, y, x + WIN_W - 1, y + WIN_ROW, enabledCell);
+                else if (over) context.fill(x + 1, y, x + WIN_W - 1, y + WIN_ROW, ROW_HOVER);
+                text(context, trim(row.label(), WIN_W - PAD * 3 - 8), left, ty, TEXT);
+                if (current) text(context, "*", x + WIN_W - PAD - width("*"), ty, TEXT);
+                addHit(x, y, WIN_W, WIN_ROW, top, bottom, Kind.W_LIST_PICK, row.target(), row.extra());
                 return null;
             }
             case ENTRY_REMOVE, ENTRY_ADD -> {
@@ -1141,6 +1244,11 @@ public class CoyGuiScreen extends Screen {
             String shown = bindText(keybind.get(), keybind);
             text(context, shown, ctrlLeft + (CTRL_W - width(shown)) / 2, ty, TEXT);
             addHit(ctrlLeft, y, CTRL_W, WIN_ROW, top, bottom, Kind.W_BIND, keybind, null);
+        } else if (isPicker(setting)) {
+            box(context, ctrlLeft, y + 1, ctrlRight, y + WIN_ROW - 1, false, over);
+            String shown = trim(pickerValue(setting), CTRL_W - 16) + "  >";
+            text(context, shown, ctrlLeft + (CTRL_W - width(shown)) / 2, ty, TEXT);
+            addHit(ctrlLeft, y, CTRL_W, WIN_ROW, top, bottom, Kind.W_LIST, setting, null);
         } else if (isList(setting)) {
             box(context, ctrlLeft, y + 1, ctrlRight, y + WIN_ROW - 1, false, over);
             String shown = ((Collection<?>) setting.get()).size() + " selected  >";
@@ -1440,13 +1548,45 @@ public class CoyGuiScreen extends Screen {
             case W_LIST_ADD -> changeList((Setting<?>) hit.target, hit.extra, true);
             case W_LIST_REMOVE -> changeList((Setting<?>) hit.target, hit.extra, false);
             case W_LIST_TEXT -> startEdit(LIST_TEXT, "", (Setting<?>) hit.target);
+            case W_LIST_PICK -> {
+                pick((Setting<?>) hit.target, hit.extra);
+                finishEdit(true);
+                window.list = null;
+                window.listSearch = "";
+                window.scroll = 0;
+            }
             case W_MORE -> {
                 if (hit.extra instanceof Module module) client.setScreen(GuiThemes.get().moduleScreen(module));
+                else if (hit.extra instanceof HudElement element) client.setScreen(new HudElementScreen(GuiThemes.get(), element));
+                else openMeteorTab();
             }
             case W_AREA -> {
             }
         }
         return true;
+    }
+
+    private void openMeteorTab() {
+        String name = switch (view) {
+            case Config -> "Config";
+            case Hud -> "HUD";
+            case Friends -> "Friends";
+            case Gui -> "GUI";
+            case Baritone -> "Baritone";
+            case Macros -> "Macros";
+            case Profiles -> "Profiles";
+            default -> "";
+        };
+        for (Tab tab : Tabs.get()) {
+            if (!tab.name.equals(name)) continue;
+            passThrough = true;
+            try {
+                client.setScreen(tab.createScreen(GuiThemes.get()));
+            } finally {
+                passThrough = false;
+            }
+            return;
+        }
     }
 
     private void startEdit(Object target, String text, Setting<?> list) {
