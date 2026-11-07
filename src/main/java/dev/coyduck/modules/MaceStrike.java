@@ -26,6 +26,7 @@ import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
+import net.minecraft.network.packet.c2s.play.ClientTickEndC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.Box;
@@ -86,8 +87,8 @@ public class MaceStrike extends Module {
 
     private final Setting<Mode> mode = sgGeneral.add(new EnumSetting.Builder<Mode>()
         .name("mode")
-        .description("Ticks sends one fake move per tick, so the server sees a fast dive over a few ticks while you stay put on screen. Burst sends the whole trip inside one tick; 6b6t set back every burst so far.")
-        .defaultValue(Mode.Ticks)
+        .description("Burst sends the whole dive inside one tick with a tick end after each move, so the server counts the full fall for the smash, then skips your next ticks to keep the packet rate even. Ticks sends one move per tick; the server then only counts the last step of the fall while you glide.")
+        .defaultValue(Mode.Burst)
         .build()
     );
 
@@ -189,6 +190,7 @@ public class MaceStrike extends Module {
     private Vec3d lastTargetPos;
     private PlayerEntity lastTarget;
     private int heldFrom = -1;
+    private int owed;
 
     public MaceStrike() {
         super(Coyduck.CATEGORY, "mace-strike", "Smashes players with a mace from your hotbar or inventory. On foot the server is told you went up and fell back down. While flying with elytra-fly+ it stays over the target and dives for each hit with fake moves of a few blocks per tick while you stay put on screen.");
@@ -197,6 +199,7 @@ public class MaceStrike extends Module {
     @Override
     public void onDeactivate() {
         phase = Phase.Idle;
+        owed = 0;
         target = null;
         giveBack();
     }
@@ -241,6 +244,7 @@ public class MaceStrike extends Module {
     }
 
     private void airTick() {
+        if (owed > 0) return;
         target = choose(followRange.get(), false);
         if (target == null) {
             lastTargetPos = null;
@@ -270,12 +274,15 @@ public class MaceStrike extends Module {
 
         double y = strikeHeight();
         if (Double.isNaN(y)) return;
-        int diveTicks = (int) Math.ceil((mc.player.getY() - y) / step.get());
+        boolean burst = mode.get() == Mode.Burst;
+        int diveTicks = burst ? 0 : (int) Math.ceil((mc.player.getY() - y) / step.get());
         if (HurtTracker.get().releaseTime(target) > Util.getMeasuringTimeMs() + diveTicks * 50L) return;
         if (mc.player.getMainHandStack().isOf(Items.MACE)) {
             float charge = mc.player.getAttackCooldownProgress(diveTicks + 0.5f);
             float health = target.getHealth() + target.getAbsorptionAmount();
-            if (charge <= CRIT_CHARGE && smashDamage(mc.player.getY() - y, charge) < health) {
+            double drop = mc.player.getY() - y;
+            double fall = burst ? drop : Math.min(drop, step.get()) + 1;
+            if (charge <= CRIT_CHARGE && smashDamage(fall, charge) < health) {
                 Box box = Targets.box(target);
                 Vec3d eye = new Vec3d(mc.player.getX(), y + STANDING_EYE, mc.player.getZ());
                 float[] rotation = rotationTo(eye, aim(box, eye));
@@ -355,7 +362,12 @@ public class MaceStrike extends Module {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onSend(PacketEvent.Send event) {
-        if (!sending && phase != Phase.Idle && event.packet instanceof PlayerMoveC2SPacket) event.cancel();
+        if (sending) return;
+        if ((phase != Phase.Idle || owed > 0) && event.packet instanceof PlayerMoveC2SPacket) event.cancel();
+        else if (owed > 0 && phase == Phase.Idle && event.packet instanceof ClientTickEndC2SPacket) {
+            event.cancel();
+            owed--;
+        }
     }
 
     @EventHandler(priority = EventPriority.LOW)
@@ -420,7 +432,18 @@ public class MaceStrike extends Module {
         int steps = Math.max(1, (int) Math.ceil(Math.abs(to - from) / step.get()));
         for (int i = 1; i <= steps; i++) {
             move(new PlayerMoveC2SPacket.PositionAndOnGround(x, from + (to - from) * i / steps, z, false, collision));
+            endTick();
         }
+    }
+
+    private void endTick() {
+        sending = true;
+        try {
+            mc.getNetworkHandler().sendPacket(ClientTickEndC2SPacket.INSTANCE);
+        } finally {
+            sending = false;
+        }
+        owed++;
     }
 
     private boolean inReachFrom(Vec3d feet) {
