@@ -54,6 +54,7 @@ import net.minecraft.util.Util;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.entity.player.PlayerEntity;
 import meteordevelopment.meteorclient.systems.friends.Friends;
+import net.minecraft.item.Items;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
@@ -74,6 +75,9 @@ public class Surround extends Module {
         Leave
     }
 
+    private static final double MACE_MIN_HEIGHT = 2;
+    private static final double MACE_MAX_HEIGHT = 40;
+    private static final double MACE_RANGE = 8;
     private static final long HOT_TIME = 2_000;
     private static final int READY_STAGE = 7;
     private static final long REBREAK_TIME = 1_200;
@@ -218,6 +222,13 @@ public class Surround extends Module {
         .range(0, 36)
         .sliderRange(0, 36)
         .visible(face::get)
+        .build()
+    );
+
+    private final Setting<Boolean> maceRoof = sgProtect.add(new BoolSetting.Builder()
+        .name("mace-roof")
+        .description("Closes the cell above your head and the head level ring while an enemy holding a mace or flying with an elytra is above you, so mace smashes from above cannot reach you.")
+        .defaultValue(true)
         .build()
     );
 
@@ -613,6 +624,7 @@ public class Surround extends Module {
 
         Set<BlockPos> targets = new LinkedHashSet<>();
         targets.addAll(threatened);
+        targets.addAll(roof());
         targets.addAll(floors);
         targets.addAll(sides);
         targets.addAll(faces);
@@ -641,6 +653,37 @@ public class Surround extends Module {
                 && crystalThreat(top, health, new BlockOverlay(mc.world).set(column.up(2), Blocks.AIR.getDefaultState()))) faces.add(top);
         }
         return faces;
+    }
+
+    private List<BlockPos> roof() {
+        List<BlockPos> roof = new ArrayList<>();
+        if (!maceRoof.get() || !maceAbove()) return roof;
+
+        for (long key : anchored) {
+            BlockPos column = BlockPos.fromLong(key);
+            BlockPos top = column.up(2);
+            if (!anchored.contains(top.asLong()) && !roof.contains(top)) roof.add(top);
+            for (Direction direction : Direction.Type.HORIZONTAL) {
+                BlockPos side = column.offset(direction);
+                if (anchored.contains(side.asLong())) continue;
+                BlockPos cell = side.up();
+                if (!roof.contains(cell)) roof.add(cell);
+            }
+        }
+        return roof;
+    }
+
+    private boolean maceAbove() {
+        for (PlayerEntity player : mc.world.getPlayers()) {
+            if (player == mc.player || !player.isAlive() || player.isSpectator() || Friends.get().isFriend(player)) continue;
+            double dy = player.getY() - mc.player.getY();
+            if (dy < MACE_MIN_HEIGHT || dy > MACE_MAX_HEIGHT) continue;
+            double dx = player.getX() - mc.player.getX();
+            double dz = player.getZ() - mc.player.getZ();
+            if (dx * dx + dz * dz > MACE_RANGE * MACE_RANGE) continue;
+            if (player.getMainHandStack().isOf(Items.MACE) || player.isGliding()) return true;
+        }
+        return false;
     }
 
     private boolean crystalThreat(BlockPos cell, float health, BlockView view) {
@@ -684,6 +727,7 @@ public class Surround extends Module {
     private boolean updateAnchor() {
         int level = level();
         boolean ground = mc.player.isOnGround();
+        if (mc.player.isGliding() || (!ground && level > anchorY + 1)) return false;
 
         if (level < anchorY) {
             if (hasInput() && columns(anchorY).longStream().noneMatch(anchored::contains)) return leave(level);
@@ -702,7 +746,7 @@ public class Surround extends Module {
 
         LongSet current = columns(anchorY);
         if (current.longStream().noneMatch(anchored::contains)) {
-            if (!ground) return true;
+            if (!ground) return false;
             if (hasInput()) return leave(level);
 
             anchored = current;
