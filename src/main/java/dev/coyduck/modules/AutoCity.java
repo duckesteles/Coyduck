@@ -49,6 +49,7 @@ public class AutoCity extends Module {
     private static final float SWITCH_GAIN = 4;
     private static final float SWITCH_PROGRESS = 0.3f;
     private static final long OPEN_LIMIT = 1500;
+    private static final float FACE_PENALTY = 1.5f;
     private static final float SUPPORT_PENALTY = 1;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -384,6 +385,14 @@ public class AutoCity extends Module {
             if (damage < minDamage.get()) continue;
 
             choices.add(new Choice(pos, damage, support));
+        }
+
+        for (BlockPos pos : Targets.ring(columns, 1)) {
+            if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || !mining.inRange(pos) || own.contains(pos)) continue;
+            if (mc.world.getBlockState(pos).isOf(Blocks.BEDROCK)) continue;
+            float damage = gapDamage(pos, box, feet, null);
+            if (damage < minDamage.get()) continue;
+            choices.add(new Choice(pos, damage - FACE_PENALTY, null));
         }
 
         choices.sort((a, b) -> Float.compare(b.score, a.score));
