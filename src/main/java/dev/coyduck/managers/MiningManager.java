@@ -594,6 +594,8 @@ public final class MiningManager {
     private static Direction facing(BlockPos target) {
         Direction best = Direction.UP;
         double bestMargin = -Double.MAX_VALUE;
+        Direction open = null;
+        double openMargin = 0;
         for (Direction direction : Direction.values()) {
             double margin = Math.min(faceMargin(direction, target, mc.player.getX(), mc.player.getY(), mc.player.getZ()),
                 faceMargin(direction, target, mc.player.lastX, mc.player.lastY, mc.player.lastZ));
@@ -601,8 +603,24 @@ public final class MiningManager {
                 bestMargin = margin;
                 best = direction;
             }
+            if (margin > openMargin && !covered(target, direction)) {
+                openMargin = margin;
+                open = direction;
+            }
         }
-        return best;
+        return open != null ? open : best;
+    }
+
+    private static boolean covered(BlockPos target, Direction direction) {
+        BlockPos neighbor = target.offset(direction);
+        return mc.world.getBlockState(neighbor).isOpaqueFullCube();
+    }
+
+    public static boolean exposed(BlockPos target) {
+        for (Direction direction : Direction.values()) {
+            if (!covered(target, direction)) return true;
+        }
+        return false;
     }
 
     private static double faceMargin(Direction direction, BlockPos target, double x, double y, double z) {

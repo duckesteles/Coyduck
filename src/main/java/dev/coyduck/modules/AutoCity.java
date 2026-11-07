@@ -417,11 +417,12 @@ public class AutoCity extends Module {
 
         MiningManager mining = MiningManager.get();
         if (!state.isReplaceable()) {
-            mining.mine(this, PRIORITY, support, true, switchMode.get(), swing.get());
+            BlockPos target = MiningManager.exposed(support) || mc.world.getBlockState(current).isReplaceable() ? support : current;
+            mining.mine(this, PRIORITY, target, true, switchMode.get(), swing.get());
             return false;
         }
 
-        if (!mining.mine(this, PRIORITY, current, true, switchMode.get(), swing.get())) return false;
+        if (!mc.world.getBlockState(current).isReplaceable() && !mining.mine(this, PRIORITY, current, true, switchMode.get(), swing.get())) return false;
 
         InteractionManager interaction = InteractionManager.get();
         int slot = InventoryManager.get().find(stack -> stack.isOf(Items.OBSIDIAN), 0, InventoryManager.MAIN_END);
