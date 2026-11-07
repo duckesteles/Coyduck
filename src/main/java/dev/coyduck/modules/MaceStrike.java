@@ -42,7 +42,14 @@ public class MaceStrike extends Module {
         Idle,
         Lift,
         Ground,
-        Dive
+        Dive,
+        Descend,
+        Ascend
+    }
+
+    public enum Mode {
+        Ticks,
+        Burst
     }
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -66,9 +73,23 @@ public class MaceStrike extends Module {
         .build()
     );
 
+    private final Setting<Mode> mode = sgGeneral.add(new EnumSetting.Builder<Mode>()
+        .name("mode")
+        .description("Ticks sends one fake move per tick, so the server sees a fast dive over a few ticks while you stay put on screen. Burst sends the whole trip inside one tick; 6b6t set back every burst so far.")
+        .defaultValue(Mode.Ticks)
+        .build()
+    );
+
+    private final Setting<Boolean> onFoot = sgGeneral.add(new BoolSetting.Builder()
+        .name("on-foot")
+        .description("Also strikes while you stand, by faking a jump up and the fall back down. Every on-foot strike got a setback on 6b6t so far.")
+        .defaultValue(false)
+        .build()
+    );
+
     private final Setting<Double> step = sgGeneral.add(new DoubleSetting.Builder()
         .name("step")
-        .description("Longest move in one packet. The trip down and back is cut into packets of at most this length, all sent in the same tick.")
+        .description("Longest move in one packet. The trip down and back is cut into moves of at most this length.")
         .defaultValue(2.0)
         .range(0.5, 10)
         .sliderRange(0.5, 5)
@@ -139,9 +160,10 @@ public class MaceStrike extends Module {
     private double strikeY;
     private long lastStrike;
     private boolean sending;
+    private double serverY;
 
     public MaceStrike() {
-        super(Coyduck.CATEGORY, "mace-strike", "Smashes players with a mace from your hotbar or inventory. On foot the server is told you went up and fell back down. While flying with elytra-fly+ it stays over the target and dives for each hit. The trip is sent as short moves inside one tick.");
+        super(Coyduck.CATEGORY, "mace-strike", "Smashes players with a mace from your hotbar or inventory. On foot the server is told you went up and fell back down. While flying with elytra-fly+ it stays over the target and dives for each hit with fake moves of a few blocks per tick while you stay put on screen.");
     }
 
     @Override
@@ -168,7 +190,7 @@ public class MaceStrike extends Module {
     }
 
     private void groundTick() {
-        if (mc.player.isGliding()) {
+        if (!onFoot.get() || mc.player.isGliding()) {
             target = null;
             return;
         }
@@ -210,7 +232,9 @@ public class MaceStrike extends Module {
         if (!looksAt(eye, box) || !due()) return;
 
         strikeY = y;
-        phase = stopGlide.get() ? Phase.Ground : Phase.Dive;
+        serverY = mc.player.getY();
+        if (stopGlide.get()) phase = Phase.Ground;
+        else phase = mode.get() == Mode.Ticks ? Phase.Descend : Phase.Dive;
     }
 
     private void steer(Vec3d goal) {
@@ -286,7 +310,24 @@ public class MaceStrike extends Module {
             }
             case Ground -> {
                 move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, true, collision));
-                phase = Phase.Dive;
+                phase = mode.get() == Mode.Ticks ? Phase.Descend : Phase.Dive;
+            }
+            case Descend -> {
+                serverY = Math.max(strikeY, serverY - step.get());
+                move(new PlayerMoveC2SPacket.PositionAndOnGround(x, serverY, z, false, collision));
+                if (serverY > strikeY) return;
+                if (ready() && inReachFrom(new Vec3d(x, serverY, z))) strike();
+                phase = Phase.Ascend;
+            }
+            case Ascend -> {
+                serverY = Math.min(y, serverY + step.get());
+                move(new PlayerMoveC2SPacket.PositionAndOnGround(x, serverY, z, false, collision));
+                if (serverY >= y) {
+                    phase = Phase.Idle;
+                    if (stopGlide.get() && mc.player.isGliding()) {
+                        mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
+                    }
+                }
             }
             case Dive -> {
                 phase = Phase.Idle;
@@ -310,6 +351,12 @@ public class MaceStrike extends Module {
         for (int i = 1; i <= steps; i++) {
             move(new PlayerMoveC2SPacket.PositionAndOnGround(x, from + (to - from) * i / steps, z, false, collision));
         }
+    }
+
+    private boolean inReachFrom(Vec3d feet) {
+        double reach = range.get() + 0.5;
+        Box box = Targets.box(target);
+        return box.squaredMagnitude(feet.add(0, GLIDING_EYE, 0)) <= reach * reach || box.squaredMagnitude(feet.add(0, STANDING_EYE, 0)) <= reach * reach;
     }
 
     private boolean ready() {
