@@ -56,13 +56,10 @@ public class MaceStrike extends Module {
         Ground,
         Dive,
         Descend,
-        Ascend,
-        Plunge,
-        Rise
+        Ascend
     }
 
     public enum Mode {
-        Single,
         Ticks,
         Burst
     }
@@ -90,8 +87,8 @@ public class MaceStrike extends Module {
 
     private final Setting<Mode> mode = sgGeneral.add(new EnumSetting.Builder<Mode>()
         .name("mode")
-        .description("Single drops to the target in one move, hits in that tick and goes back up with one move the next tick, like players on 6b6t do. The whole drop counts for the smash. Ticks spreads the dive over ticks, where only the last step counts while you glide. Burst sends the dive inside one tick with tick ends.")
-        .defaultValue(Mode.Single)
+        .description("Burst sends the whole dive inside one tick with a tick end after each move, so the server counts the full fall for the smash, then skips your next ticks to keep the packet rate even. Ticks sends one move per tick; the server then only counts the last step of the fall while you glide.")
+        .defaultValue(Mode.Burst)
         .build()
     );
 
@@ -157,21 +154,11 @@ public class MaceStrike extends Module {
 
     private final Setting<Double> hover = sgAir.add(new DoubleSetting.Builder()
         .name("hover")
-        .description("How far above the target's feet you stay while following. Every extra block of fall adds about 5 damage to a charged smash. In Single mode the drop is also capped by max-drop.")
-        .defaultValue(10.0)
+        .description("How far above the target's feet you stay while following. Every extra block of fall adds about 5 damage to a charged smash, and the dive still fits in the time the mace needs to charge.")
+        .defaultValue(16.0)
         .range(5, 30)
         .sliderRange(5, 30)
         .visible(follow::get)
-        .build()
-    );
-
-    private final Setting<Double> maxDrop = sgAir.add(new DoubleSetting.Builder()
-        .name("max-drop")
-        .description("Longest single move down in Single mode. Players on 6b6t drop about 8 blocks in one move while gliding.")
-        .defaultValue(8.0)
-        .range(2, 16)
-        .sliderRange(2, 16)
-        .visible(() -> mode.get() == Mode.Single)
         .build()
     );
 
@@ -287,8 +274,7 @@ public class MaceStrike extends Module {
 
         double y = strikeHeight();
         if (Double.isNaN(y)) return;
-        boolean burst = mode.get() != Mode.Ticks;
-        if (mode.get() == Mode.Single && mc.player.getY() - y > maxDrop.get() + 0.05) return;
+        boolean burst = mode.get() == Mode.Burst;
         int diveTicks = burst ? 0 : (int) Math.ceil((mc.player.getY() - y) / step.get());
         if (HurtTracker.get().releaseTime(target) > Util.getMeasuringTimeMs() + diveTicks * 50L) return;
         if (mc.player.getMainHandStack().isOf(Items.MACE)) {
@@ -313,23 +299,15 @@ public class MaceStrike extends Module {
 
         strikeY = y;
         serverY = mc.player.getY();
-        phase = stopGlide.get() ? Phase.Ground : diveStart();
-    }
-
-    private Phase diveStart() {
-        return switch (mode.get()) {
-            case Single -> Phase.Plunge;
-            case Ticks -> Phase.Descend;
-            case Burst -> Phase.Dive;
-        };
+        if (stopGlide.get()) phase = Phase.Ground;
+        else phase = mode.get() == Mode.Ticks ? Phase.Descend : Phase.Dive;
     }
 
     private double reachableHover(double x, double feetY, double z) {
         Box own = mc.player.getBoundingBox();
         double half = own.getLengthX() / 2;
         double tall = own.getLengthY();
-        double want = mode.get() == Mode.Single ? Math.min(hover.get(), maxDrop.get() + STRIKE_GAP + 1.8) : hover.get();
-        for (double h = want; h > MIN_HOVER; h -= HEIGHT_STEP) {
+        for (double h = hover.get(); h > MIN_HOVER; h -= HEIGHT_STEP) {
             Box column = new Box(x - half, feetY + 2, z - half, x + half, feetY + h + tall, z + half);
             if (mc.world.isSpaceEmpty(mc.player, column)) return h;
         }
@@ -414,24 +392,7 @@ public class MaceStrike extends Module {
             }
             case Ground -> {
                 move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, true, collision));
-                phase = diveStart();
-            }
-            case Plunge -> {
-                if (!ready()) {
-                    phase = Phase.Idle;
-                    move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, false, collision));
-                    return;
-                }
-                phase = Phase.Rise;
-                move(new PlayerMoveC2SPacket.PositionAndOnGround(x, strikeY, z, false, collision));
-                strike();
-            }
-            case Rise -> {
-                phase = Phase.Idle;
-                move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, false, collision));
-                if (stopGlide.get() && mc.player.isGliding()) {
-                    mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
-                }
+                phase = mode.get() == Mode.Ticks ? Phase.Descend : Phase.Dive;
             }
             case Descend -> {
                 serverY = Math.max(strikeY, serverY - step.get());
