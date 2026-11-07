@@ -36,9 +36,12 @@ public class MaceStrike extends Module {
     private static final double STANDING_EYE = 1.62;
     private static final double GLIDING_EYE = 0.4;
     private static final double STRIKE_GAP = 0.25;
-    private static final double OVER_RANGE = 0.6;
+    private static final double OVER_RANGE = 1.0;
     private static final double LEAD_TICKS = 2;
     private static final double HOVER_SLACK = 0.75;
+    private static final double STILL_SPEED = 0.08;
+    private static final double ALIGN = 0.35;
+    private static final double MIN_HOVER = 4.0;
 
     private enum Phase {
         Idle,
@@ -100,10 +103,10 @@ public class MaceStrike extends Module {
 
     private final Setting<Integer> interval = sgGeneral.add(new IntSetting.Builder()
         .name("interval")
-        .description("Milliseconds between smashes.")
-        .defaultValue(500)
-        .range(100, 3000)
-        .sliderRange(100, 2000)
+        .description("Extra milliseconds between smashes. Dives already wait until you are back at full height and the target's hurt time is over, so 0 is fastest without wasted hits.")
+        .defaultValue(0)
+        .range(0, 3000)
+        .sliderRange(0, 2000)
         .build()
     );
 
@@ -177,6 +180,8 @@ public class MaceStrike extends Module {
     private long lastStrike;
     private boolean sending;
     private double serverY;
+    private Vec3d lastTargetPos;
+    private PlayerEntity lastTarget;
     private int heldFrom = -1;
 
     public MaceStrike() {
@@ -231,16 +236,29 @@ public class MaceStrike extends Module {
 
     private void airTick() {
         target = choose(followRange.get(), false);
-        if (target == null) return;
+        if (target == null) {
+            lastTargetPos = null;
+            return;
+        }
 
-        Vec3d goal = target.getEntityPos().add(target.getVelocity().multiply(LEAD_TICKS)).add(0, hover.get(), 0);
-        steer(goal);
+        Vec3d now = target.getEntityPos();
+        Vec3d motion = lastTargetPos == null || lastTarget != target ? Vec3d.ZERO : now.subtract(lastTargetPos);
+        lastTargetPos = now;
+        lastTarget = target;
 
-        double dx = target.getX() - mc.player.getX();
-        double dz = target.getZ() - mc.player.getZ();
-        if (dx * dx + dz * dz > OVER_RANGE * OVER_RANGE) return;
+        double speed = Math.sqrt(motion.x * motion.x + motion.z * motion.z);
+        double leadTicks = Math.ceil(hover.get() / step.get()) + 1;
+        double goalX = speed < STILL_SPEED ? Math.floor(now.x) + 0.5 : now.x + motion.x * leadTicks;
+        double goalZ = speed < STILL_SPEED ? Math.floor(now.z) + 0.5 : now.z + motion.z * leadTicks;
+        double above = reachableHover(goalX, now.y, goalZ);
+        steer(new Vec3d(goalX, now.y + above, goalZ));
 
-        if (mc.player.getY() - target.getY() < hover.get() - HOVER_SLACK) return;
+        double dx = goalX - mc.player.getX();
+        double dz = goalZ - mc.player.getZ();
+        double tx = now.x - mc.player.getX();
+        double tz = now.z - mc.player.getZ();
+        if (dx * dx + dz * dz > ALIGN * ALIGN || tx * tx + tz * tz > OVER_RANGE * OVER_RANGE) return;
+        if (mc.player.getY() - now.y < above - HOVER_SLACK) return;
 
         double y = strikeHeight();
         if (Double.isNaN(y)) return;
@@ -258,6 +276,17 @@ public class MaceStrike extends Module {
         takeMace();
         if (stopGlide.get()) phase = Phase.Ground;
         else phase = mode.get() == Mode.Ticks ? Phase.Descend : Phase.Dive;
+    }
+
+    private double reachableHover(double x, double feetY, double z) {
+        Box own = mc.player.getBoundingBox();
+        double half = own.getLengthX() / 2;
+        double tall = own.getLengthY();
+        for (double h = hover.get(); h > MIN_HOVER; h -= HEIGHT_STEP) {
+            Box column = new Box(x - half, feetY + 2, z - half, x + half, feetY + h + tall, z + half);
+            if (mc.world.isSpaceEmpty(mc.player, column)) return h;
+        }
+        return MIN_HOVER;
     }
 
     private void steer(Vec3d goal) {
