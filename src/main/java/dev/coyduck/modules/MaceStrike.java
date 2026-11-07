@@ -1,6 +1,7 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.RotationManager;
@@ -37,6 +38,7 @@ public class MaceStrike extends Module {
     private static final double STRIKE_GAP = 0.25;
     private static final double OVER_RANGE = 0.6;
     private static final double LEAD_TICKS = 2;
+    private static final double HOVER_SLACK = 0.75;
 
     private enum Phase {
         Idle,
@@ -238,8 +240,12 @@ public class MaceStrike extends Module {
         double dz = target.getZ() - mc.player.getZ();
         if (dx * dx + dz * dz > OVER_RANGE * OVER_RANGE) return;
 
+        if (mc.player.getY() - target.getY() < hover.get() - HOVER_SLACK) return;
+
         double y = strikeHeight();
         if (Double.isNaN(y)) return;
+        int diveTicks = (int) Math.ceil((mc.player.getY() - y) / step.get());
+        if (HurtTracker.get().releaseTime(target) > Util.getMeasuringTimeMs() + diveTicks * 50L) return;
 
         Box box = Targets.box(target);
         Vec3d eye = new Vec3d(mc.player.getX(), y + STANDING_EYE, mc.player.getZ());
