@@ -114,8 +114,8 @@ public class MaceStrike extends Module {
 
     private final Setting<Boolean> smash = sgGeneral.add(new BoolSetting.Builder()
         .name("smash")
-        .description("Stops the glide right before the hit and starts it again right after, inside the same tick. A mace only smashes when you are not gliding, and the next move is a glide again.")
-        .defaultValue(true)
+        .description("Sends the fall flying command around the hit to stop the glide for it. Grim's ElytraA cancels these packets, so it does nothing there and is off by default.")
+        .defaultValue(false)
         .build()
     );
 
