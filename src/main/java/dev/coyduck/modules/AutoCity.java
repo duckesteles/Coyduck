@@ -4,6 +4,7 @@ import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.CrystalTracker;
+import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.utils.DuckRender;
@@ -42,7 +43,7 @@ import net.minecraft.world.World;
 import java.util.ArrayList;
 import java.util.List;
 
-public class AutoCity extends Module {
+public class AutoCity extends Module implements MiningManager.StopGate {
     public static final int PRIORITY = 50;
 
     private static final float BURROW_SCORE = 1000;
@@ -75,6 +76,13 @@ public class AutoCity extends Module {
     private final Setting<Boolean> rebreak = sgGeneral.add(new BoolSetting.Builder()
         .name("rebreak")
         .description("Breaks the block again the moment it is replaced, without mining it again.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> hurtSync = sgGeneral.add(new BoolSetting.Builder()
+        .name("hurt-sync")
+        .description("Holds the break of a gap, and every rebreak, until the target's hurt time is over, so the crystal auto-crystal puts in the gap on the same tick deals full damage.")
         .defaultValue(true)
         .build()
     );
@@ -307,6 +315,14 @@ public class AutoCity extends Module {
         }
 
         mining.mine(this, PRIORITY, current, true, switchMode.get(), swing.get());
+    }
+
+    @Override
+    public boolean allowStop(BlockPos pos) {
+        if (!hurtSync.get() || target == null || !pos.equals(current) || currentScore >= BURROW_SCORE) return true;
+        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
+        if (autoCrystal == null || !autoCrystal.isActive() || !InteractionManager.get().hasCrystals()) return true;
+        return HurtTracker.get().releaseTime(target) <= Util.getMeasuringTimeMs();
     }
 
     private boolean shouldSwitch(Choice best, Choice now) {

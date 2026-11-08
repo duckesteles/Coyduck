@@ -692,6 +692,7 @@ public class AutoCrystal extends Module {
     @EventHandler
     private void onMineStop(MineStopEvent event) {
         clearCache();
+        placeBudget = Math.max(placeBudget, 1);
         stoppedAt = event.pos;
         try {
             pass();

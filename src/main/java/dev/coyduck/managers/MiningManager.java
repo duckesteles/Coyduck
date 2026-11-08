@@ -91,6 +91,10 @@ public final class MiningManager {
     private long lastStopAt;
     private long readySince;
 
+    public interface StopGate {
+        boolean allowStop(BlockPos pos);
+    }
+
     private MiningManager() {}
 
     public static MiningManager get() {
@@ -239,6 +243,7 @@ public final class MiningManager {
 
     private boolean stop(Object owner, BlockState state) {
         if (!owns(owner) || !isReady(state) || state.isOf(Blocks.COBWEB) || lastStopTick == ticks || InventoryManager.get().isOffhandEating()) return false;
+        if (owner instanceof StopGate gate && !gate.allowStop(pos)) return false;
 
         int tool = bestTool(state);
         if (tool != -1 && holdTicks == 0 && canHold()) {
