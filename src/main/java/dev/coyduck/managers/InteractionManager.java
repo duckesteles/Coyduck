@@ -77,14 +77,12 @@ public final class InteractionManager {
 
     private static final long PLACED_MEMORY = 10_000;
     private static final long REJECT_MEMORY = 2_000;
-    private static final long AIM_WAIT = 100;
 
     private record OwnBreak(Vec3d position, long time) {}
 
     private final Long2ObjectOpenHashMap<Pending> pending = new Long2ObjectOpenHashMap<>();
     private final Long2LongOpenHashMap placedAt = new Long2LongOpenHashMap();
     private final Long2LongOpenHashMap rejectedAt = new Long2LongOpenHashMap();
-    private final Long2LongOpenHashMap aimWait = new Long2LongOpenHashMap();
     private static final int STUCK_HITS = 3;
     private static final long STUCK_TIME = 1_500;
 
@@ -217,14 +215,7 @@ public final class InteractionManager {
     }
 
     public boolean place(BlockPos pos, BlockHitResult hit, SwingMode swing, boolean rotate, int priority) {
-        boolean retry = !rotate && priority > 0 && wasRejected(pos);
-        if ((rotate || retry) && !aimed(hit.getPos(), new Box(hit.getBlockPos()), priority)) {
-            if (!retry) return false;
-            long now = Util.getMeasuringTimeMs();
-            long since = aimWait.putIfAbsent(pos.asLong(), now);
-            if (since == 0 || now - since < AIM_WAIT) return false;
-        }
-        aimWait.remove(pos.asLong());
+        if (rotate && !aimed(hit.getPos(), new Box(hit.getBlockPos()), priority)) return false;
         mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
         int sequence = ((ClientWorldAccessor) mc.world).coyduck$getPendingUpdateManager().getSequence();
         swing(swing);
@@ -546,7 +537,6 @@ public final class InteractionManager {
         pending.values().removeIf(entry -> entry.expiry <= now);
         placedAt.values().removeIf(at -> now - at > PLACED_MEMORY);
         rejectedAt.values().removeIf(at -> now - at > REJECT_MEMORY);
-        aimWait.values().removeIf(at -> now - at > REJECT_MEMORY);
 
         long lifetime = LatencyManager.get().timeout();
         attacked.int2LongEntrySet().removeIf(entry -> now - entry.getLongValue() >= lifetime);
@@ -571,7 +561,6 @@ public final class InteractionManager {
         pending.clear();
         placedAt.clear();
         rejectedAt.clear();
-        aimWait.clear();
         attacked.clear();
         firstHit.clear();
         hits.clear();

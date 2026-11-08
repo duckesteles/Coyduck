@@ -533,7 +533,7 @@ public class Surround extends Module {
 
     private void commit(BlockPos pos, BlockHitResult hit) {
         if (!InteractionManager.get().place(pos, hit, swing.get(), rotate.get(), InteractionManager.SURROUND_PRIORITY)) {
-            if (rotate.get() || !InteractionManager.get().wasRejected(pos)) budget = 0;
+            budget = 0;
             return;
         }
         rendered.put(pos.asLong(), Util.getMeasuringTimeMs());
