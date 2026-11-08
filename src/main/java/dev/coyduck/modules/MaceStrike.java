@@ -56,6 +56,7 @@ public class MaceStrike extends Module {
     private static final long LEARN_DELAY = 600;
     private static final double LEARN_WEIGHT = 0.3;
     private static final double MAX_FALL = 40;
+    private static final long HURT_MS = 500;
     private static final long SETBACK_PAUSE = 1000;
 
     private enum Phase {
@@ -148,7 +149,7 @@ public class MaceStrike extends Module {
 
     private final Setting<Boolean> fullCharge = sgGeneral.add(new BoolSetting.Builder()
         .name("full-charge")
-        .description("Always waits for a full charge (about 1.7 seconds after the mace is in hand) before a smash. Off: each smash waits only as long as this target needs to pop, from its health, absorption, armor, enchantments and the fall the server really counted on earlier hits, and never less than its hurt time.")
+        .description("Always waits for a full charge (about 1.7 seconds after the mace is in hand) before a smash. Off: from the target's health, absorption, armor, enchantments and the fall the server really counted on earlier hits, it picks whichever pops sooner: a smash every time the hurt time ends at whatever charge (most smash damage comes from the fall and ignores the charge), or fewer charged critical smashes.")
         .defaultValue(false)
         .visible(holdMace::get)
         .build()
@@ -323,11 +324,12 @@ public class MaceStrike extends Module {
             float needed = target.getHealth() + target.getAbsorptionAmount() + REGEN_MARGIN;
             double drop = mc.player.getY() - y;
             double fall = Math.min(burst ? drop : Math.min(drop, step.get()) + 1, countedFall());
-            boolean enough = smashDamage(fall, charge) >= needed;
-            if (charge <= CRIT_CHARGE && (fullCharge.get() || !enough)) {
+            float damage = smashDamage(fall, charge);
+            boolean go = charge > CRIT_CHARGE || damage >= needed || (!fullCharge.get() && rapidFirst(fall, charge, needed));
+            if (!go) {
                 if (!waitTraced && Trace.on()) {
                     waitTraced = true;
-                    Trace.log("mace waits, charge {} gives {} of {} needed, counted fall {}", charge, smashDamage(fall, charge), needed, fall);
+                    Trace.log("mace waits, charge {} gives {} of {} needed, counted fall {}", charge, damage, needed, fall);
                 }
                 Box box = Targets.box(target);
                 Vec3d eye = new Vec3d(mc.player.getX(), y + STANDING_EYE, mc.player.getZ());
@@ -560,6 +562,19 @@ public class MaceStrike extends Module {
         float damage = base * (0.2f + charge * charge * 0.8f) + (float) bonus;
         if (charge > CRIT_CHARGE) damage *= 1.5f;
         return DamageUtils.calculateReductions(damage, victim, mc.world.getDamageSources().playerAttack(mc.player));
+    }
+
+    private boolean rapidFirst(double fall, float charge, float needed) {
+        float fullTicks = Math.max(1, mc.player.getAttackCooldownProgressPerTick());
+        float rapidCharge = Math.min(1, HURT_MS / 50f / fullTicks);
+        float rapid = Math.max(0.1f, smashDamage(fall, rapidCharge));
+        float full = Math.max(0.1f, smashDamage(fall, 1));
+        long rapidTime = (long) (Math.ceil(needed / rapid) - 1) * HURT_MS;
+        long waitFull = (long) (Math.max(0, CRIT_CHARGE + 0.01f - charge) * fullTicks * 50);
+        long fullTime = waitFull + (long) (Math.ceil(needed / full) - 1) * (long) (fullTicks * 50);
+        boolean rapidWins = rapidTime <= fullTime;
+        if (rapidWins && Trace.on()) Trace.log("mace hits at once, {} hits of {} every {}ms beat waiting {}ms for {}", (int) Math.ceil(needed / rapid), rapid, HURT_MS, waitFull, full);
+        return rapidWins;
     }
 
     private double countedFall() {
