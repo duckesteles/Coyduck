@@ -226,6 +226,7 @@ public class MaceStrike extends Module {
     private int learnDensity;
     private long learnAt;
     private boolean waitTraced;
+    private boolean roofTraced;
     private long pausedUntil;
 
     public MaceStrike() {
@@ -383,14 +384,30 @@ public class MaceStrike extends Module {
 
         for (double y = victim.maxY + STRIKE_GAP; y <= top; y += HEIGHT_STEP) {
             Box path = box.stretch(0, y - mc.player.getY(), 0);
-            if (!mc.world.isSpaceEmpty(mc.player, path)) continue;
+            if (!mc.world.isSpaceEmpty(mc.player, path)) {
+                if (Trace.on() && !roofTraced) Trace.log("mace skips {}, blocks between you and them", target.getName().getString());
+                roofTraced = true;
+                return Double.NaN;
+            }
 
             Vec3d standing = new Vec3d(mc.player.getX(), y + STANDING_EYE, mc.player.getZ());
             Vec3d gliding = new Vec3d(mc.player.getX(), y + GLIDING_EYE, mc.player.getZ());
             if (victim.squaredMagnitude(standing) > reach * reach || victim.squaredMagnitude(gliding) > reach * reach) return Double.NaN;
+            if (!clearSight(gliding, victim) && !clearSight(standing, victim)) {
+                if (Trace.on() && !roofTraced) Trace.log("mace skips {}, no clear line from the strike point", target.getName().getString());
+                roofTraced = true;
+                return Double.NaN;
+            }
+            roofTraced = false;
             return y;
         }
         return Double.NaN;
+    }
+
+    private boolean clearSight(Vec3d eye, Box victim) {
+        Vec3d point = aim(victim, eye);
+        net.minecraft.util.hit.BlockHitResult hit = mc.world.raycast(new net.minecraft.world.RaycastContext(eye, point, net.minecraft.world.RaycastContext.ShapeType.COLLIDER, net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
+        return hit.getType() == net.minecraft.util.hit.HitResult.Type.MISS;
     }
 
     private boolean looksAt(Vec3d eye, Box box) {
