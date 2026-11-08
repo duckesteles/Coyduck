@@ -31,6 +31,9 @@ public class PearlPhase extends Module {
     private static final double GRAVITY = 0.03;
     private static final double DRAG = 0.99;
     private static final double WIDTH = 0.3;
+    private static final double STANDING = 1.8;
+    private static final double CRAWLING = 0.6;
+    private static final double CRAWL_EYE = 0.4;
     private static final int MAX_TICKS = 8;
     private static final int AIM_TICKS = 10;
     private static final int ROBUST_CANDIDATES = 60;
@@ -72,7 +75,7 @@ public class PearlPhase extends Module {
     private Vec3d planned;
 
     public PearlPhase() {
-        super(Coyduck.CATEGORY, "pearl-phase", "Throws a pearl at your feet so you land half inside the walls next to you. Toggle it when you want to phase.");
+        super(Coyduck.CATEGORY, "pearl-phase", "Throws a pearl at your feet so you land half inside the walls next to you. Also works while crawling in a one block high gap, scoring landings for the crawling body and trying flatter throws. Toggle it when you want to phase.");
     }
 
     @Override
@@ -147,7 +150,8 @@ public class PearlPhase extends Module {
         Vec3d shooter = mc.player.isOnGround() ? new Vec3d(mc.player.getVelocity().x, 0, mc.player.getVelocity().z) : mc.player.getVelocity();
 
         List<float[]> candidates = new ArrayList<>();
-        for (float pitch = 40; pitch <= 90; pitch += 0.5f) {
+        float lowest = mc.player.isCrawling() ? 0 : 40;
+        for (float pitch = lowest; pitch <= 90; pitch += 0.5f) {
             for (float yaw = -180; yaw < 180; yaw += 1.5f) {
                 double score = landingScore(spawn, shooter, feet, yaw, pitch);
                 if (score > 0) candidates.add(new float[] {yaw, pitch, (float) score});
@@ -205,10 +209,16 @@ public class PearlPhase extends Module {
     }
 
     private double score(Vec3d landing) {
-        Box box = new Box(landing.x - WIDTH, landing.y, landing.z - WIDTH, landing.x + WIDTH, landing.y + 1.8, landing.z + WIDTH);
-        Box middle = new Box(landing.x - 0.05, landing.y + 0.05, landing.z - 0.05, landing.x + 0.05, landing.y + 1.75, landing.z + 0.05);
+        double tall = STANDING;
+        double eye = mc.player.getStandingEyeHeight();
+        if (!mc.world.isSpaceEmpty(new Box(landing.x - 0.05, landing.y + 0.05, landing.z - 0.05, landing.x + 0.05, landing.y + STANDING - 0.05, landing.z + 0.05))) {
+            tall = CRAWLING;
+            eye = CRAWL_EYE;
+        }
+        Box box = new Box(landing.x - WIDTH, landing.y, landing.z - WIDTH, landing.x + WIDTH, landing.y + tall, landing.z + WIDTH);
+        Box middle = new Box(landing.x - 0.05, landing.y + 0.05, landing.z - 0.05, landing.x + 0.05, landing.y + tall - 0.05, landing.z + 0.05);
         if (!mc.world.isSpaceEmpty(middle)) return 0;
-        if (!eyeInWall.get() && !mc.world.isSpaceEmpty(Box.of(landing.add(0, mc.player.getStandingEyeHeight(), 0), EYE_CLEARANCE, 1.0E-6, EYE_CLEARANCE))) return 0;
+        if (!eyeInWall.get() && !mc.world.isSpaceEmpty(Box.of(landing.add(0, eye, 0), EYE_CLEARANCE, 1.0E-6, EYE_CLEARANCE))) return 0;
 
         double want = depth.get();
         double total = 0;
