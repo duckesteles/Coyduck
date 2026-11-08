@@ -332,7 +332,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         long now = Util.getMeasuringTimeMs();
         if (!allow && stopHeldSince == 0) {
             stopHeldSince = now;
-            Trace.log("city hold stop {} target hurt for {}ms", pos, HurtTracker.get().releaseTime(target) - now);
+            Trace.log("city hold stop {} target hurt for {}ms", pos, Math.max(0, HurtTracker.get().releaseTime(target) - now));
         } else if (allow && stopHeldSince != 0) {
             Trace.log("city release stop {} after {}ms", pos, now - stopHeldSince);
             stopHeldSince = 0;
@@ -341,10 +341,21 @@ public class AutoCity extends Module implements MiningManager.StopGate {
     }
 
     private boolean stopAllowed(BlockPos pos) {
-        if (!hurtSync.get() || target == null || !pos.equals(current) || currentScore >= BURROW_SCORE) return true;
+        if (target == null || !pos.equals(current) || currentScore >= BURROW_SCORE) return true;
         AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
         if (autoCrystal == null || !autoCrystal.isActive() || !InteractionManager.get().hasCrystals()) return true;
-        return HurtTracker.get().releaseTime(target) <= Util.getMeasuringTimeMs();
+        if (!worthOpening(pos)) return false;
+        return !hurtSync.get() || HurtTracker.get().releaseTime(target) <= Util.getMeasuringTimeMs();
+    }
+
+    private boolean worthOpening(BlockPos pos) {
+        if (!mc.world.getBlockState(pos).isReplaceable() && MiningManager.get().wasBroken()) return true;
+        Box box = Targets.box(target);
+        BlockPos support = currentSupport != null && !Targets.isBase(mc.world.getBlockState(currentSupport)) ? currentSupport : null;
+        float damage = gapDamage(pos, box, Targets.feet(box), support);
+        if (damage >= minDamage.get() || damage >= target.getHealth() + target.getAbsorptionAmount()) return true;
+        if (Trace.on() && stopHeldSince == 0) Trace.log("city waits on {}, the gap would only allow {} damage now", pos, damage);
+        return false;
     }
 
     private String shouldSwitch(Choice best, Choice now) {
