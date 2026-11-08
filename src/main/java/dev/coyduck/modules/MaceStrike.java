@@ -713,7 +713,19 @@ public class MaceStrike extends Module {
     }
 
     private int maceSlot() {
-        return InventoryManager.get().find(stack -> stack.isOf(Items.MACE), 0, InventoryManager.MAIN_END);
+        InventoryManager inventory = InventoryManager.get();
+        int best = -1;
+        int bestScore = -1;
+        for (int i = 0; i < InventoryManager.MAIN_END; i++) {
+            ItemStack stack = inventory.stack(i);
+            if (!stack.isOf(Items.MACE)) continue;
+            int score = Utils.getEnchantmentLevel(stack, Enchantments.DENSITY) * 4 + Utils.getEnchantmentLevel(stack, Enchantments.BREACH) * 3 + (i < InventoryManager.HOTBAR_END ? 1 : 0);
+            if (score > bestScore) {
+                best = i;
+                bestScore = score;
+            }
+        }
+        return best;
     }
 
     private PlayerEntity choose(double distance, boolean reachOnly) {
