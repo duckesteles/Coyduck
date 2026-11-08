@@ -20,7 +20,9 @@ import net.minecraft.util.math.Vec3d;
 public class ElytraEvade extends Module {
     private static final double LOOKAHEAD = 3;
     private static final double GROUND_CLEARANCE = 3;
-    private static final double HEIGHT_PULL = 0.3;
+    private static final double HEIGHT_PULL = 1.0;
+    private static final double ABOVE = 2;
+    private static final double LEAD_TICKS = 5;
     private static final double OUTWARD_PULL = 3;
     private static final int FLIP_COOLDOWN = 10;
     private static final double RELEASE_MARGIN = 2;
@@ -54,14 +56,24 @@ public class ElytraEvade extends Module {
         .build()
     );
 
+    private final Setting<Double> maceRange = sgGeneral.add(new DoubleSetting.Builder()
+        .name("mace-range")
+        .description("A player holding a mace or gliding counts as close from this far, since a mace dive starts from far above.")
+        .defaultValue(28)
+        .range(6, 64)
+        .sliderRange(6, 64)
+        .build()
+    );
+
     private final Setting<Boolean> matchHeight = sgGeneral.add(new BoolSetting.Builder()
         .name("match-height")
-        .description("Climbs when the player climbs, so nobody gets above you for a mace dive.")
+        .description("Climbs at full speed when the player climbs and stays a little above them, using their vertical speed to get there first, so nobody gets above you for a mace dive.")
         .defaultValue(true)
         .build()
     );
 
     private PlayerEntity threat;
+    private double lastThreatY = Double.NaN;
     private int direction = 1;
     private int flipTicks;
     private double holdY = Double.NaN;
@@ -95,12 +107,14 @@ public class ElytraEvade extends Module {
 
         PlayerEntity nearest = nearest();
         double distance = nearest == null ? Double.MAX_VALUE : nearest.distanceTo(mc.player);
-        if (threat == null && distance > trigger.get()) return;
-        if (nearest == null || distance > keep.get() + RELEASE_MARGIN) {
+        double reach = nearest != null && maceThreat(nearest) ? Math.max(trigger.get(), maceRange.get()) : trigger.get();
+        if (threat == null && distance > reach) return;
+        if (nearest == null || distance > Math.max(keep.get(), reach) + RELEASE_MARGIN) {
             release("safe");
             return;
         }
 
+        if (threat != nearest) lastThreatY = Double.NaN;
         if (threat != nearest) Trace.log("evade from {} at {} blocks", nearest.getName().getString(), distance);
         threat = nearest;
         if (Double.isNaN(holdY)) holdY = mc.player.getY();
@@ -124,7 +138,9 @@ public class ElytraEvade extends Module {
         double awayZ = dz / flat;
         double out = MathHelper.clamp((keep.get() - distance) / keep.get() * OUTWARD_PULL, -0.5, 1);
 
-        double goalY = matchHeight.get() ? Math.max(holdY, them.y) : holdY;
+        double climb = Double.isNaN(lastThreatY) ? 0 : them.y - lastThreatY;
+        lastThreatY = them.y;
+        double goalY = matchHeight.get() ? Math.max(holdY, them.y + Math.max(0, climb) * LEAD_TICKS + ABOVE) : holdY;
         double y = MathHelper.clamp((goalY - me.y) * HEIGHT_PULL, -fly.downSpeed(), fly.upSpeed());
         if (nearGround()) y = fly.upSpeed();
 
@@ -150,6 +166,10 @@ public class ElytraEvade extends Module {
         return !mc.world.isSpaceEmpty(mc.player, ahead);
     }
 
+    private static boolean maceThreat(PlayerEntity player) {
+        return player.isGliding() || player.getMainHandStack().isOf(net.minecraft.item.Items.MACE) || player.getOffHandStack().isOf(net.minecraft.item.Items.MACE);
+    }
+
     private boolean nearGround() {
         return !mc.world.isSpaceEmpty(mc.player, mc.player.getBoundingBox().stretch(0, -GROUND_CLEARANCE, 0));
     }
@@ -172,5 +192,6 @@ public class ElytraEvade extends Module {
         if (threat != null && why != null) Trace.log("evade stops, {}", why);
         threat = null;
         holdY = Double.NaN;
+        lastThreatY = Double.NaN;
     }
 }
