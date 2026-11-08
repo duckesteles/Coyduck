@@ -57,6 +57,9 @@ public class MaceStrike extends Module {
     private static final double LEARN_WEIGHT = 0.3;
     private static final double MAX_FALL = 40;
     private static final long HURT_MS = 500;
+    private static final double CHASE_LEAD = 4;
+    private static final double CHASE_ALIGN = 1.2;
+    private static final double CHASE_OVER = 2.0;
     private static final long SETBACK_PAUSE = 1000;
 
     private enum Phase {
@@ -188,6 +191,16 @@ public class MaceStrike extends Module {
         .build()
     );
 
+    private final Setting<Double> chaseHover = sgAir.add(new DoubleSetting.Builder()
+        .name("chase-hover")
+        .description("Height kept above a target that flies with an elytra. A flying target gets chased and cut off ahead of its path, and hit with short drops from just above, while a target on the ground or in a hole gets the steady hover from high up.")
+        .defaultValue(4)
+        .range(2.5, 12)
+        .sliderRange(2.5, 12)
+        .visible(follow::get)
+        .build()
+    );
+
     private final Setting<Double> followRange = sgAir.add(new DoubleSetting.Builder()
         .name("follow-range")
         .description("Targets this far away are chased.")
@@ -227,6 +240,7 @@ public class MaceStrike extends Module {
     private long learnAt;
     private boolean waitTraced;
     private boolean roofTraced;
+    private Boolean chasing;
     private long pausedUntil;
 
     public MaceStrike() {
@@ -235,6 +249,7 @@ public class MaceStrike extends Module {
 
     @Override
     public void onDeactivate() {
+        chasing = null;
         phase = Phase.Idle;
         owed = 0;
         target = null;
@@ -301,18 +316,25 @@ public class MaceStrike extends Module {
         lastTargetPos = now;
         lastTarget = target;
 
+        boolean chase = target.isGliding();
+        if (chasing == null || chasing != chase) Trace.log("mace {} {}", chase ? "chases flying" : "hovers over", target.getName().getString());
+        chasing = chase;
+        double wanted = chase ? chaseHover.get() : hover.get();
         double speed = Math.sqrt(motion.x * motion.x + motion.z * motion.z);
-        double leadTicks = Math.ceil(hover.get() / step.get()) + 1;
+        double leadTicks = chase ? CHASE_LEAD : Math.ceil(wanted / step.get()) + 1;
         double goalX = speed < STILL_SPEED ? Math.floor(now.x) + 0.5 : now.x + motion.x * leadTicks;
         double goalZ = speed < STILL_SPEED ? Math.floor(now.z) + 0.5 : now.z + motion.z * leadTicks;
-        double above = reachableHover(goalX, now.y, goalZ);
-        steer(new Vec3d(goalX, now.y + above, goalZ));
+        double goalY = chase ? motion.y * leadTicks : 0;
+        double above = reachableHover(goalX, now.y, goalZ, wanted);
+        steer(new Vec3d(goalX, now.y + goalY + above, goalZ));
 
+        double align = chase ? CHASE_ALIGN : ALIGN;
+        double over = chase ? CHASE_OVER : OVER_RANGE;
         double dx = goalX - mc.player.getX();
         double dz = goalZ - mc.player.getZ();
         double tx = now.x - mc.player.getX();
         double tz = now.z - mc.player.getZ();
-        if (dx * dx + dz * dz > ALIGN * ALIGN || tx * tx + tz * tz > OVER_RANGE * OVER_RANGE) return;
+        if (dx * dx + dz * dz > align * align || tx * tx + tz * tz > over * over) return;
         if (mc.player.getY() - now.y < above - HOVER_SLACK) return;
 
         double y = strikeHeight();
@@ -353,15 +375,16 @@ public class MaceStrike extends Module {
         else phase = mode.get() == Mode.Ticks ? Phase.Descend : Phase.Dive;
     }
 
-    private double reachableHover(double x, double feetY, double z) {
+    private double reachableHover(double x, double feetY, double z, double wanted) {
         Box own = mc.player.getBoundingBox();
         double half = own.getLengthX() / 2;
         double tall = own.getLengthY();
-        for (double h = hover.get(); h > MIN_HOVER; h -= HEIGHT_STEP) {
+        double floor = Math.min(MIN_HOVER, wanted);
+        for (double h = wanted; h > floor; h -= HEIGHT_STEP) {
             Box column = new Box(x - half, feetY + 2, z - half, x + half, feetY + h + tall, z + half);
             if (mc.world.isSpaceEmpty(mc.player, column)) return h;
         }
-        return MIN_HOVER;
+        return floor;
     }
 
     private void steer(Vec3d goal) {
