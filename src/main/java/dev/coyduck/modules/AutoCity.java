@@ -49,6 +49,7 @@ public class AutoCity extends Module {
     private static final float SWITCH_GAIN = 4;
     private static final float SWITCH_PROGRESS = 0.3f;
     private static final long OPEN_LIMIT = 1500;
+    private static final long SWITCH_COOLDOWN = 1000;
     private static final float FACE_PENALTY = 1.5f;
     private static final float SUPPORT_PENALTY = 1;
 
@@ -182,6 +183,7 @@ public class AutoCity extends Module {
     private BlockPos currentSupport;
     private float currentScore;
     private long openSince;
+    private long switchedAt;
 
     public AutoCity() {
         super(Coyduck.CATEGORY, "auto-city+", "Mines the target's surround or burrow and breaks it again whenever it is replaced.");
@@ -273,7 +275,10 @@ public class AutoCity extends Module {
 
         List<Choice> choices = choose(box, columns);
         Choice best = choices.isEmpty() ? null : choices.getFirst();
-        if (best != null && (current == null || shouldSwitch(best))) {
+        Choice now = find(choices, current);
+        if (now != null) currentScore = now.score;
+        if (best != null && (current == null || shouldSwitch(best, now))) {
+            if (current != null) switchedAt = Util.getMeasuringTimeMs();
             current = best.pos;
             openSince = 0;
             currentScore = best.score;
@@ -304,16 +309,29 @@ public class AutoCity extends Module {
         mining.mine(this, PRIORITY, current, true, switchMode.get(), swing.get());
     }
 
-    private boolean shouldSwitch(Choice best) {
+    private boolean shouldSwitch(Choice best, Choice now) {
         if (best.pos.equals(current)) return false;
 
         MiningManager mining = MiningManager.get();
-        if (!mining.owns(this) || !mining.isMining(current)) return true;
-        if (mining.wasBroken()) {
+        if (!mining.owns(this)) return true;
+        boolean onCurrent = mining.isMining(current);
+        if (!onCurrent && (currentSupport == null || !mining.isMining(currentSupport))) return true;
+        if (onCurrent && mining.wasBroken()) {
             if (currentScore >= BURROW_SCORE) return best.score > SWITCH_GAIN;
             return best.score >= BURROW_SCORE || (stuckOpen() && best.score > SWITCH_GAIN);
         }
-        return mining.progress() < SWITCH_PROGRESS && best.score > currentScore + SWITCH_GAIN;
+        if (best.score >= BURROW_SCORE && currentScore < BURROW_SCORE) return true;
+        if (Util.getMeasuringTimeMs() - switchedAt < SWITCH_COOLDOWN) return false;
+        float score = now == null ? 0 : now.score;
+        return mining.progress() < SWITCH_PROGRESS && best.score > score + SWITCH_GAIN;
+    }
+
+    private static Choice find(List<Choice> choices, BlockPos pos) {
+        if (pos == null) return null;
+        for (Choice choice : choices) {
+            if (choice.pos.equals(pos)) return choice;
+        }
+        return null;
     }
 
     private boolean stuckOpen() {
