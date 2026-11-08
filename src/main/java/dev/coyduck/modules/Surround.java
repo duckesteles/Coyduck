@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import meteordevelopment.meteorclient.utils.render.color.Color;
 import net.minecraft.registry.Registries;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import dev.coyduck.Coyduck;
@@ -266,6 +267,24 @@ public class Surround extends Module {
         .build()
     );
 
+    private final Setting<Boolean> showOpen = sgRender.add(new BoolSetting.Builder()
+        .name("show-open")
+        .description("Marks every surround cell the server does not really hold yet: empty, waiting for the server to confirm your block, just denied, or holding a weak block. A block you see inside a marked cell may not be there.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<SettingColor> openColor = sgRender.add(new ColorSetting.Builder()
+        .name("open-color")
+        .description("Color of open cells.")
+        .defaultValue(new SettingColor(230, 60, 60, 220))
+        .visible(showOpen::get)
+        .build()
+    );
+
+    private static final long OPEN_MEMORY = 600;
+    private final Color openSide = new Color();
+
     private record Side(BlockPos pos, Direction outward) {}
 
     private final Long2LongOpenHashMap rendered = new Long2LongOpenHashMap();
@@ -409,6 +428,22 @@ public class Surround extends Module {
             if (interaction.rejectedAt(BlockPos.fromLong(entry.getLongKey())) >= entry.getLongValue()) continue;
             DuckRender.box(event.renderer, new Box(BlockPos.fromLong(entry.getLongKey())), sideColor.get(), lineColor.get(), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
         }
+        if (showOpen.get() && mc.world != null && !anchored.isEmpty()) {
+            Color line = openColor.get();
+            openSide.set(line.r, line.g, line.b, Math.min(line.a, 45));
+            for (BlockPos pos : Targets.ring(anchored, 0)) {
+                if (open(pos, now)) DuckRender.box(event.renderer, new Box(pos), openSide, line, ShapeMode.Both, 1);
+            }
+        }
+    }
+
+    private boolean open(BlockPos pos, long now) {
+        InteractionManager interaction = InteractionManager.get();
+        BlockState state = mc.world.getBlockState(pos);
+        if (state.isReplaceable() || interaction.isPending(pos)) return true;
+        long rejected = interaction.rejectedAt(pos);
+        if (rejected != 0 && now - rejected < OPEN_MEMORY) return true;
+        return !blocks.get().contains(state.getBlock()) && state.getBlock().getBlastResistance() < STRONG;
     }
 
     private void pass() {
