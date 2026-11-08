@@ -248,6 +248,8 @@ public class CoyGuiScreen extends Screen {
     private int dragX;
     private int dragY;
     private Setting<?> sliding;
+    private Setting<?> slideBeforeSetting;
+    private Object slideBefore;
     private Hit slidingHit;
     private int slidingChannel = -1;
     private Object binding;
@@ -1210,6 +1212,10 @@ public class CoyGuiScreen extends Screen {
             context.fill(bx, by, bx + size, by + size, EDGE);
             context.fill(bx + 1, by + 1, bx + size - 1, by + size - 1, bool.get() ? accent : over ? CELL_HOVER : CELL);
             addHit(x, y, resetX - x - 2, WIN_ROW, top, bottom, Kind.W_BOOL, bool, null);
+        } else if ((setting instanceof DoubleSetting || setting instanceof IntSetting) && editing == setting) {
+            box(context, ctrlLeft, y + 1, ctrlRight, y + WIN_ROW - 1, true, over);
+            drawEdit(context, ctrlLeft + PAD, ty, CTRL_W - PAD * 2);
+            addHit(ctrlLeft, y, CTRL_W, WIN_ROW, top, bottom, Kind.W_SLIDER, setting, new int[] {ctrlLeft + 1, ctrlRight - 1});
         } else if (setting instanceof DoubleSetting || setting instanceof IntSetting) {
             box(context, ctrlLeft, y + 1, ctrlRight, y + WIN_ROW - 1, false, over);
             int filled = ctrlLeft + 1 + Math.round((CTRL_W - 2) * sliderFraction(setting));
@@ -1411,7 +1417,8 @@ public class CoyGuiScreen extends Screen {
         }
 
         Hit hit = hitAt(mx, my);
-        if (hit == null || (hit.kind != Kind.W_STRING && hit.kind != Kind.FRIEND_ADD && hit.kind != Kind.W_LIST_SEARCH && hit.kind != Kind.W_LIST_TEXT && hit.kind != Kind.SEARCH)) finishEdit(true);
+        if (hit == null || (hit.kind != Kind.W_STRING && hit.kind != Kind.FRIEND_ADD && hit.kind != Kind.W_LIST_SEARCH && hit.kind != Kind.W_LIST_TEXT && hit.kind != Kind.SEARCH
+            && !(hit.kind == Kind.W_SLIDER && hit.target == editing))) finishEdit(true);
         if (hit == null) return super.mouseClicked(click, doubled);
 
         switch (hit.kind) {
@@ -1519,7 +1526,19 @@ public class CoyGuiScreen extends Screen {
             }
             case W_SLIDER, W_CHANNEL -> {
                 if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-                    sliding = (Setting<?>) hit.target;
+                    Setting<?> target = (Setting<?>) hit.target;
+                    if (hit.kind == Kind.W_SLIDER && (target instanceof DoubleSetting || target instanceof IntSetting)) {
+                        if (editing == target) return true;
+                        if (doubled) {
+                            if (slideBeforeSetting == target) restoreSlide();
+                            sliding = null;
+                            startEdit(target, valueText(target), null);
+                            return true;
+                        }
+                        slideBeforeSetting = target;
+                        slideBefore = target.get();
+                    }
+                    sliding = target;
                     slidingHit = hit;
                     slidingChannel = hit.kind == Kind.W_CHANNEL ? ((int[]) hit.extra)[2] : -1;
                     slide(mx);
@@ -1601,6 +1620,17 @@ public class CoyGuiScreen extends Screen {
         if (editing == null) return;
         if (commit) {
             if (editing instanceof StringSetting setting) setting.set(editText);
+            else if (editing instanceof DoubleSetting setting) {
+                try {
+                    setting.set(MathHelper.clamp(Double.parseDouble(editText.trim().replace(',', '.')), setting.min, setting.max));
+                } catch (NumberFormatException ignored) {
+                }
+            } else if (editing instanceof IntSetting setting) {
+                try {
+                    setting.set(MathHelper.clamp((int) Math.round(Double.parseDouble(editText.trim().replace(',', '.'))), setting.min, setting.max));
+                } catch (NumberFormatException ignored) {
+                }
+            }
             else if (editing == FRIEND_ADD && !editText.isBlank()) Friends.get().add(new Friend(editText.trim()));
             else if (editing == LIST_TEXT && editingList != null && !editText.isBlank()) changeList(editingList, editText, true);
         }
@@ -1743,8 +1773,16 @@ public class CoyGuiScreen extends Screen {
             if (view != View.Modules || binding != null || input.asString().isBlank()) return false;
             startEdit(SEARCH_EDIT, search, null);
         }
+        if ((editing instanceof DoubleSetting || editing instanceof IntSetting) && !input.asString().matches("[0-9.,-]+")) return true;
         insert(input.asString());
         return true;
+    }
+
+    private void restoreSlide() {
+        if (slideBeforeSetting instanceof DoubleSetting setting && slideBefore instanceof Double value) setting.set(value);
+        else if (slideBeforeSetting instanceof IntSetting setting && slideBefore instanceof Integer value) setting.set(value);
+        slideBeforeSetting = null;
+        slideBefore = null;
     }
 
     private void insert(String typed) {
