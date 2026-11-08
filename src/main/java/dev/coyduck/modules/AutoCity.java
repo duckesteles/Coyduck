@@ -270,8 +270,8 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         MiningManager mining = MiningManager.get();
         target = Targets.find(targetRange.get(), current != null ? target : null);
 
-        if (target == null || (needCrystals.get() && !hasAmmo())) {
-            if (current != null) Trace.log("city idle {}", target == null ? "no target" : "no ammo");
+        if (target == null || target.isGliding() || (needCrystals.get() && !hasAmmo())) {
+            if (current != null) Trace.log("city idle {}", target == null ? "no target" : target.isGliding() ? "target is gliding" : "no ammo");
             mining.release(this);
             current = null;
             return;
