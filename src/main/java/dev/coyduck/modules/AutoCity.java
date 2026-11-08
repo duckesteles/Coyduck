@@ -11,6 +11,7 @@ import dev.coyduck.utils.DuckRender;
 import dev.coyduck.utils.BlockOverlay;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
+import dev.coyduck.utils.Trace;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -192,6 +193,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
     private float currentScore;
     private long openSince;
     private long switchedAt;
+    private long stopHeldSince;
 
     public AutoCity() {
         super(Coyduck.CATEGORY, "auto-city+", "Mines the target's surround or burrow and breaks it again whenever it is replaced.");
@@ -269,6 +271,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         target = Targets.find(targetRange.get(), current != null ? target : null);
 
         if (target == null || (needCrystals.get() && !hasAmmo())) {
+            if (current != null) Trace.log("city idle {}", target == null ? "no target" : "no ammo");
             mining.release(this);
             current = null;
             return;
@@ -277,7 +280,10 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         Box box = Targets.box(target);
         LongSet columns = Targets.columns(box);
 
-        if (current != null && !stillValid(current, columns)) current = null;
+        if (current != null && !stillValid(current, columns)) {
+            Trace.log("city drop {} no longer valid", current);
+            current = null;
+        }
         if (current == null || !mc.world.getBlockState(current).isReplaceable()) openSince = 0;
         else if (openSince == 0) openSince = Util.getMeasuringTimeMs();
 
@@ -285,8 +291,11 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         Choice best = choices.isEmpty() ? null : choices.getFirst();
         Choice now = find(choices, current);
         if (now != null) currentScore = now.score;
-        if (best != null && (current == null || shouldSwitch(best, now))) {
+        String reason = best == null ? null : current == null ? "new" : shouldSwitch(best, now);
+        if (reason != null) {
+            Trace.log("city target {} -> {} score {} -> {} {} target {}", current, best.pos, now == null ? null : now.score, best.score, reason, target.getName().getString());
             if (current != null) switchedAt = Util.getMeasuringTimeMs();
+            stopHeldSince = 0;
             current = best.pos;
             openSince = 0;
             currentScore = best.score;
@@ -319,27 +328,41 @@ public class AutoCity extends Module implements MiningManager.StopGate {
 
     @Override
     public boolean allowStop(BlockPos pos) {
+        boolean allow = stopAllowed(pos);
+        long now = Util.getMeasuringTimeMs();
+        if (!allow && stopHeldSince == 0) {
+            stopHeldSince = now;
+            Trace.log("city hold stop {} target hurt for {}ms", pos, HurtTracker.get().releaseTime(target) - now);
+        } else if (allow && stopHeldSince != 0) {
+            Trace.log("city release stop {} after {}ms", pos, now - stopHeldSince);
+            stopHeldSince = 0;
+        }
+        return allow;
+    }
+
+    private boolean stopAllowed(BlockPos pos) {
         if (!hurtSync.get() || target == null || !pos.equals(current) || currentScore >= BURROW_SCORE) return true;
         AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
         if (autoCrystal == null || !autoCrystal.isActive() || !InteractionManager.get().hasCrystals()) return true;
         return HurtTracker.get().releaseTime(target) <= Util.getMeasuringTimeMs();
     }
 
-    private boolean shouldSwitch(Choice best, Choice now) {
-        if (best.pos.equals(current)) return false;
+    private String shouldSwitch(Choice best, Choice now) {
+        if (best.pos.equals(current)) return null;
 
         MiningManager mining = MiningManager.get();
-        if (!mining.owns(this)) return true;
+        if (!mining.owns(this)) return "not mining";
         boolean onCurrent = mining.isMining(current);
-        if (!onCurrent && (currentSupport == null || !mining.isMining(currentSupport))) return true;
+        if (!onCurrent && (currentSupport == null || !mining.isMining(currentSupport))) return "mining elsewhere";
         if (onCurrent && mining.wasBroken()) {
-            if (currentScore >= BURROW_SCORE) return best.score > SWITCH_GAIN;
-            return best.score >= BURROW_SCORE || (stuckOpen() && best.score > SWITCH_GAIN);
+            if (currentScore >= BURROW_SCORE) return best.score > SWITCH_GAIN ? "burrow open" : null;
+            if (best.score >= BURROW_SCORE) return "burrow";
+            return stuckOpen() && best.score > SWITCH_GAIN ? "open gap unused" : null;
         }
-        if (best.score >= BURROW_SCORE && currentScore < BURROW_SCORE) return true;
-        if (Util.getMeasuringTimeMs() - switchedAt < SWITCH_COOLDOWN) return false;
+        if (best.score >= BURROW_SCORE && currentScore < BURROW_SCORE) return "burrow";
+        if (Util.getMeasuringTimeMs() - switchedAt < SWITCH_COOLDOWN) return null;
         float score = now == null ? 0 : now.score;
-        return mining.progress() < SWITCH_PROGRESS && best.score > score + SWITCH_GAIN;
+        return mining.progress() < SWITCH_PROGRESS && best.score > score + SWITCH_GAIN ? "better" : null;
     }
 
     private static Choice find(List<Choice> choices, BlockPos pos) {

@@ -7,6 +7,7 @@ import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
 import dev.coyduck.modules.AirMine;
 import dev.coyduck.modules.AutoTotem;
 import dev.coyduck.utils.ExplosionDamage;
+import dev.coyduck.utils.Trace;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
@@ -30,6 +31,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
+import net.minecraft.registry.Registries;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
@@ -133,6 +135,7 @@ public final class MiningManager {
         if (same) return true;
         if (pos != null && !broken && !startPending) send(PlayerActionC2SPacket.Action.ABORT_DESTROY_BLOCK);
 
+        Trace.log("mine target {} by {} prio {} replaces {}{}", target, owner.getClass(), priority, pos, pos != null && !broken ? " unfinished" : "");
         pos = target.toImmutable();
         lastStop = 0;
         lastStopTick = -1;
@@ -156,6 +159,7 @@ public final class MiningManager {
     }
 
     private void sendStart() {
+        if (Trace.on()) Trace.log("mine start-sent {} waited {}ms", pos, Util.getMeasuringTimeMs() - startTime);
         startPending = false;
         side = facing(pos);
         startTick = ticks;
@@ -192,6 +196,7 @@ public final class MiningManager {
 
     public void release(Object owner) {
         if (!owns(owner)) return;
+        Trace.log("mine release {} by {}{}", pos, owner.getClass(), broken ? "" : " unfinished");
 
         if (!broken && !startPending && mc.getNetworkHandler() != null) send(PlayerActionC2SPacket.Action.ABORT_DESTROY_BLOCK);
         reset();
@@ -247,6 +252,7 @@ public final class MiningManager {
 
         int tool = bestTool(state);
         if (tool != -1 && holdTicks == 0 && canHold()) {
+            Trace.log("mine stop deferred {} tool not in hand", pos);
             hold(state, pos);
             return false;
         }
@@ -264,6 +270,7 @@ public final class MiningManager {
         if (tool == -1) action.run();
         else if (!InventoryManager.get().withItem(tool, switchMode, action)) return false;
 
+        if (Trace.on()) Trace.log("mine stop {} {} elapsed {}t tool {}", pos, broken ? "rebreak" : "first", (int) elapsed(), tool == -1 ? "hand" : InventoryManager.get().stack(tool).getItem());
         readySince = 0;
         lastStop = Util.getMeasuringTimeMs();
         lastStopTick = ticks;
@@ -276,6 +283,7 @@ public final class MiningManager {
 
     private void blindStop() {
         if (!enemyNear(pos) || ownBlock(pos) || bestTool(Blocks.OBSIDIAN.getDefaultState()) != -1) return;
+        Trace.log("mine blind-stop {}", pos);
         InteractionManager.get().swing(swing == InteractionManager.SwingMode.None ? InteractionManager.SwingMode.Packet : swing);
         send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
         lastStopTick = ticks;
@@ -373,6 +381,7 @@ public final class MiningManager {
         if (pos == null) return;
 
         if (!inRange(pos)) {
+            Trace.log("mine drop {} out of range", pos);
             reset();
             return;
         }
@@ -383,6 +392,7 @@ public final class MiningManager {
 
         boolean waited = Util.getMeasuringTimeMs() - lastStop > LatencyManager.get().timeout();
         if (stops >= MAX_STOPS && waited && !mc.world.getBlockState(pos).isReplaceable()) {
+            Trace.log("mine restart {} stop not confirmed after {}ms", pos, Util.getMeasuringTimeMs() - lastStop);
             restart();
             return;
         }
@@ -419,7 +429,10 @@ public final class MiningManager {
     @EventHandler
     private void onSend(PacketEvent.Send event) {
         if (sending || pos == null) return;
-        if (event.packet instanceof PlayerActionC2SPacket packet && packet.getAction() == PlayerActionC2SPacket.Action.START_DESTROY_BLOCK) reset();
+        if (event.packet instanceof PlayerActionC2SPacket packet && packet.getAction() == PlayerActionC2SPacket.Action.START_DESTROY_BLOCK) {
+            Trace.log("mine drop {} foreign start at {}", pos, packet.getPos());
+            reset();
+        }
     }
 
     @EventHandler
@@ -543,10 +556,12 @@ public final class MiningManager {
 
     private void update(BlockState state) {
         if (state.isReplaceable()) {
+            if (!brokenSinceStop && Trace.on()) Trace.log("mine broken {} {}ms after stop", pos, lastStop == 0 ? -1 : Util.getMeasuringTimeMs() - lastStop);
             broken = true;
             brokenSinceStop = true;
             stops = 0;
         } else if (autoStop && brokenSinceStop && !ownBlock(pos)) {
+            if (Trace.on()) Trace.log("mine replaced {} with {}", pos, Registries.BLOCK.getId(state.getBlock()).getPath());
             stop(owner, state);
         }
     }

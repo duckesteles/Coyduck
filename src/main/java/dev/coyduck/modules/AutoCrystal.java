@@ -13,6 +13,7 @@ import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.managers.MotionTracker;
 import dev.coyduck.managers.RotationManager;
+import dev.coyduck.utils.Trace;
 import dev.coyduck.utils.DuckRender;
 import dev.coyduck.utils.BlockOverlay;
 import dev.coyduck.utils.ExplosionDamage;
@@ -693,12 +694,14 @@ public class AutoCrystal extends Module {
     private void onMineStop(MineStopEvent event) {
         clearCache();
         placeBudget = Math.max(placeBudget, 1);
+        int before = placeBudget;
         stoppedAt = event.pos;
         try {
             pass();
         } finally {
             stoppedAt = null;
         }
+        Trace.log("crystal on stop {} {} status {}", event.pos, placeBudget < before ? "placed" : "none", status);
     }
 
     private void clearCache() {
