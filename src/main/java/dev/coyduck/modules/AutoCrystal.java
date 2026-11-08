@@ -99,6 +99,7 @@ public class AutoCrystal extends Module {
 
     private BlockPos stoppedAt;
 
+    private static final double CITY_CELL_RANGE = 3.0;
     private record Target(PlayerEntity player, Box box, Vec3d feet, float health, float minDamage, LongSet gaps) {}
 
     private static final int FOCUS_TICKS = 20;
@@ -965,8 +966,11 @@ public class AutoCrystal extends Module {
         if (mining.remainingTicks() > MathHelper.ceil(LatencyManager.get().rtt() / 50.0) + 1) return null;
 
         long key = cell.asLong();
+        AutoCity city = Modules.get().get(AutoCity.class);
+        boolean cityCell = city != null && city.isActive() && mining.owns(city);
         for (Target target : targets) {
             if (target.gaps.contains(key)) return cell;
+            if (cityCell && Vec3d.ofCenter(cell).squaredDistanceTo(target.feet) <= CITY_CELL_RANGE * CITY_CELL_RANGE) return cell;
         }
         return null;
     }
