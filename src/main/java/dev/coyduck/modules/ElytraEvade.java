@@ -1,6 +1,7 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Trace;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
@@ -23,27 +24,34 @@ public class ElytraEvade extends Module {
     private static final double HEIGHT_PULL = 1.0;
     private static final double ABOVE = 2;
     private static final double LEAD_TICKS = 5;
-    private static final double OUTWARD_PULL = 3;
     private static final int FLIP_COOLDOWN = 10;
-    private static final double RELEASE_MARGIN = 2;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
-    private final Setting<Double> trigger = sgGeneral.add(new DoubleSetting.Builder()
-        .name("trigger")
-        .description("A player this close starts the evasion. Crystal placing, webs and hits reach about 5 to 6 blocks and a crystal blast about 12 more, so 14 reacts before any of them can land.")
-        .defaultValue(14)
-        .range(6, 40)
-        .sliderRange(6, 40)
+    private final Setting<Double> minDamage = sgGeneral.add(new DoubleSetting.Builder()
+        .name("min-damage")
+        .description("Evades only from players who could hurt you this much with one crystal, placed at the closest point they can reach, walls and blocks between counted.")
+        .defaultValue(4)
+        .range(0.5, 20)
+        .sliderRange(0.5, 20)
         .build()
     );
 
-    private final Setting<Double> keep = sgGeneral.add(new DoubleSetting.Builder()
-        .name("keep")
-        .description("Distance held from the closest player while evading. Beyond about 18 blocks no crystal they can place reaches you.")
-        .defaultValue(22)
-        .range(8, 64)
-        .sliderRange(8, 64)
+    private final Setting<Double> reach = sgGeneral.add(new DoubleSetting.Builder()
+        .name("reach")
+        .description("How far a player can place a crystal from their eyes. 6b6t enforces about 4.5.")
+        .defaultValue(5)
+        .range(3, 7)
+        .sliderRange(3, 7)
+        .build()
+    );
+
+    private final Setting<Double> margin = sgGeneral.add(new DoubleSetting.Builder()
+        .name("margin")
+        .description("Extra reach assumed while evading, so you only stop once you are this much further out than they could hurt you from.")
+        .defaultValue(4)
+        .range(0, 16)
+        .sliderRange(0, 16)
         .build()
     );
 
@@ -58,7 +66,7 @@ public class ElytraEvade extends Module {
 
     private final Setting<Double> maceRange = sgGeneral.add(new DoubleSetting.Builder()
         .name("mace-range")
-        .description("A player holding a mace or gliding counts as close from this far, since a mace dive starts from far above.")
+        .description("A gliding player counts as a threat from this far, since a mace dive starts from far above.")
         .defaultValue(28)
         .range(6, 64)
         .sliderRange(6, 64)
@@ -79,7 +87,7 @@ public class ElytraEvade extends Module {
     private double holdY = Double.NaN;
 
     public ElytraEvade() {
-        super(Coyduck.CATEGORY, "elytra-evade", "While you fly with elytra-fly+, circles away from any player who gets close enough to crystal, web or hit you, and keeps a distance where their crystals can't reach. Stays out of mace-strike's way while it hunts. Does nothing while nobody is near, so you can leave it on.");
+        super(Coyduck.CATEGORY, "elytra-evade", "While you fly with elytra-fly+, moves sideways and away from any player who could hurt you with a crystal at the closest point they can reach, or who glides near you for a mace dive, until none of them could. Stays out of mace-strike's way while it hunts. Does nothing while nobody is near, so you can leave it on.");
     }
 
     @Override
@@ -105,23 +113,48 @@ public class ElytraEvade extends Module {
             return;
         }
 
-        PlayerEntity nearest = nearest();
-        double distance = nearest == null ? Double.MAX_VALUE : nearest.distanceTo(mc.player);
-        double reach = nearest != null && maceThreat(nearest) ? Math.max(trigger.get(), maceRange.get()) : trigger.get();
-        if (threat == null && distance > reach) return;
-        if (nearest == null || distance > Math.max(keep.get(), reach) + RELEASE_MARGIN) {
-            release("safe");
+        PlayerEntity danger = dangerous(threat == null ? 0 : margin.get());
+        if (danger == null) {
+            release("nobody can hurt you");
             return;
         }
 
-        if (threat != nearest) lastThreatY = Double.NaN;
-        if (threat != nearest) Trace.log("evade from {} at {} blocks", nearest.getName().getString(), distance);
-        threat = nearest;
+        if (threat != danger) {
+            lastThreatY = Double.NaN;
+            float could = potential(danger, 0);
+            Trace.log("evade from {} at {} blocks{}", danger.getName().getString(), danger.distanceTo(mc.player), danger.isGliding() ? ", gliding" : could == Float.MAX_VALUE ? ", in reach" : ", could hit you for " + String.format(java.util.Locale.ROOT, "%.1f", could));
+        }
+        threat = danger;
         if (Double.isNaN(holdY)) holdY = mc.player.getY();
-        ElytraFly.pilot(motion(distance));
+        ElytraFly.pilot(motion());
     }
 
-    private Vec3d motion(double distance) {
+    private PlayerEntity dangerous(double extra) {
+        PlayerEntity best = null;
+        double bestScore = 0;
+        for (PlayerEntity player : mc.world.getPlayers()) {
+            if (player == mc.player || !player.isAlive() || player.isSpectator() || Friends.get().isFriend(player)) continue;
+            double score = player.isGliding() && player.distanceTo(mc.player) <= maceRange.get() + extra ? Double.MAX_VALUE / 2 - player.distanceTo(mc.player) : potential(player, extra);
+            if (score >= minDamage.get() && score > bestScore) {
+                best = player;
+                bestScore = score;
+            }
+        }
+        return best;
+    }
+
+    private float potential(PlayerEntity player, double extra) {
+        Vec3d eye = player.getEyePos();
+        Vec3d body = mc.player.getBoundingBox().getCenter();
+        Vec3d toward = body.subtract(eye);
+        double distance = toward.length();
+        double range = reach.get() + extra;
+        if (distance <= range) return Float.MAX_VALUE;
+        Vec3d crystal = eye.add(toward.multiply(range / distance));
+        return ExplosionDamage.crystal(mc.player, crystal);
+    }
+
+    private Vec3d motion() {
         ElytraFly fly = Modules.get().get(ElytraFly.class);
         Vec3d me = mc.player.getEntityPos();
         Vec3d them = threat.getEntityPos();
@@ -136,7 +169,7 @@ public class ElytraEvade extends Module {
         }
         double awayX = dx / flat;
         double awayZ = dz / flat;
-        double out = MathHelper.clamp((keep.get() - distance) / keep.get() * OUTWARD_PULL, -0.5, 1);
+        double out = 1;
 
         double climb = Double.isNaN(lastThreatY) ? 0 : them.y - lastThreatY;
         lastThreatY = them.y;
@@ -166,26 +199,8 @@ public class ElytraEvade extends Module {
         return !mc.world.isSpaceEmpty(mc.player, ahead);
     }
 
-    private static boolean maceThreat(PlayerEntity player) {
-        return player.isGliding() || player.getMainHandStack().isOf(net.minecraft.item.Items.MACE) || player.getOffHandStack().isOf(net.minecraft.item.Items.MACE);
-    }
-
     private boolean nearGround() {
         return !mc.world.isSpaceEmpty(mc.player, mc.player.getBoundingBox().stretch(0, -GROUND_CLEARANCE, 0));
-    }
-
-    private PlayerEntity nearest() {
-        PlayerEntity best = null;
-        double bestDistance = Double.MAX_VALUE;
-        for (PlayerEntity player : mc.world.getPlayers()) {
-            if (player == mc.player || !player.isAlive() || player.isSpectator() || Friends.get().isFriend(player)) continue;
-            double distance = player.distanceTo(mc.player);
-            if (distance < bestDistance) {
-                best = player;
-                bestDistance = distance;
-            }
-        }
-        return best;
     }
 
     private void release(String why) {
