@@ -39,6 +39,7 @@ import dev.coyduck.modules.HoleSnap;
 import dev.coyduck.modules.AntiPiston;
 import dev.coyduck.modules.KillAura;
 import dev.coyduck.modules.MaceStrike;
+import dev.coyduck.modules.ElytraEvade;
 import dev.coyduck.modules.AutoXp;
 import dev.coyduck.modules.HoleFill;
 import dev.coyduck.modules.KillEffects;
@@ -110,6 +111,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new AntiPiston());
         Modules.get().add(new KillAura());
         Modules.get().add(new MaceStrike());
+        Modules.get().add(new ElytraEvade());
         Modules.get().add(new CustomFov());
         Modules.get().add(new AirMine());
         Modules.get().add(new PopCounter());
