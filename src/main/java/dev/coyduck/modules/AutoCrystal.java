@@ -406,6 +406,14 @@ public class AutoCrystal extends Module {
         .build()
     );
 
+    private final Setting<Boolean> instantAim = sgRotate.add(new BoolSetting.Builder()
+        .name("instant-aim")
+        .description("When a crystal spot opens and you are not looking at it yet, sends a look packet right before the crystal so it goes out the same tick instead of waiting for the turn. Look-only packets are not limited per tick like position packets.")
+        .defaultValue(true)
+        .visible(rotate::get)
+        .build()
+    );
+
     private final Setting<Boolean> rotateBreak = sgRotate.add(new BoolSetting.Builder()
         .name("rotate-break")
         .description("Also looks at crystals before breaking them. Breaking works without it and is a tick faster.")
@@ -1176,8 +1184,11 @@ public class AutoCrystal extends Module {
         Box box = new Box(base);
         Vec3d aim = InteractionManager.get().crystalAim(base);
         if (!rotationReady(box, aim, placeRange.get() + 1, PLACE_PRIORITY)) {
-            status = "rotating";
-            return;
+            if (!instantAim.get()) {
+                status = "rotating";
+                return;
+            }
+            RotationManager.get().lookNow(aim);
         }
 
         Runnable after = idPredict.get() ? () -> predictAttack(base, choice) : null;

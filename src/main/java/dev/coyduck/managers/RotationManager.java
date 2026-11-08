@@ -56,6 +56,22 @@ public final class RotationManager {
         if (pending == null || priority >= pending.priority) pending = new Request(priority, yaw, pitch, speed, moveFix);
     }
 
+    public void lookNow(Vec3d target) {
+        if (mc.player == null || mc.getNetworkHandler() == null) return;
+        Vec3d eye = mc.player.getEyePos();
+        double dx = target.x - eye.x;
+        double dy = target.y - eye.y;
+        double dz = target.z - eye.z;
+        float wantYaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90.0f;
+        float wantPitch = MathHelper.clamp((float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz))), -90.0f, 90.0f);
+        float base = known ? serverYaw : mc.player.getYaw();
+        float basePitch = known ? serverPitch : mc.player.getPitch();
+        float gcd = gcd();
+        float deltaYaw = Math.round(MathHelper.wrapDegrees(wantYaw - base) / gcd) * gcd;
+        float deltaPitch = Math.round((wantPitch - basePitch) / gcd) * gcd;
+        mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(base + deltaYaw, MathHelper.clamp(basePitch + deltaPitch, -90.0f, 90.0f), mc.player.isOnGround(), mc.player.horizontalCollision));
+    }
+
     public boolean isLookingAt(Box box, double range) {
         Vec3d eye = mc.player.getEyePos();
         if (box.contains(eye)) return true;
