@@ -270,7 +270,7 @@ public final class MiningManager {
         if (tool == -1) action.run();
         else if (!InventoryManager.get().withItem(tool, switchMode, action)) return false;
 
-        if (Trace.on()) Trace.log("mine stop {} {} elapsed {}t tool {}", pos, broken ? "rebreak" : "first", (int) elapsed(), tool == -1 ? "hand" : InventoryManager.get().stack(tool).getItem());
+        if (Trace.on()) Trace.log("mine stop {} {} elapsed {}t need {}t tool {}", pos, broken ? "rebreak" : "first", (int) elapsed(), (int) Math.ceil(STOP_THRESHOLD / Math.max(bestDelta(state), 1.0E-6f)), tool == -1 ? "hand" : InventoryManager.get().stack(tool).getItem());
         readySince = 0;
         lastStop = Util.getMeasuringTimeMs();
         lastStopTick = ticks;

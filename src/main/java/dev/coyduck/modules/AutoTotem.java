@@ -6,6 +6,7 @@ import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
+import dev.coyduck.utils.Trace;
 import dev.coyduck.utils.ExplosionDamage;
 import meteordevelopment.meteorclient.events.entity.EntityAddedEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
@@ -165,6 +166,7 @@ public class AutoTotem extends Module {
 
     private final long[] sourceUsedAt = new long[InventoryManager.MAIN_END];
     private boolean gapple;
+    private long refillAt;
     private long gappleAt;
     private int foodTicks;
     private int mainMissing;
@@ -340,6 +342,7 @@ public class AutoTotem extends Module {
         boolean ambiguous = mask != 0 && (isTotem(main) || maskHoldsTotem(mask));
 
         boolean mainPopped = isTotem(main) && (mask == 0 || !isTotem(mc.player.getOffHandStack()));
+        Trace.log("totem pop from {} main {} off {}{}", mainPopped ? "main hand" : "offhand", main.getItem(), mc.player.getOffHandStack().getItem(), ambiguous ? " ambiguous" : "");
         if (mainPopped) main.decrement(1);
         else mc.player.getOffHandStack().decrement(1);
         if (gapple && mainPopped && (mainhand.get() == Mainhand.Off || !hotbarTotem(server))) {
@@ -423,11 +426,13 @@ public class AutoTotem extends Module {
         clearPending();
 
         if (holding) {
+            Trace.log("totem refill confirmed after {}ms", Util.getMeasuringTimeMs() - refillAt);
             attempts = 0;
             confirmed = playerScreen;
             return;
         }
 
+        Trace.log("totem refill not confirmed after {}ms, attempt {}", Util.getMeasuringTimeMs() - refillAt, attempts + 1);
         if (++attempts <= MAX_ATTEMPTS) refill(true);
     }
 
@@ -443,6 +448,7 @@ public class AutoTotem extends Module {
         }
 
         clearPending();
+        Trace.log("totem refill timed out after {}ms, attempt {}", Util.getMeasuringTimeMs() - refillAt, attempts + 1);
         if (++attempts <= MAX_ATTEMPTS + 2) refill(true);
         else attempts = 0;
     }
@@ -459,6 +465,8 @@ public class AutoTotem extends Module {
         InventoryManager.Swap swap = inventory.swapWithOffhand(source, hotbarSwap.get());
         if (swap == InventoryManager.Swap.NONE) return;
         sourceUsedAt[source] = Util.getMeasuringTimeMs();
+        refillAt = Util.getMeasuringTimeMs();
+        Trace.log("totem refill from slot {} by {}{}", source, swap, force ? " forced" : "");
 
         if (swap == InventoryManager.Swap.CLICK) inventory.resync();
 
@@ -636,6 +644,7 @@ public class AutoTotem extends Module {
         }
 
         if (!inventory.select(hotbar)) return;
+        Trace.log("totem main hand from slot {} ({}, hp {})", hotbar, popped ? "after main pop" : critical ? "critical" : mainhand.get() == Mainhand.Always ? "always" : "danger", mc.player.getHealth() + mc.player.getAbsorptionAmount());
         if (previousSlot == NONE) previousSlot = selected;
         reserveSlot = hotbar;
         expectedSlot = hotbar;
@@ -678,6 +687,7 @@ public class AutoTotem extends Module {
 
         InventoryManager inventory = InventoryManager.get();
         if (restore.get() && previousSlot != NONE && inventory.selectedSlot() == reserveSlot && !inventory.select(previousSlot)) return;
+        Trace.log("totem main hand released, back to slot {}", previousSlot);
 
         reserveSlot = NONE;
         previousSlot = NONE;

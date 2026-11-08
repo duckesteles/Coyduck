@@ -1,5 +1,7 @@
 package dev.coyduck.modules;
 
+import net.minecraft.registry.Registries;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.managers.CrystalTracker;
@@ -9,6 +11,7 @@ import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
+import dev.coyduck.utils.Trace;
 import dev.coyduck.utils.BlockOverlay;
 import dev.coyduck.utils.DuckRender;
 import dev.coyduck.utils.ExplosionDamage;
@@ -266,6 +269,7 @@ public class Surround extends Module {
     private record Side(BlockPos pos, Direction outward) {}
 
     private final Long2LongOpenHashMap rendered = new Long2LongOpenHashMap();
+    private final Long2ObjectOpenHashMap<String> cellStatus = new Long2ObjectOpenHashMap<>();
     private LongSet anchored = new LongOpenHashSet();
     private int anchorY;
     private int budget;
@@ -295,6 +299,7 @@ public class Surround extends Module {
         }
 
         rendered.clear();
+        cellStatus.clear();
         budget = blocksPerTick.get();
 
         if (!canAct()) return;
@@ -429,14 +434,33 @@ public class Surround extends Module {
 
         MiningManager mining = MiningManager.get();
         int cost = 0;
+        boolean tracing = Trace.on();
         for (BlockPos pos : targets()) {
-            if (cost >= budget) break;
+            if (cost >= budget) {
+                if (!tracing) break;
+                note(pos, "budget");
+                continue;
+            }
             boolean retry = interaction.isPending(pos) && liveCrystalIn(pos);
-            if ((!retry && !interaction.canPlace(pos)) || mining.isMining(pos)) continue;
+            if (!retry && !interaction.canPlace(pos)) {
+                if (tracing) note(pos, interaction.isPending(pos) ? "pending" : mc.world.getBlockState(pos).isReplaceable() ? "unplaceable" : "filled " + Registries.BLOCK.getId(mc.world.getBlockState(pos).getBlock()).getPath());
+                continue;
+            }
+            if (mining.isMining(pos)) {
+                if (tracing) note(pos, "we mine it");
+                continue;
+            }
 
             int needed = cost(pos);
-            if (needed == 0 || cost + needed > budget) continue;
-            if (!clear(pos)) continue;
+            if (needed == 0 || cost + needed > budget) {
+                if (tracing) note(pos, needed == 0 ? "no face to place on" : "budget");
+                continue;
+            }
+            if (!clear(pos)) {
+                if (tracing) note(pos, "blocked by " + obstruction(pos));
+                continue;
+            }
+            if (tracing) note(pos, retry ? "placing again over crystal" : "placing");
 
             if (retry) {
                 interaction.forget(pos);
@@ -459,6 +483,18 @@ public class Surround extends Module {
         prePlace(slot);
     }
 
+    private void note(BlockPos pos, String status) {
+        String before = cellStatus.put(pos.asLong(), status);
+        if (!status.equals(before)) Trace.log("surround {} {}{}", pos, status, before == null ? "" : " (was " + before + ")");
+    }
+
+    private String obstruction(BlockPos pos) {
+        List<Entity> entities = InteractionManager.get().obstructions(pos);
+        if (entities.isEmpty()) return "nothing";
+        Entity first = entities.getFirst();
+        return first instanceof EndCrystalEntity ? "crystal" + (InteractionManager.get().recentlyAttacked(first) ? " (hit, waiting)" : "") : first instanceof PlayerEntity player ? player.getName().getString() : Registries.ENTITY_TYPE.getId(first.getType()).getPath();
+    }
+
     private void prePlace(int slot) {
         if (!predict.get() || rotate.get() || budget <= 0) return;
 
@@ -478,6 +514,7 @@ public class Surround extends Module {
 
                 mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
                 interaction.swing(swing.get());
+                Trace.log("surround pre-place {} about to break", pos);
                 preSent.put(pos.asLong(), ticks);
                 budget--;
             }
@@ -762,6 +799,8 @@ public class Surround extends Module {
     }
 
     private boolean leave(int level) {
+        Trace.log("surround leaves the hole, level {} -> {}", anchorY, level);
+        cellStatus.clear();
         if (disable.get() == Disable.Leave) {
             toggle();
             return false;
