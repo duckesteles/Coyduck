@@ -167,6 +167,8 @@ public class AutoTotem extends Module {
     private final long[] sourceUsedAt = new long[InventoryManager.MAIN_END];
     private boolean gapple;
     private long refillAt;
+    private long pendingSince;
+    private static final double SYNC_SHARE = 0.6;
     private long gappleAt;
     private int foodTicks;
     private int mainMissing;
@@ -389,12 +391,20 @@ public class AutoTotem extends Module {
         pendingSource = NONE;
         pendingSyncId = syncId;
         pendingUntil = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
+        pendingSince = Util.getMeasuringTimeMs();
         nextVerify = Util.getMeasuringTimeMs() + VERIFY_INTERVAL;
         barrier = inventory.barrier();
     }
 
     private void onOffhandUpdate() {
-        if (pending) return;
+        if (pending) {
+            long since = Util.getMeasuringTimeMs() - pendingSince;
+            if (since >= LatencyManager.get().rtt() * SYNC_SHARE) {
+                Trace.log("totem server inventory sync after {}ms stands in for the barrier", since);
+                onBarrier();
+            }
+            return;
+        }
 
         confirmed = isTotem(mc.player.getOffHandStack());
         refill(false);
@@ -475,6 +485,7 @@ public class AutoTotem extends Module {
         pendingSource = swap == InventoryManager.Swap.CLICK ? source : NONE;
         pendingSyncId = syncId;
         pendingUntil = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
+        pendingSince = Util.getMeasuringTimeMs();
         barrier = inventory.barrier();
     }
 
