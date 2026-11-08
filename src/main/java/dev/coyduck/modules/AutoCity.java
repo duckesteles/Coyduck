@@ -393,7 +393,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
     private boolean stillValid(BlockPos pos, LongSet columns) {
         if (!MiningManager.get().inRange(pos) || Targets.ownRing().contains(pos) || mine(pos)) return false;
 
-        boolean partOfHole = columns.contains(pos.asLong()) || Targets.ring(columns, 0).contains(pos);
+        boolean partOfHole = columns.contains(pos.asLong()) || Targets.ring(columns, 0).contains(pos) || Targets.ring(columns, 1).contains(pos);
         if (!partOfHole) return false;
 
         if (webbed(pos)) return false;
@@ -441,7 +441,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         List<BlockPos> ring = Targets.ring(columns, 0);
 
         for (BlockPos pos : ring) {
-            if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || !mining.inRange(pos) || own.contains(pos)) continue;
+            if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || !mining.inRange(pos) || own.contains(pos) || mine(pos)) continue;
 
             BlockPos support = null;
             float damage = gapDamage(pos, box, feet, null);
@@ -456,7 +456,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         }
 
         for (BlockPos pos : Targets.ring(columns, 1)) {
-            if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || !mining.inRange(pos) || own.contains(pos)) continue;
+            if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || !mining.inRange(pos) || own.contains(pos) || mine(pos)) continue;
             if (mc.world.getBlockState(pos).isOf(Blocks.BEDROCK)) continue;
             float damage = gapDamage(pos, box, feet, null);
             if (damage < minDamage.get()) continue;
