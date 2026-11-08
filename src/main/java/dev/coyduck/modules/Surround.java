@@ -399,7 +399,9 @@ public class Surround extends Module {
 
         long now = Util.getMeasuringTimeMs();
         rendered.long2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > DuckRender.LIFETIME);
+        InteractionManager interaction = InteractionManager.get();
         for (var entry : rendered.long2LongEntrySet()) {
+            if (interaction.rejectedAt(BlockPos.fromLong(entry.getLongKey())) >= entry.getLongValue()) continue;
             DuckRender.box(event.renderer, new Box(BlockPos.fromLong(entry.getLongKey())), sideColor.get(), lineColor.get(), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
         }
     }
@@ -444,6 +446,7 @@ public class Surround extends Module {
             cost += needed;
         }
 
+        placeable.sort((a, b) -> Boolean.compare(!interaction.wasRejected(a), !interaction.wasRejected(b)));
         if (!placeable.isEmpty() && interaction.ready(placeable.get(0), airplace.get(), rotate.get(), InteractionManager.SURROUND_PRIORITY)) {
             InventoryManager.get().withItemWhileEating(slot, switchMode.get(), () -> {
                 for (BlockPos pos : placeable) {
@@ -530,7 +533,7 @@ public class Surround extends Module {
 
     private void commit(BlockPos pos, BlockHitResult hit) {
         if (!InteractionManager.get().place(pos, hit, swing.get(), rotate.get(), InteractionManager.SURROUND_PRIORITY)) {
-            budget = 0;
+            if (rotate.get() || !InteractionManager.get().wasRejected(pos)) budget = 0;
             return;
         }
         rendered.put(pos.asLong(), Util.getMeasuringTimeMs());
