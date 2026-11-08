@@ -40,29 +40,37 @@ public class BoatFly extends Module {
     private static final double KICK_DIP = 0.04;
     private static final double FLOAT_MIN_FALL = -0.03125;
     private static final long RESET_WINDOW = 4000;
-    private static final int RESET_LIMIT = 12;
-    private static final double CUT = 0.6;
-    private static final double RAMP = 0.02;
-    private static final long RAMP_EVERY = 1500;
-    private static final double FLOOR = 0.05;
+    private static final int RESET_LIMIT = 5;
+    private static final double DUPLICATE = 0.01;
+    private static final double CUT = 0.8;
+    private static final double GROW = 1.15;
+    private static final double GROW_ADD = 0.05;
+    private static final double PROBE = 0.03;
+    private static final double NEAR_BAD = 0.9;
+    private static final long RAMP_EVERY = 500;
+    private static final long BAD_FORGET = 30_000;
+    private static final double BAD_FORGET_STEP = 0.1;
+    private static final long PROVE = 1000;
     private static final long SETTLE = 150;
     private static final int BLAME_TICKS = 4;
+    private static final int RING = 24;
+    private static final double MAX_LOOK_AHEAD = 64;
     private static final int HISTORY = 4;
     private static final long REMOUNT_EVERY = 500;
     private static final int REMOUNT_TRIES = 10;
     private static final double REMOUNT_RANGE = 4.5;
 
     private enum Lane {
-        Air("air", 0.38),
-        Inside("inside", 0.2),
-        Vertical("vertical", 0.2);
+        Air("air", 0.9),
+        Inside("inside", 0.9),
+        Vertical("vertical", 0.5);
 
         final String label;
-        final double start;
+        final double proven;
 
-        Lane(String label, double start) {
+        Lane(String label, double proven) {
             this.label = label;
-            this.start = start;
+            this.proven = proven;
         }
     }
 
@@ -71,25 +79,25 @@ public class BoatFly extends Module {
 
     private final Setting<Double> speed = sgGeneral.add(new DoubleSetting.Builder()
         .name("speed")
-        .description("Highest horizontal blocks per tick. With learn on the boat starts slower and speeds up to this only while the server accepts it.")
-        .defaultValue(0.9)
-        .range(0.05, 2)
-        .sliderRange(0.05, 1.5)
+        .description("Highest horizontal blocks per tick, the same as elytra-fly+ by default. With learn on the boat starts here and only slows down when the server rejects a speed it has not accepted before.")
+        .defaultValue(2.9)
+        .range(0.05, 5)
+        .sliderRange(0.05, 5)
         .build()
     );
 
     private final Setting<Double> verticalSpeed = sgGeneral.add(new DoubleSetting.Builder()
         .name("vertical-speed")
-        .description("Highest blocks per tick up with jump and down with sneak. With learn on it works the same way as speed.")
-        .defaultValue(0.5)
-        .range(0.05, 1.4)
-        .sliderRange(0.05, 1.4)
+        .description("Highest blocks per tick up with jump and down with sneak, the same as elytra-fly+ by default. With learn on it works the same way as speed.")
+        .defaultValue(2.4)
+        .range(0.05, 5)
+        .sliderRange(0.05, 5)
         .build()
     );
 
     private final Setting<Boolean> learn = sgGeneral.add(new BoolSetting.Builder()
         .name("learn")
-        .description("Finds the fastest the server allows. Every time the server sets the boat back it slows down, and while moves go through it speeds up again a little at a time. Open air, inside blocks and up or down are learned apart, since the server treats them differently.")
+        .description("Finds the fastest the server allows. A setback only slows the boat down when it was going faster than any speed the server already accepted, since the server also sets boats back for other reasons, like going down into a block. After that it speeds up again quickly to just under the rejected speed and then tries a little higher now and then. Open air, inside blocks and up or down are learned apart.")
         .defaultValue(true)
         .build()
     );
@@ -150,9 +158,18 @@ public class BoatFly extends Module {
     );
 
     private final double[] pace = {Double.NaN, Double.NaN, Double.NaN};
+    private final double[] good = {Lane.Air.proven, Lane.Inside.proven, Lane.Vertical.proven};
+    private final double[] bad = {Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY};
+    private final long[] badAt = new long[3];
     private final long[] cutAt = new long[3];
     private final long[] rampAt = new long[3];
-    private final int[] usedTick = {Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
+    private final long[] streakStart = new long[3];
+    private final double[] streakMin = new double[3];
+    private final int[] lastUsed = {Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
+    private final int[][] ringTick = new int[3][RING];
+    private final double[][] ringStep = new double[3][RING];
+    private final int[] ringAt = new int[3];
+    private long lastSetback;
     private final ArrayDeque<Long> resets = new ArrayDeque<>();
     private final ArrayDeque<String> history = new ArrayDeque<>();
 
@@ -279,27 +296,44 @@ public class BoatFly extends Module {
     @EventHandler
     private void onApply(PacketApplyEvent.Pre event) {
         if (!(event.packet instanceof VehicleMoveS2CPacket packet) || boat == null || mc.player.getVehicle() != boat) return;
-        long time = System.currentTimeMillis();
-        int rtt = LatencyManager.get().rtt();
         Vec3d from = boat.getEntityPos();
         Vec3d to = packet.position();
+        if (from.distanceTo(to) < DUPLICATE) return;
+        long time = System.currentTimeMillis();
+        int rtt = LatencyManager.get().rtt();
         resets.addLast(time);
+        lastSetback = time;
         frozenUntil = time + rtt + SETTLE;
 
-        StringBuilder cut = new StringBuilder();
-        if (learn.get()) {
-            int blame = BLAME_TICKS + rtt / 50;
-            for (Lane lane : Lane.values()) {
-                int i = lane.ordinal();
-                if (ticks - usedTick[i] > blame || time - cutAt[i] < rtt + SETTLE + 100 || Double.isNaN(pace[i])) continue;
-                pace[i] = Math.max(FLOOR, pace[i] * CUT);
-                cutAt[i] = time;
-                cut.append(' ').append(lane.label).append('=').append(num(pace[i]));
+        StringBuilder why = new StringBuilder();
+        int since = ticks - BLAME_TICKS - rtt / 50;
+        for (Lane lane : Lane.values()) {
+            int i = lane.ordinal();
+            streakStart[i] = 0;
+            double step = recentMax(i, since);
+            if (step <= 0) continue;
+            if (step <= good[i] + 0.01) {
+                why.append(' ').append(lane.label).append(' ').append(num(step)).append(" not speed, proven ").append(num(good[i]));
+                continue;
             }
+            if (!learn.get() || time - cutAt[i] < rtt + SETTLE + PROVE) continue;
+            bad[i] = Math.min(bad[i], step);
+            badAt[i] = time;
+            pace[i] = Math.max(good[i], Math.min(pace[i], step) * CUT);
+            cutAt[i] = time;
+            why.append(' ').append(lane.label).append(' ').append(num(step)).append(" too fast, pace ").append(num(pace[i]));
         }
         Trace.log("boat set back gap {} offset {},{},{} y {} -> {}{} last moves [{}]",
             num(from.distanceTo(to)), num(to.x - from.x), num(to.y - from.y), num(to.z - from.z), num(from.y), num(to.y),
-            cut.isEmpty() ? "" : " pace cut" + cut, String.join(" | ", history));
+            why.toString(), String.join(" | ", history));
+    }
+
+    private double recentMax(int i, int since) {
+        double max = 0;
+        for (int k = 0; k < RING; k++) {
+            if (ringTick[i][k] >= since && ringTick[i][k] != 0) max = Math.max(max, ringStep[i][k]);
+        }
+        return max;
     }
 
     private Vec3d manualMove(AbstractBoatEntity vehicle) {
@@ -311,8 +345,9 @@ public class BoatFly extends Module {
         double up = (mc.options.jumpKey.isPressed() ? 1 : 0) - (mc.options.sneakKey.isPressed() ? 1 : 0);
         double y = 0;
         if (up != 0) {
-            y = up * pace(Lane.Vertical, verticalSpeed.get());
-            used(Lane.Vertical, verticalSpeed.get());
+            double step = pace(Lane.Vertical, verticalSpeed.get());
+            y = up * step;
+            used(Lane.Vertical, step, verticalSpeed.get());
         }
         if (forward == 0 && strafe == 0) return new Vec3d(0, y, 0);
 
@@ -326,7 +361,7 @@ public class BoatFly extends Module {
         z /= length;
         Lane lane = lane(vehicle, x, z);
         double h = pace(lane, speed.get());
-        used(lane, speed.get());
+        used(lane, h, speed.get());
         return new Vec3d(x * h, y, z * h);
     }
 
@@ -335,9 +370,9 @@ public class BoatFly extends Module {
         double dy = cruiseY.get() - pos.y;
         if (!atCruise(vehicle)) {
             status = String.format(Locale.ROOT, "to y %.0f", cruiseY.get());
-            double step = pace(Lane.Vertical, verticalSpeed.get());
-            if (Math.abs(dy) > step) used(Lane.Vertical, verticalSpeed.get());
-            return new Vec3d(0, MathHelper.clamp(dy, -step, step), 0);
+            double step = Math.min(pace(Lane.Vertical, verticalSpeed.get()), Math.abs(dy));
+            used(Lane.Vertical, step, verticalSpeed.get());
+            return new Vec3d(0, Math.copySign(step, dy), 0);
         }
 
         double dx = targetX.get() + 0.5 - pos.x;
@@ -354,15 +389,14 @@ public class BoatFly extends Module {
         double x = dx / flat;
         double z = dz / flat;
         vehicle.setYaw((float) Math.toDegrees(Math.atan2(-dx, dz)));
-        double ahead = Math.min(flat, LOOK_AHEAD);
+        double ahead = Math.min(flat, MathHelper.clamp(pace(Lane.Air, speed.get()) * 10, LOOK_AHEAD, MAX_LOOK_AHEAD));
         if (!loaded(pos.x + x * ahead, pos.z + z * ahead)) {
             status = "waiting for chunks";
             return new Vec3d(0, 0, 0);
         }
         Lane lane = lane(vehicle, x, z);
-        double step = pace(lane, speed.get());
-        if (flat > step) used(lane, speed.get());
-        step = Math.min(step, flat);
+        double step = Math.min(pace(lane, speed.get()), flat);
+        used(lane, step, speed.get());
         status = String.format(Locale.ROOT, "%.0f blocks", flat);
         return new Vec3d(x * step, 0, z * step);
     }
@@ -380,17 +414,41 @@ public class BoatFly extends Module {
     private double pace(Lane lane, double max) {
         if (!learn.get()) return max;
         int i = lane.ordinal();
-        if (Double.isNaN(pace[i])) pace[i] = Math.min(lane.start, max);
+        if (Double.isNaN(pace[i])) pace[i] = max;
         return Math.min(pace[i], max);
     }
 
-    private void used(Lane lane, double max) {
+    private void used(Lane lane, double step, double max) {
         int i = lane.ordinal();
-        usedTick[i] = ticks;
-        if (!learn.get() || pace[i] >= max) return;
+        ringAt[i] = (ringAt[i] + 1) % RING;
+        ringTick[i][ringAt[i]] = ticks;
+        ringStep[i][ringAt[i]] = step;
+
         long time = System.currentTimeMillis();
-        if (time - cutAt[i] < RAMP_EVERY || time - rampAt[i] < RAMP_EVERY) return;
-        pace[i] = Math.min(max, pace[i] + RAMP);
+        long settle = LatencyManager.get().rtt() + SETTLE + PROVE;
+        if (streakStart[i] == 0 || ticks - lastUsed[i] > 2) {
+            streakStart[i] = time;
+            streakMin[i] = step;
+        } else {
+            streakMin[i] = Math.min(streakMin[i], step);
+        }
+        lastUsed[i] = ticks;
+        if (time - streakStart[i] >= settle && time - lastSetback >= settle && streakMin[i] > good[i] + 0.01) {
+            good[i] = streakMin[i];
+            if (bad[i] <= good[i]) bad[i] = Double.POSITIVE_INFINITY;
+            Trace.log("boat {} {} proven", lane.label, num(good[i]));
+        }
+
+        if (!learn.get()) return;
+        if (Double.isFinite(bad[i]) && time - badAt[i] > BAD_FORGET) {
+            bad[i] += BAD_FORGET_STEP;
+            badAt[i] = time;
+        }
+        if (pace[i] >= max || step < pace[i] * 0.95 || time - cutAt[i] < settle || time - rampAt[i] < RAMP_EVERY) return;
+        double next = Double.isFinite(bad[i]) && pace[i] >= bad[i] * NEAR_BAD
+            ? pace[i] + PROBE
+            : Math.min(pace[i] * GROW + GROW_ADD, Double.isFinite(bad[i]) ? bad[i] * NEAR_BAD : Double.POSITIVE_INFINITY);
+        pace[i] = Math.min(max, Math.max(next, pace[i] + PROBE / 3));
         rampAt[i] = time;
         Trace.log("boat {} pace up to {}", lane.label, num(pace[i]));
     }
