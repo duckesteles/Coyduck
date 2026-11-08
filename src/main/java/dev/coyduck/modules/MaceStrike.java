@@ -141,6 +141,14 @@ public class MaceStrike extends Module {
         .build()
     );
 
+    private final Setting<Boolean> fullCharge = sgGeneral.add(new BoolSetting.Builder()
+        .name("full-charge")
+        .description("Waits until the mace in your hand is fully charged before every smash. Switching to the mace restarts the charge, which takes about 1.7 seconds; a full charge gives the whole base damage and the 1.5x critical hit.")
+        .defaultValue(true)
+        .visible(holdMace::get)
+        .build()
+    );
+
     private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
         .name("rotate")
         .description("Faces the target before the smash starts.")
@@ -206,6 +214,10 @@ public class MaceStrike extends Module {
         owed = 0;
         target = null;
         giveBack();
+    }
+
+    public boolean hunting() {
+        return isActive() && target != null;
     }
 
     @Override
@@ -287,7 +299,7 @@ public class MaceStrike extends Module {
             float health = target.getHealth() + target.getAbsorptionAmount();
             double drop = mc.player.getY() - y;
             double fall = burst ? drop : Math.min(drop, step.get()) + 1;
-            if (charge <= CRIT_CHARGE && smashDamage(fall, charge) < health) {
+            if (charge <= CRIT_CHARGE && (fullCharge.get() || smashDamage(fall, charge) < health)) {
                 Box box = Targets.box(target);
                 Vec3d eye = new Vec3d(mc.player.getX(), y + STANDING_EYE, mc.player.getZ());
                 float[] rotation = rotationTo(eye, aim(box, eye));
