@@ -1,5 +1,10 @@
 package dev.coyduck.managers;
 
+import dev.coyduck.utils.Trace;
+import net.minecraft.registry.Registries;
+import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
+import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
+import net.minecraft.block.Block;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientWorldAccessor;
@@ -77,6 +82,7 @@ public final class InteractionManager {
 
     private static final long PLACED_MEMORY = 10_000;
     private static final long REJECT_MEMORY = 2_000;
+    private static final double ANSWER_SHARE = 0.6;
 
     private record OwnBreak(Vec3d position, long time) {}
 
@@ -507,6 +513,13 @@ public final class InteractionManager {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onApply(PacketApplyEvent.Post event) {
+        if (mc.world != null) {
+            switch (event.packet) {
+                case BlockUpdateS2CPacket packet -> serverSays(packet.getPos(), packet.getState());
+                case ChunkDeltaUpdateS2CPacket packet -> packet.visitUpdates((at, state) -> serverSays(at.toImmutable(), state));
+                default -> {}
+            }
+        }
         if (event.packet instanceof PlayerActionResponseS2CPacket packet && mc.world != null) {
             int acked = packet.sequence();
             if (acked > ((ClientWorldAccessor) mc.world).coyduck$getPendingUpdateManager().getSequence()) return;
@@ -519,6 +532,19 @@ public final class InteractionManager {
                 return true;
             });
         }
+    }
+
+    private void serverSays(BlockPos pos, BlockState state) {
+        long key = pos.asLong();
+        if (!state.isReplaceable() || !pending.containsKey(key)) return;
+        long since = Util.getMeasuringTimeMs() - placedAt.get(key);
+        if (since < LatencyManager.get().rtt() * ANSWER_SHARE) return;
+        if (mc.world.getBlockState(pos).isReplaceable()) return;
+
+        mc.world.setBlockState(pos, state, Block.NOTIFY_ALL_AND_REDRAW);
+        pending.remove(key);
+        rejectedAt.put(key, Util.getMeasuringTimeMs());
+        Trace.log("ghost {} removed, the server says {} {}ms after our place", pos, Registries.BLOCK.getId(state.getBlock()).getPath(), since);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
