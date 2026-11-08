@@ -19,6 +19,7 @@ import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.vehicle.AbstractBoatEntity;
+import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.network.packet.s2c.play.VehicleMoveS2CPacket;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
@@ -50,7 +51,8 @@ public class BoatFly extends Module {
     private static final long RAMP_EVERY = 500;
     private static final long BAD_FORGET = 30_000;
     private static final double BAD_FORGET_STEP = 0.1;
-    private static final long PROVE = 1000;
+    private static final long PROVE = 5000;
+    private static final long EJECT_WINDOW = 500;
     private static final long SETTLE = 150;
     private static final int BLAME_TICKS = 4;
     private static final int RING = 24;
@@ -79,8 +81,8 @@ public class BoatFly extends Module {
 
     private final Setting<Double> speed = sgGeneral.add(new DoubleSetting.Builder()
         .name("speed")
-        .description("Highest horizontal blocks per tick, the same as elytra-fly+ by default. With learn on the boat starts here and only slows down when the server rejects a speed it has not accepted before.")
-        .defaultValue(2.9)
+        .description("Highest horizontal blocks per tick. 6b6t takes you off the boat at 1 or more, so 0.99 is the fastest it allows. With learn on the boat starts here and only slows down when the server rejects a speed it has not accepted before.")
+        .defaultValue(0.99)
         .range(0.05, 5)
         .sliderRange(0.05, 5)
         .build()
@@ -170,6 +172,7 @@ public class BoatFly extends Module {
     private final double[][] ringStep = new double[3][RING];
     private final int[] ringAt = new int[3];
     private long lastSetback;
+    private long teleportAt;
     private final ArrayDeque<Long> resets = new ArrayDeque<>();
     private final ArrayDeque<String> history = new ArrayDeque<>();
 
@@ -223,8 +226,11 @@ public class BoatFly extends Module {
         long time = System.currentTimeMillis();
         boolean now = mc.player.getVehicle() instanceof AbstractBoatEntity;
         if (riding && !now) {
+            boolean ejected = time - teleportAt < EJECT_WINDOW;
+            Vec3d from = boat != null ? boat.getEntityPos() : mc.player.getEntityPos();
             release();
-            Trace.log("boat off, remount {}", remount.get() && lastBoat != null ? "tries" : "off");
+            Trace.log("boat off{}, remount {}", ejected ? " by a server teleport" : "", remount.get() && lastBoat != null ? "tries" : "off");
+            if (ejected) setback("eject", from, mc.player.getEntityPos(), time);
         }
         if (now) remountTries = 0;
         riding = now;
@@ -295,11 +301,19 @@ public class BoatFly extends Module {
 
     @EventHandler
     private void onApply(PacketApplyEvent.Pre event) {
-        if (!(event.packet instanceof VehicleMoveS2CPacket packet) || boat == null || mc.player.getVehicle() != boat) return;
+        if (mc.player == null || boat == null || mc.player.getVehicle() != boat) return;
+        if (event.packet instanceof PlayerPositionLookS2CPacket) {
+            teleportAt = System.currentTimeMillis();
+            return;
+        }
+        if (!(event.packet instanceof VehicleMoveS2CPacket packet)) return;
         Vec3d from = boat.getEntityPos();
         Vec3d to = packet.position();
         if (from.distanceTo(to) < DUPLICATE) return;
-        long time = System.currentTimeMillis();
+        setback("set back", from, to, System.currentTimeMillis());
+    }
+
+    private void setback(String kind, Vec3d from, Vec3d to, long time) {
         int rtt = LatencyManager.get().rtt();
         resets.addLast(time);
         lastSetback = time;
@@ -323,8 +337,8 @@ public class BoatFly extends Module {
             cutAt[i] = time;
             why.append(' ').append(lane.label).append(' ').append(num(step)).append(" too fast, pace ").append(num(pace[i]));
         }
-        Trace.log("boat set back gap {} offset {},{},{} y {} -> {}{} last moves [{}]",
-            num(from.distanceTo(to)), num(to.x - from.x), num(to.y - from.y), num(to.z - from.z), num(from.y), num(to.y),
+        Trace.log("boat {} gap {} offset {},{},{} y {} -> {}{} last moves [{}]",
+            kind, num(from.distanceTo(to)), num(to.x - from.x), num(to.y - from.y), num(to.z - from.z), num(from.y), num(to.y),
             why.toString(), String.join(" | ", history));
     }
 
