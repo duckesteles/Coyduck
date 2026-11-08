@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.utils.Trace;
 import dev.coyduck.Coyduck;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.RotationManager;
@@ -43,10 +44,17 @@ public class PearlPhase extends Module {
 
     private final Setting<Double> depth = sgGeneral.add(new DoubleSetting.Builder()
         .name("depth")
-        .description("Preferred depth into each wall. Any overlap already stops crystals being placed in that cell; walls at eye height only allow a sliver so you never suffocate.")
+        .description("Preferred depth into each wall. Any overlap already stops crystals being placed in that cell. Without eye-in-wall, walls at eye height only allow a sliver so you never suffocate.")
         .defaultValue(0.22)
         .range(0.05, 0.28)
         .sliderRange(0.05, 0.28)
+        .build()
+    );
+
+    private final Setting<Boolean> eyeInWall = sgGeneral.add(new BoolSetting.Builder()
+        .name("eye-in-wall")
+        .description("Allows landings that put your eyes in a wall, so it also phases from a closed 1x1 hole. You take 1 suffocation damage every half second there, like the players you fight; gapples cover it.")
+        .defaultValue(true)
         .build()
     );
 
@@ -128,6 +136,7 @@ public class PearlPhase extends Module {
             mc.player.setPitch(pitch);
         });
         if (!thrown) error("Couldn't switch to the pearl while eating.");
+        else Trace.log("phase pearl thrown yaw {} pitch {} from {}", targetYaw, targetPitch, mc.player.getEntityPos());
         toggle();
     }
 
@@ -199,7 +208,7 @@ public class PearlPhase extends Module {
         Box box = new Box(landing.x - WIDTH, landing.y, landing.z - WIDTH, landing.x + WIDTH, landing.y + 1.8, landing.z + WIDTH);
         Box middle = new Box(landing.x - 0.05, landing.y + 0.05, landing.z - 0.05, landing.x + 0.05, landing.y + 1.75, landing.z + 0.05);
         if (!mc.world.isSpaceEmpty(middle)) return 0;
-        if (!mc.world.isSpaceEmpty(Box.of(landing.add(0, mc.player.getStandingEyeHeight(), 0), EYE_CLEARANCE, 1.0E-6, EYE_CLEARANCE))) return 0;
+        if (!eyeInWall.get() && !mc.world.isSpaceEmpty(Box.of(landing.add(0, mc.player.getStandingEyeHeight(), 0), EYE_CLEARANCE, 1.0E-6, EYE_CLEARANCE))) return 0;
 
         double want = depth.get();
         double total = 0;
@@ -240,7 +249,7 @@ public class PearlPhase extends Module {
             if (!mc.world.getBlockState(feet.up().offset(direction)).getCollisionShape(mc.world, feet.up().offset(direction)).isEmpty()) faces++;
         }
         if (walls == 0) return "No wall next to your feet to phase into.";
-        if (faces == 4) return "Every head level cell is blocked, which leaves only a sliver for your eyes and no throw hits it. Open one head level side and try again.";
+        if (faces == 4 && !eyeInWall.get()) return "Every head level cell is blocked, which leaves only a sliver for your eyes and no throw hits it. Open one head level side and try again.";
         return "No throw lands you in a wall from here: a crystal or player is in the way, or the pearl would hit a wall first.";
     }
 }
