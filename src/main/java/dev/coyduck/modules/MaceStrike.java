@@ -4,6 +4,7 @@ import dev.coyduck.Coyduck;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
+import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.RotationManager;
 import dev.coyduck.utils.Trace;
 import dev.coyduck.utils.Targets;
@@ -60,6 +61,7 @@ public class MaceStrike extends Module {
     private static final double CHASE_LEAD = 4;
     private static final double CHASE_ALIGN = 1.2;
     private static final double CHASE_OVER = 2.0;
+    private static final float MIN_LEARN = 2.0f;
     private static final long SETBACK_PAUSE = 1000;
 
     private enum Phase {
@@ -167,6 +169,15 @@ public class MaceStrike extends Module {
         .build()
     );
 
+    private final Setting<Double> minHealth = sgGeneral.add(new DoubleSetting.Builder()
+        .name("min-health")
+        .description("At or below this much health plus absorption it stops diving and lets go of the mace, so Auto Totem+ can put a totem in your main hand.")
+        .defaultValue(10)
+        .range(0, 36)
+        .sliderRange(0, 36)
+        .build()
+    );
+
     private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
         .name("rotate")
         .description("Faces the target before the smash starts.")
@@ -241,6 +252,9 @@ public class MaceStrike extends Module {
     private boolean waitTraced;
     private boolean roofTraced;
     private Boolean chasing;
+    private Vec3d strikeLead = Vec3d.ZERO;
+    private float learnAbsorption;
+    private boolean learnImmune;
     private long pausedUntil;
 
     public MaceStrike() {
@@ -310,7 +324,9 @@ public class MaceStrike extends Module {
             return;
         }
 
-        takeMace();
+        boolean low = mc.player.getHealth() + mc.player.getAbsorptionAmount() <= minHealth.get();
+        if (low) giveBack();
+        else takeMace();
         Vec3d now = target.getEntityPos();
         Vec3d motion = lastTargetPos == null || lastTarget != target ? Vec3d.ZERO : now.subtract(lastTargetPos);
         lastTargetPos = now;
@@ -328,12 +344,15 @@ public class MaceStrike extends Module {
         double above = reachableHover(goalX, now.y, goalZ, wanted);
         steer(new Vec3d(goalX, now.y + goalY + above, goalZ));
 
+        double arrival = chase ? LatencyManager.get().rtt() / 2.0 / 50.0 : 0;
+        strikeLead = chase ? motion.multiply(arrival) : Vec3d.ZERO;
         double align = chase ? CHASE_ALIGN : ALIGN;
         double over = chase ? CHASE_OVER : OVER_RANGE;
         double dx = goalX - mc.player.getX();
         double dz = goalZ - mc.player.getZ();
-        double tx = now.x - mc.player.getX();
-        double tz = now.z - mc.player.getZ();
+        double tx = now.x + strikeLead.x - mc.player.getX();
+        double tz = now.z + strikeLead.z - mc.player.getZ();
+        if (low) return;
         if (dx * dx + dz * dz > align * align || tx * tx + tz * tz > over * over) return;
         if (mc.player.getY() - now.y < above - HOVER_SLACK) return;
 
@@ -403,7 +422,7 @@ public class MaceStrike extends Module {
         Box box = mc.player.getBoundingBox();
         double top = mc.player.getY() - MIN_DROP;
         double reach = range.get();
-        Box victim = Targets.box(target);
+        Box victim = Targets.box(target).offset(strikeLead);
 
         for (double y = victim.maxY + STRIKE_GAP; y <= top; y += HEIGHT_STEP) {
             Box path = box.stretch(0, y - mc.player.getY(), 0);
@@ -569,6 +588,8 @@ public class MaceStrike extends Module {
         if (victim != null && mc.player.getMainHandStack().isOf(Items.MACE)) {
             learnVictim = victim.getId();
             learnHealth = victim.getHealth() + victim.getAbsorptionAmount();
+            learnAbsorption = victim.getAbsorptionAmount();
+            learnImmune = HurtTracker.get().releaseTime(victim) > Util.getMeasuringTimeMs();
             learnPops = PopCounter.pops(victim);
             learnCharge = mc.player.getAttackCooldownProgress(0.5f);
             learnBase = (float) mc.player.getAttributeValue(EntityAttributes.ATTACK_DAMAGE);
@@ -628,9 +649,13 @@ public class MaceStrike extends Module {
         if (!(mc.world.getEntityById(id) instanceof PlayerEntity victim) || !victim.isAlive()) return;
 
         boolean popped = PopCounter.pops(victim) > learnPops;
+        if (!popped && (learnImmune || victim.getAbsorptionAmount() > learnAbsorption + 0.5f)) {
+            Trace.log("mace learns nothing from that hit, {}", learnImmune ? "it landed in their hurt time" : "they gained absorption");
+            return;
+        }
         float lost = learnHealth - (victim.getHealth() + victim.getAbsorptionAmount());
         float observed = popped ? learnHealth : lost;
-        if (observed <= 0.5f) return;
+        if (observed < MIN_LEARN) return;
 
         double low = 0;
         double high = MAX_FALL;
