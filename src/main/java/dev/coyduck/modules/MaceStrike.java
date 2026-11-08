@@ -197,7 +197,7 @@ public class MaceStrike extends Module {
     private long pausedUntil;
 
     public MaceStrike() {
-        super(Coyduck.CATEGORY, "mace-strike", "Smashes players with a mace from your hotbar or inventory. On foot the server is told you went up and fell back down. While flying with elytra-fly+ it stays over the target and dives for each hit with fake moves of a few blocks per tick while you stay put on screen.");
+        super(Coyduck.CATEGORY, "mace-strike", "Smashes players with a mace from your hotbar or inventory. On foot the server is told you went up and fell back down. While flying with elytra-fly+ it stays over the target and dives for each hit with fake moves of a few blocks per tick while you stay put on screen. The worst elytra mace on Earth.");
     }
 
     @Override
