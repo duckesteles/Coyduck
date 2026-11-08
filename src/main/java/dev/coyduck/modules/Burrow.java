@@ -72,6 +72,8 @@ public class Burrow extends Module {
     );
 
     private long lastTry;
+    private BlockPos spot;
+    private boolean warned;
 
     public Burrow() {
         super(Coyduck.CATEGORY, "burrow+", "Experimental: puts a block where you stand and tries to get the server to set you back inside it. Toggle it to burrow once, or turn on keep to burrow again every time the block is broken.");
@@ -80,6 +82,8 @@ public class Burrow extends Module {
     @Override
     public void onActivate() {
         lastTry = 0;
+        spot = null;
+        warned = false;
         if (!keep.get()) toggle();
         if (mc.player == null || mc.world == null) return;
         burrow(true);
@@ -89,7 +93,18 @@ public class Burrow extends Module {
     private void onTick(TickEvent.Post event) {
         if (!keep.get() || mc.player == null || mc.world == null) return;
         if (Util.getMeasuringTimeMs() - lastTry < retryDelay.get() || moving()) return;
-        if (!mc.world.getBlockState(mc.player.getBlockPos()).isReplaceable()) return;
+        BlockPos feet = mc.player.getBlockPos();
+        if (spot != null && !feet.equals(spot)) {
+            if (feet.getX() == spot.getX() && feet.getZ() == spot.getZ() && feet.getY() > spot.getY()) {
+                if (!warned) {
+                    warned = true;
+                    warning("The server put you on top of the block instead of inside it, so keep stops here instead of building a tower. Step back down or try another rubberband value.");
+                }
+                return;
+            }
+            spot = null;
+        }
+        if (!mc.world.getBlockState(feet).isReplaceable()) return;
         burrow(false);
     }
 
@@ -143,6 +158,8 @@ public class Burrow extends Module {
         });
 
         mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.Full(x, y + rubberband.get(), z, yaw, 90, false, collision));
+        spot = feet.toImmutable();
+        warned = false;
         Trace.log("burrow sent at {}", feet);
         if (verbose) info("Sent. If you are standing on the block instead of in it, try another rubberband value.");
     }
