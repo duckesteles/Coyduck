@@ -5,6 +5,7 @@ import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.RotationManager;
+import dev.coyduck.utils.Trace;
 import dev.coyduck.utils.Targets;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
@@ -51,6 +52,10 @@ public class MaceStrike extends Module {
     private static final double STILL_SPEED = 0.08;
     private static final double ALIGN = 0.35;
     private static final double MIN_HOVER = 4.0;
+    private static final float REGEN_MARGIN = 1.0f;
+    private static final long LEARN_DELAY = 600;
+    private static final double LEARN_WEIGHT = 0.3;
+    private static final double MAX_FALL = 40;
     private static final long SETBACK_PAUSE = 1000;
 
     private enum Phase {
@@ -143,9 +148,18 @@ public class MaceStrike extends Module {
 
     private final Setting<Boolean> fullCharge = sgGeneral.add(new BoolSetting.Builder()
         .name("full-charge")
-        .description("Waits until the mace in your hand is fully charged before every smash. Switching to the mace restarts the charge, which takes about 1.7 seconds; a full charge gives the whole base damage and the 1.5x critical hit.")
-        .defaultValue(true)
+        .description("Always waits for a full charge (about 1.7 seconds after the mace is in hand) before a smash. Off: each smash waits only as long as this target needs to pop, from its health, absorption, armor, enchantments and the fall the server really counted on earlier hits, and never less than its hurt time.")
+        .defaultValue(false)
         .visible(holdMace::get)
+        .build()
+    );
+
+    private final Setting<Double> assumedFall = sgGeneral.add(new DoubleSetting.Builder()
+        .name("assumed-fall")
+        .description("Fall the server is assumed to count before any hit has been measured. After every smash the real health loss replaces it.")
+        .defaultValue(3.0)
+        .range(0, 30)
+        .sliderRange(0, 30)
         .build()
     );
 
@@ -202,6 +216,15 @@ public class MaceStrike extends Module {
     private PlayerEntity lastTarget;
     private int heldFrom = -1;
     private int owed;
+    private double learnedFall = Double.NaN;
+    private int learnVictim = -1;
+    private float learnHealth;
+    private int learnPops;
+    private float learnCharge;
+    private float learnBase;
+    private int learnDensity;
+    private long learnAt;
+    private boolean waitTraced;
     private long pausedUntil;
 
     public MaceStrike() {
@@ -227,6 +250,7 @@ public class MaceStrike extends Module {
 
     @EventHandler(priority = EventPriority.LOW)
     private void onTickPre(TickEvent.Pre event) {
+        if (mc.world != null) learn();
         if (phase != Phase.Idle) return;
         if (Util.getMeasuringTimeMs() < pausedUntil) return;
         if (!canAct() || maceSlot() == -1) {
@@ -296,10 +320,15 @@ public class MaceStrike extends Module {
         if (HurtTracker.get().releaseTime(target) > Util.getMeasuringTimeMs() + diveTicks * 50L) return;
         if (mc.player.getMainHandStack().isOf(Items.MACE)) {
             float charge = mc.player.getAttackCooldownProgress(diveTicks + 0.5f);
-            float health = target.getHealth() + target.getAbsorptionAmount();
+            float needed = target.getHealth() + target.getAbsorptionAmount() + REGEN_MARGIN;
             double drop = mc.player.getY() - y;
-            double fall = burst ? drop : Math.min(drop, step.get()) + 1;
-            if (charge <= CRIT_CHARGE && (fullCharge.get() || smashDamage(fall, charge) < health)) {
+            double fall = Math.min(burst ? drop : Math.min(drop, step.get()) + 1, countedFall());
+            boolean enough = smashDamage(fall, charge) >= needed;
+            if (charge <= CRIT_CHARGE && (fullCharge.get() || !enough)) {
+                if (!waitTraced && Trace.on()) {
+                    waitTraced = true;
+                    Trace.log("mace waits, charge {} gives {} of {} needed, counted fall {}", charge, smashDamage(fall, charge), needed, fall);
+                }
                 Box box = Targets.box(target);
                 Vec3d eye = new Vec3d(mc.player.getX(), y + STANDING_EYE, mc.player.getZ());
                 float[] rotation = rotationTo(eye, aim(box, eye));
@@ -314,6 +343,7 @@ public class MaceStrike extends Module {
         RotationManager.get().request(PRIORITY, rotation[0], rotation[1], ROTATE_SPEED, false);
         if (!looksAt(eye, box) || !due()) return;
 
+        waitTraced = false;
         strikeY = y;
         serverY = mc.player.getY();
         if (stopGlide.get()) phase = Phase.Ground;
@@ -494,6 +524,15 @@ public class MaceStrike extends Module {
     private void strike() {
         PlayerEntity victim = target;
         int slot = maceSlot();
+        if (victim != null && mc.player.getMainHandStack().isOf(Items.MACE)) {
+            learnVictim = victim.getId();
+            learnHealth = victim.getHealth() + victim.getAbsorptionAmount();
+            learnPops = PopCounter.pops(victim);
+            learnCharge = mc.player.getAttackCooldownProgress(0.5f);
+            learnBase = (float) mc.player.getAttributeValue(EntityAttributes.ATTACK_DAMAGE);
+            learnDensity = Utils.getEnchantmentLevel(mc.player.getMainHandStack(), Enchantments.DENSITY);
+            learnAt = Util.getMeasuringTimeMs();
+        }
         Runnable hit = () -> {
             boolean toggle = smash.get() && mc.player.isGliding();
             boolean sprinting = mc.player.isSprinting();
@@ -512,12 +551,42 @@ public class MaceStrike extends Module {
 
     private float smashDamage(double fall, float charge) {
         ItemStack mace = mc.player.getMainHandStack();
-        float base = (float) mc.player.getAttributeValue(EntityAttributes.ATTACK_DAMAGE);
-        double bonus = fall <= 3 ? 4 * fall : fall <= 8 ? 12 + 2 * (fall - 3) : 22 + (fall - 8);
-        bonus += 0.5 * Utils.getEnchantmentLevel(mace, Enchantments.DENSITY) * fall;
+        return smashDamage(fall, charge, target, (float) mc.player.getAttributeValue(EntityAttributes.ATTACK_DAMAGE), Utils.getEnchantmentLevel(mace, Enchantments.DENSITY));
+    }
+
+    private float smashDamage(double fall, float charge, PlayerEntity victim, float base, int density) {
+        double bonus = fall <= 1.5 ? 0 : fall <= 3 ? 4 * fall : fall <= 8 ? 12 + 2 * (fall - 3) : 22 + (fall - 8);
+        if (fall > 1.5) bonus += 0.5 * density * fall;
         float damage = base * (0.2f + charge * charge * 0.8f) + (float) bonus;
         if (charge > CRIT_CHARGE) damage *= 1.5f;
-        return DamageUtils.calculateReductions(damage, target, mc.world.getDamageSources().playerAttack(mc.player));
+        return DamageUtils.calculateReductions(damage, victim, mc.world.getDamageSources().playerAttack(mc.player));
+    }
+
+    private double countedFall() {
+        return Double.isNaN(learnedFall) ? assumedFall.get() : learnedFall;
+    }
+
+    private void learn() {
+        if (learnVictim == -1 || Util.getMeasuringTimeMs() - learnAt < LEARN_DELAY) return;
+        int id = learnVictim;
+        learnVictim = -1;
+        if (!(mc.world.getEntityById(id) instanceof PlayerEntity victim) || !victim.isAlive()) return;
+
+        boolean popped = PopCounter.pops(victim) > learnPops;
+        float lost = learnHealth - (victim.getHealth() + victim.getAbsorptionAmount());
+        float observed = popped ? learnHealth : lost;
+        if (observed <= 0.5f) return;
+
+        double low = 0;
+        double high = MAX_FALL;
+        for (int i = 0; i < 24; i++) {
+            double mid = (low + high) / 2;
+            if (smashDamage(mid, learnCharge, victim, learnBase, learnDensity) < observed) low = mid;
+            else high = mid;
+        }
+        double fall = popped ? Math.max(countedFall(), high) : high;
+        learnedFall = Double.isNaN(learnedFall) ? fall : learnedFall + (fall - learnedFall) * LEARN_WEIGHT;
+        Trace.log("mace learned counted fall {} from {} damage{}", learnedFall, observed, popped ? " (popped, at least)" : "");
     }
 
     private void glideCommand() {
