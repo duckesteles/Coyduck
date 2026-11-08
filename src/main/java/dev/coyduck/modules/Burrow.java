@@ -3,15 +3,21 @@ package dev.coyduck.modules;
 import dev.coyduck.Coyduck;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
+import meteordevelopment.meteorclient.events.world.TickEvent;
+import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;
+import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
+import meteordevelopment.orbit.EventHandler;
+import dev.coyduck.utils.Trace;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.util.Hand;
+import net.minecraft.util.Util;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -48,26 +54,64 @@ public class Burrow extends Module {
         .build()
     );
 
+    private final Setting<Boolean> keep = sgGeneral.add(new BoolSetting.Builder()
+        .name("keep")
+        .description("Stays on and burrows again whenever the block in your feet is gone, for example when an enemy keeps breaking it. Only tries while you stand still on the ground and press no movement keys.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Integer> retryDelay = sgGeneral.add(new IntSetting.Builder()
+        .name("retry-delay")
+        .description("Milliseconds between burrow attempts while keep is on, so the server has time to set you back into the block.")
+        .defaultValue(500)
+        .range(100, 3000)
+        .sliderRange(100, 2000)
+        .visible(keep::get)
+        .build()
+    );
+
+    private long lastTry;
+
     public Burrow() {
-        super(Coyduck.CATEGORY, "burrow+", "Experimental: puts a block where you stand and tries to get the server to set you back inside it. Toggle it to burrow once.");
+        super(Coyduck.CATEGORY, "burrow+", "Experimental: puts a block where you stand and tries to get the server to set you back inside it. Toggle it to burrow once, or turn on keep to burrow again every time the block is broken.");
     }
 
     @Override
     public void onActivate() {
-        toggle();
+        lastTry = 0;
+        if (!keep.get()) toggle();
         if (mc.player == null || mc.world == null) return;
+        burrow(true);
+    }
 
+    @EventHandler
+    private void onTick(TickEvent.Post event) {
+        if (!keep.get() || mc.player == null || mc.world == null) return;
+        if (Util.getMeasuringTimeMs() - lastTry < retryDelay.get() || moving()) return;
+        if (!mc.world.getBlockState(mc.player.getBlockPos()).isReplaceable()) return;
+        burrow(false);
+    }
+
+    private boolean moving() {
+        double speed = mc.player.getVelocity().horizontalLength();
+        return speed > 0.05 || mc.options.forwardKey.isPressed() || mc.options.backKey.isPressed() || mc.options.leftKey.isPressed()
+            || mc.options.rightKey.isPressed() || mc.options.jumpKey.isPressed();
+    }
+
+    private void burrow(boolean verbose) {
+        lastTry = Util.getMeasuringTimeMs();
         BlockPos feet = mc.player.getBlockPos();
         if (!mc.world.getBlockState(feet).isReplaceable()) {
-            error("Already burrowed.");
+            if (verbose) error("Already burrowed.");
             return;
         }
         if (!mc.player.isOnGround()) {
-            error("Stand on the ground to burrow.");
+            if (verbose) error("Stand on the ground to burrow.");
             return;
         }
         if (!mc.world.isSpaceEmpty(mc.player.getBoundingBox().offset(0, JUMP[JUMP.length - 1], 0))) {
-            error("Not enough room above you.");
+            if (verbose) error("Not enough room above you.");
             return;
         }
 
@@ -77,7 +121,7 @@ public class Burrow extends Module {
         int slot = inventory.find(stack -> stack.isOf(wanted), 0, InventoryManager.MAIN_END);
         if (slot == -1) slot = inventory.find(stack -> stack.isOf(other), 0, InventoryManager.MAIN_END);
         if (slot == -1) {
-            error("No obsidian or ender chest.");
+            if (verbose) error("No obsidian or ender chest.");
             return;
         }
 
@@ -99,6 +143,7 @@ public class Burrow extends Module {
         });
 
         mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.Full(x, y + rubberband.get(), z, yaw, 90, false, collision));
-        info("Sent. If you are standing on the block instead of in it, try another rubberband value.");
+        Trace.log("burrow sent at {}", feet);
+        if (verbose) info("Sent. If you are standing on the block instead of in it, try another rubberband value.");
     }
 }
