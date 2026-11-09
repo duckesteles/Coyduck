@@ -45,7 +45,7 @@ public class AutoEz extends Module {
 
     private final Setting<List<String>> messages = sgGeneral.add(new StringListSetting.Builder()
         .name("messages")
-        .description("Picked at random for every kill. {name} becomes the player's name.")
+        .description("Picked at random for every kill. {name} becomes the player's name. In public chat the name is added after the message when it has no {name}.")
         .defaultValue(List.of(
             "gg",
             "gg wp",
@@ -55,16 +55,45 @@ public class AutoEz extends Module {
         .build()
     );
 
+    private final Setting<Boolean> whisper = sgGeneral.add(new BoolSetting.Builder()
+        .name("whisper")
+        .description("Whispers the message to the player you killed. Turning it on turns public-chat off.")
+        .defaultValue(true)
+        .onChanged(on -> {
+            if (on && this.publicChat != null && this.publicChat.get()) this.publicChat.set(false);
+        })
+        .build()
+    );
+
+    private final Setting<Boolean> publicChat = sgGeneral.add(new BoolSetting.Builder()
+        .name("public-chat")
+        .description("Writes the message with the player's name in public chat instead of whispering. Turning it on turns whisper off.")
+        .defaultValue(false)
+        .onChanged(on -> {
+            if (on && this.whisper.get()) this.whisper.set(false);
+        })
+        .build()
+    );
+
     private final Setting<String> suffix = sgGeneral.add(new StringSetting.Builder()
         .name("suffix")
-        .description("Added after every message. Leave empty for none.")
+        .description("Added after every whisper. Leave empty for none.")
         .defaultValue("| try coyduck addon » github.com/duckesteles/coyduck")
+        .visible(() -> whisper.get())
+        .build()
+    );
+
+    private final Setting<String> publicSuffix = sgGeneral.add(new StringSetting.Builder()
+        .name("public-suffix")
+        .description("Added after every public chat message. Leave empty for none.")
+        .defaultValue("| coyduck addon")
+        .visible(() -> publicChat.get())
         .build()
     );
 
     private final Setting<Boolean> smallCaps = sgGeneral.add(new BoolSetting.Builder()
         .name("small-caps")
-        .description("Writes the suffix in small caps.")
+        .description("Writes the suffix and the public suffix in small caps.")
         .defaultValue(true)
         .build()
     );
@@ -73,12 +102,13 @@ public class AutoEz extends Module {
         .name("command")
         .description("Whisper command, without the slash.")
         .defaultValue("msg")
+        .visible(() -> whisper.get())
         .build()
     );
 
     private final Setting<Integer> delay = sgGeneral.add(new IntSetting.Builder()
         .name("delay")
-        .description("Ticks to wait after the kill before whispering.")
+        .description("Ticks to wait after the kill before sending.")
         .defaultValue(20)
         .range(0, 200)
         .sliderRange(0, 100)
@@ -92,7 +122,7 @@ public class AutoEz extends Module {
     private record Pending(String name, long at) {}
 
     public AutoEz() {
-        super(Coyduck.CATEGORY, "auto-ez", "Whispers a good game message to players you kill.");
+        super(Coyduck.CATEGORY, "auto-ez", "Sends a good game message for players you kill, as a whisper to them or in public chat with their name.");
     }
 
     @Override
@@ -133,7 +163,7 @@ public class AutoEz extends Module {
         long now = Util.getMeasuringTimeMs();
         pending.removeIf(entry -> {
             if (entry.at > now) return false;
-            whisper(entry.name);
+            send(entry.name);
             return true;
         });
     }
@@ -173,7 +203,7 @@ public class AutoEz extends Module {
         }
     }
 
-    private void whisper(String name) {
+    private void send(String name) {
         List<String> list = messages.get();
         if (list.isEmpty()) return;
 
@@ -181,12 +211,25 @@ public class AutoEz extends Module {
         if (list.size() > 1 && index == last) index = (index + 1) % list.size();
         last = index;
 
-        String tail = suffix.get().isBlank() ? "" : " " + (smallCaps.get() ? smallCaps(suffix.get()) : suffix.get());
-        String body = list.get(index).replace("{name}", name) + tail;
+        String message = list.get(index);
+        if (publicChat.get()) {
+            String text = message.contains("{name}") ? message.replace("{name}", name) : message + " " + name;
+            String line = text + tail(publicSuffix.get());
+            mc.getNetworkHandler().sendChatMessage(line.length() > CHAT_LIMIT ? line.substring(0, CHAT_LIMIT) : line);
+            return;
+        }
+        if (!whisper.get()) return;
+
+        String body = message.replace("{name}", name) + tail(suffix.get());
         String prefix = command.get().trim() + " " + name + " ";
         int room = CHAT_LIMIT - prefix.length();
         if (body.length() > room) body = body.substring(0, room);
         mc.getNetworkHandler().sendChatCommand(prefix + body);
+    }
+
+    private String tail(String text) {
+        if (text.isBlank()) return "";
+        return " " + (smallCaps.get() ? smallCaps(text) : text);
     }
 
     private static String smallCaps(String text) {
