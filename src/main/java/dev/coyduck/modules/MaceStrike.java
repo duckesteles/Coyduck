@@ -1,6 +1,7 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
@@ -31,6 +32,8 @@ import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.network.packet.c2s.play.ClientTickEndC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
+import net.minecraft.entity.damage.DamageTypes;
+import net.minecraft.network.packet.s2c.play.EntityDamageS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.Box;
@@ -63,6 +66,10 @@ public class MaceStrike extends Module {
     private static final double CHASE_OVER = 2.0;
     private static final float MIN_LEARN = 2.0f;
     private static final long SETBACK_PAUSE = 1000;
+    private static final int MAX_RAPID_HITS = 2;
+    private static final double CLOSED_PENALTY = 1000;
+    private static final double STICK = 4;
+    private static final double BODY_INSET = 0.1;
 
     private enum Phase {
         Idle,
@@ -255,6 +262,8 @@ public class MaceStrike extends Module {
     private Vec3d strikeLead = Vec3d.ZERO;
     private float learnAbsorption;
     private boolean learnImmune;
+    private boolean learnSmash;
+    private boolean learnMixed;
     private long pausedUntil;
 
     public MaceStrike() {
@@ -489,6 +498,13 @@ public class MaceStrike extends Module {
     }
 
     @EventHandler
+    private void onDamage(PacketApplyEvent.Pre event) {
+        if (!(event.packet instanceof EntityDamageS2CPacket packet) || mc.player == null || learnVictim == -1 || packet.entityId() != learnVictim) return;
+        if (packet.sourceType().matchesKey(DamageTypes.MACE_SMASH) && packet.sourceCauseId() == mc.player.getId()) learnSmash = true;
+        else learnMixed = true;
+    }
+
+    @EventHandler
     private void onGameLeft(GameLeftEvent event) {
         phase = Phase.Idle;
         owed = 0;
@@ -595,6 +611,8 @@ public class MaceStrike extends Module {
             learnBase = (float) mc.player.getAttributeValue(EntityAttributes.ATTACK_DAMAGE);
             learnDensity = Utils.getEnchantmentLevel(mc.player.getMainHandStack(), Enchantments.DENSITY);
             learnAt = Util.getMeasuringTimeMs();
+            learnSmash = false;
+            learnMixed = false;
         }
         Runnable hit = () -> {
             boolean toggle = smash.get() && mc.player.isGliding();
@@ -630,6 +648,7 @@ public class MaceStrike extends Module {
         float rapidCharge = Math.min(1, HURT_MS / 50f / fullTicks);
         float rapid = Math.max(0.1f, smashDamage(fall, rapidCharge));
         float full = Math.max(0.1f, smashDamage(fall, 1));
+        if (Math.ceil(needed / rapid) > MAX_RAPID_HITS) return false;
         long rapidTime = (long) (Math.ceil(needed / rapid) - 1) * HURT_MS;
         long waitFull = (long) (Math.max(0, CRIT_CHARGE + 0.01f - charge) * fullTicks * 50);
         long fullTime = waitFull + (long) (Math.ceil(needed / full) - 1) * (long) (fullTicks * 50);
@@ -649,6 +668,10 @@ public class MaceStrike extends Module {
         if (!(mc.world.getEntityById(id) instanceof PlayerEntity victim) || !victim.isAlive()) return;
 
         boolean popped = PopCounter.pops(victim) > learnPops;
+        if (!learnSmash || learnMixed) {
+            Trace.log("mace learns nothing from that hit, {}", !learnSmash ? "the server did not count it as a smash" : "they took other damage too");
+            return;
+        }
         if (!popped && (learnImmune || victim.getAbsorptionAmount() > learnAbsorption + 0.5f)) {
             Trace.log("mace learns nothing from that hit, {}", learnImmune ? "it landed in their hurt time" : "they gained absorption");
             return;
@@ -736,13 +759,35 @@ public class MaceStrike extends Module {
             if (reachOnly && !inReach(player)) continue;
             if (!reachOnly && player.squaredDistanceTo(mc.player) > distance * distance) continue;
 
-            double score = player == target ? -1 : player.getHealth() + player.getAbsorptionAmount();
+            double score;
+            if (reachOnly) {
+                score = player == target ? -1 : player.getHealth() + player.getAbsorptionAmount();
+            } else {
+                score = Math.sqrt(player.squaredDistanceTo(mc.player));
+                if (!open(player)) score += CLOSED_PENALTY;
+                if (player == target) score -= STICK;
+            }
             if (score < bestScore) {
                 best = player;
                 bestScore = score;
             }
         }
+        if (!reachOnly && best != null && target != null && best != target && Trace.on()) {
+            Trace.log("mace switches from {} to {}, the nearest one it can hit", target.getName().getString(), best.getName().getString());
+        }
         return best;
+    }
+
+    private boolean open(PlayerEntity player) {
+        Box body = Targets.box(player);
+        if (!mc.world.isSpaceEmpty(player, body.contract(BODY_INSET))) return false;
+        Box own = mc.player.getBoundingBox();
+        double half = own.getLengthX() / 2;
+        Vec3d center = body.getCenter();
+        double bottom = body.maxY + STRIKE_GAP;
+        Box column = new Box(center.x - half, bottom, center.z - half, center.x + half, bottom + MIN_HOVER + own.getLengthY(), center.z + half);
+        if (!mc.world.isSpaceEmpty(mc.player, column)) return false;
+        return clearSight(new Vec3d(center.x, bottom + GLIDING_EYE, center.z), body);
     }
 
     private boolean inReach(PlayerEntity player) {
