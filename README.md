@@ -10,6 +10,7 @@
 - AutoAnchor
 - AutoTotem
 - KillAura
+- MaceStrike
 - Surround
 - AutoTrap
 - AutoWeb
@@ -17,6 +18,8 @@
 - LadderTrap
 - ElytraFly
 - ElytraPilot
+- ElytraEvade
+- BoatFly
 - SelfTrap
 - HoleSnap
 - HoleFill
@@ -27,6 +30,7 @@
 - KillEffects
 - PearlPhase
 - SpeedPlus
+- NoClimb
 - NoRotate
 - AutoXp
 - Burrow
@@ -38,4 +42,5 @@
 - NoExplosion
 - HideRich
 - AutoEz
+- AutoLogin
 - ClickGui
