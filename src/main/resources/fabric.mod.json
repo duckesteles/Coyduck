@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "coyduck-logger",
+  "version": "${version}",
+  "name": "Coyduck Logger",
+  "description": "Records your own fights in detail for later analysis. Positions are written only during fights and only relative to where each fight started, so a log never shows where you are.",
+  "authors": [
+    "duckesteles"
+  ],
+  "contact": {
+    "sources": "https://github.com/duckesteles/Coyduck/tree/logger"
+  },
+  "license": "GPL-3.0-only",
+  "icon": "assets/coyduck-logger/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.coyduck.logger.CoyduckLogger"
+    ]
+  },
+  "mixins": [
+    "coyduck-logger.mixins.json"
+  ],
+  "depends": {
+    "java": ">=${jdk_version}",
+    "minecraft": "${mc_version}",
+    "fabricloader": ">=0.16.0"
+  }
+}
