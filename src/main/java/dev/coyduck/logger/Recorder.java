@@ -116,7 +116,15 @@ public final class Recorder {
     }
 
     public synchronized void join() {
-        close("joined another world");
+        try {
+            joinSafely();
+        } catch (RuntimeException e) {
+            CoyduckLogger.LOG.warn("Coyduck Logger join failed", e);
+        }
+    }
+
+    private void joinSafely() {
+        closeSafely("joined another world");
         String name = LocalDateTime.now().format(FILE) + ".log";
         Path path = mc.runDirectory.toPath().resolve("coyduck-logger").resolve(name);
         try {
@@ -145,6 +153,14 @@ public final class Recorder {
     }
 
     public synchronized void close(String reason) {
+        try {
+            closeSafely(reason);
+        } catch (RuntimeException e) {
+            CoyduckLogger.LOG.warn("Coyduck Logger close failed", e);
+        }
+    }
+
+    private void closeSafely(String reason) {
         if (file == null) return;
         if (anchor != null) endWindow(reason);
         raw("END " + reason + ", scrubbed " + guard.scrubbed() + " numbers that looked like coordinates");
@@ -177,6 +193,14 @@ public final class Recorder {
     }
 
     public synchronized void tick() {
+        try {
+            tickSafely();
+        } catch (RuntimeException e) {
+            CoyduckLogger.LOG.warn("Coyduck Logger tick failed", e);
+        }
+    }
+
+    private void tickSafely() {
         if (file == null) return;
         tick++;
         if (mc.player == null || mc.world == null) {
