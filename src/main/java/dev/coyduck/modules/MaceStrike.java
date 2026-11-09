@@ -40,6 +40,10 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
+import java.util.ArrayDeque;
+import java.util.HashMap;
+import java.util.Map;
+
 public class MaceStrike extends Module {
     private static final int PRIORITY = 85;
     private static final float ROTATE_SPEED = 180.0f;
@@ -70,6 +74,19 @@ public class MaceStrike extends Module {
     private static final double CLOSED_PENALTY = 1000;
     private static final double STICK = 4;
     private static final double BODY_INSET = 0.1;
+    private static final long HEAL_WINDOW = 3000;
+    private static final float MAX_RISE = 4.0f;
+    private static final double HEAL_RANGE = 48;
+
+    private record Rise(long time, float amount) {}
+
+    private static final class Heals {
+        float last = Float.NaN;
+        long since;
+        final ArrayDeque<Rise> rises = new ArrayDeque<>();
+    }
+
+    private final Map<Integer, Heals> heals = new HashMap<>();
 
     private enum Phase {
         Idle,
@@ -272,6 +289,7 @@ public class MaceStrike extends Module {
 
     @Override
     public void onDeactivate() {
+        heals.clear();
         chasing = null;
         phase = Phase.Idle;
         owed = 0;
@@ -290,7 +308,10 @@ public class MaceStrike extends Module {
 
     @EventHandler(priority = EventPriority.LOW)
     private void onTickPre(TickEvent.Pre event) {
-        if (mc.world != null) learn();
+        if (mc.world != null) {
+            trackHeals();
+            learn();
+        }
         if (phase != Phase.Idle) return;
         if (Util.getMeasuringTimeMs() < pausedUntil) return;
         if (!canAct() || maceSlot() == -1) {
@@ -380,7 +401,7 @@ public class MaceStrike extends Module {
             if (!go) {
                 if (!waitTraced && Trace.on()) {
                     waitTraced = true;
-                    Trace.log("mace waits, charge {} gives {} of {} needed, counted fall {}", charge, damage, needed, fall);
+                    Trace.log("mace waits, charge {} gives {} of {} needed, counted fall {}, they heal {}/s", charge, damage, needed, fall, healRate(target));
                 }
                 Box box = Targets.box(target);
                 Vec3d eye = new Vec3d(mc.player.getX(), y + STANDING_EYE, mc.player.getZ());
@@ -648,13 +669,47 @@ public class MaceStrike extends Module {
         float rapidCharge = Math.min(1, HURT_MS / 50f / fullTicks);
         float rapid = Math.max(0.1f, smashDamage(fall, rapidCharge));
         float full = Math.max(0.1f, smashDamage(fall, 1));
-        if (Math.ceil(needed / rapid) > MAX_RAPID_HITS) return false;
-        long rapidTime = (long) (Math.ceil(needed / rapid) - 1) * HURT_MS;
+        float perMs = healRate(target) / 1000f;
+
+        double rapidHits = Math.ceil(needed / rapid);
+        rapidHits = Math.ceil((needed + perMs * (rapidHits - 1) * HURT_MS) / rapid);
+        if (rapidHits > MAX_RAPID_HITS) return false;
+        long rapidTime = (long) (rapidHits - 1) * HURT_MS;
+
+        long fullGap = (long) (fullTicks * 50);
         long waitFull = (long) (Math.max(0, CRIT_CHARGE + 0.01f - charge) * fullTicks * 50);
-        long fullTime = waitFull + (long) (Math.ceil(needed / full) - 1) * (long) (fullTicks * 50);
+        double fullHits = Math.ceil(needed / full);
+        fullHits = Math.ceil((needed + perMs * (waitFull + (fullHits - 1) * fullGap)) / full);
+        long fullTime = waitFull + (long) (fullHits - 1) * fullGap;
+
         boolean rapidWins = rapidTime <= fullTime;
-        if (rapidWins && Trace.on()) Trace.log("mace hits at once, {} hits of {} every {}ms beat waiting {}ms for {}", (int) Math.ceil(needed / rapid), rapid, HURT_MS, waitFull, full);
+        if (rapidWins && Trace.on()) Trace.log("mace hits at once, {} hits of {} every {}ms beat waiting {}ms for {}, they heal {}/s", (int) rapidHits, rapid, HURT_MS, waitFull, full, perMs * 1000);
         return rapidWins;
+    }
+
+    private void trackHeals() {
+        long now = Util.getMeasuringTimeMs();
+        if (heals.size() > 64) heals.keySet().removeIf(id -> mc.world.getEntityById(id) == null);
+        for (PlayerEntity player : mc.world.getPlayers()) {
+            if (player == mc.player || player.squaredDistanceTo(mc.player) > HEAL_RANGE * HEAL_RANGE) continue;
+            Heals log = heals.computeIfAbsent(player.getId(), id -> new Heals());
+            if (Float.isNaN(log.last)) log.since = now;
+            float health = player.getHealth();
+            float rise = health - log.last;
+            if (!Float.isNaN(log.last) && rise > 0.01f && rise <= MAX_RISE && player.isAlive()) log.rises.addLast(new Rise(now, rise));
+            log.last = health;
+            while (!log.rises.isEmpty() && now - log.rises.peekFirst().time() > HEAL_WINDOW) log.rises.pollFirst();
+        }
+    }
+
+    private float healRate(PlayerEntity player) {
+        if (player == null) return 0;
+        Heals log = heals.get(player.getId());
+        if (log == null) return 0;
+        float total = 0;
+        for (Rise rise : log.rises) total += rise.amount();
+        long watched = Math.min(HEAL_WINDOW, Util.getMeasuringTimeMs() - log.since);
+        return total / (Math.max(1000, watched) / 1000f);
     }
 
     private double countedFall() {
@@ -676,7 +731,7 @@ public class MaceStrike extends Module {
             Trace.log("mace learns nothing from that hit, {}", learnImmune ? "it landed in their hurt time" : "they gained absorption");
             return;
         }
-        float lost = learnHealth - (victim.getHealth() + victim.getAbsorptionAmount());
+        float lost = learnHealth - (victim.getHealth() + victim.getAbsorptionAmount()) + healRate(victim) * LEARN_DELAY / 1000f;
         float observed = popped ? learnHealth : lost;
         if (observed < MIN_LEARN) return;
 
