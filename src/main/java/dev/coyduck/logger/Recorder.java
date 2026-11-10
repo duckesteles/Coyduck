@@ -63,6 +63,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -81,11 +82,13 @@ public final class Recorder {
     private static final int DEATH = 3;
     private static final DateTimeFormatter FILE = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
+    private static final List<String> PUBLIC_SERVERS = List.of("6b6t.org", "2b2t.org", "9b9t.com", "0b0t.org", "8b8t.me", "constantiam.net", "anarchy.pw", "simpleanarchy.net");
 
     private final MinecraftClient mc = MinecraftClient.getInstance();
     private final LeakGuard guard = new LeakGuard();
 
     private LogFile file;
+    private LogFile closed;
     private String dimension;
     private long tick;
     private int tickEnds;
@@ -165,8 +168,8 @@ public final class Recorder {
     public void shutdown() {
         LogFile last;
         synchronized (this) {
-            last = file;
             close("game closed");
+            last = closed;
         }
         if (last != null) last.await();
     }
@@ -176,6 +179,7 @@ public final class Recorder {
         if (anchor != null) endWindow(reason);
         raw("END " + reason + ", scrubbed " + guard.scrubbed() + " numbers that looked like coordinates" + (file.dropped() > 0 ? ", " + file.dropped() + " lines dropped" : ""));
         file.close();
+        closed = file;
         file = null;
     }
 
@@ -201,8 +205,10 @@ public final class Recorder {
         String address = mc.getCurrentServerEntry().address.trim();
         if (address.startsWith("[") || address.chars().filter(c -> c == ':').count() > 1) return "an ip address";
         int port = address.lastIndexOf(':');
-        String host = port > 0 ? address.substring(0, port) : address;
-        return host.matches("[0-9.]+") ? "an ip address" : host;
+        String host = (port > 0 ? address.substring(0, port) : address).toLowerCase(Locale.ROOT);
+        if (host.matches("[0-9.]+")) return "an ip address";
+        for (String known : PUBLIC_SERVERS) if (host.equals(known) || host.endsWith("." + known)) return known;
+        return "a private server";
     }
 
     public synchronized void tick() {
