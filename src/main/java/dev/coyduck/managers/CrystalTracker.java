@@ -7,6 +7,7 @@ import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import meteordevelopment.meteorclient.events.entity.EntityAddedEvent;
+import meteordevelopment.meteorclient.events.entity.player.AttackEntityEvent;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.orbit.EventHandler;
@@ -149,6 +150,12 @@ public final class CrystalTracker {
 
     public int highestId() {
         return highestId;
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST)
+    private void onAttack(AttackEntityEvent event) {
+        if (event.isCancelled() || !(event.entity instanceof EndCrystalEntity crystal) || !InteractionManager.get().canHitWithHand()) return;
+        explodeAt(crystal.getEntityPos());
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
