@@ -295,9 +295,23 @@ public class CoyGuiScreen extends Screen {
         }
         arrange();
         for (Page each : allPages()) {
-            for (Panel panel : each.panels) panel.x = MathHelper.clamp(panel.x, 0, Math.max(0, width - WIDTH));
+            for (Panel panel : each.panels) {
+                panel.x = MathHelper.clamp(panel.x, 0, Math.max(0, width - WIDTH));
+                clampY(panel);
+            }
         }
         if (window != null) clampWindow();
+    }
+
+    private void moveY(Panel panel, int y) {
+        int length = panel.collapsed ? HEADER : Math.max(HEADER, panel.bottom - panel.y);
+        int clamped = MathHelper.clamp(y, HEADER - length, Math.max(0, height - HEADER));
+        panel.bottom += clamped - panel.y;
+        panel.y = clamped;
+    }
+
+    private void clampY(Panel panel) {
+        moveY(panel, panel.y);
     }
 
     private List<Page> allPages() {
@@ -630,6 +644,7 @@ public class CoyGuiScreen extends Screen {
 
     private Object drawPanel(DrawContext context, Panel panel, int offset, int mouseX, int mouseY) {
         if (!shown(panel)) return null;
+        clampY(panel);
         int x = panel.x + offset;
         int y = panel.y;
 
@@ -1653,7 +1668,7 @@ public class CoyGuiScreen extends Screen {
         if (dragging != null) {
             custom = true;
             dragging.x = MathHelper.clamp((int) click.x() - dragX, 0, Math.max(0, width - WIDTH));
-            dragging.y = (int) click.y() - dragY;
+            moveY(dragging, (int) click.y() - dragY);
             return true;
         }
         if (sliding != null) {
@@ -1684,8 +1699,7 @@ public class CoyGuiScreen extends Screen {
         for (int i = list.size() - 1; i >= 0; i--) {
             Panel panel = list.get(i);
             if (mouseX < panel.x || mouseX >= panel.x + WIDTH || mouseY < panel.y || mouseY >= Math.max(panel.bottom, panel.y + HEADER) || !shown(panel)) continue;
-            int length = Math.max(HEADER, panel.bottom - panel.y);
-            panel.y = MathHelper.clamp(panel.y + (int) Math.signum(vertical) * SCROLL, HEADER - length, Math.max(0, height - HEADER));
+            moveY(panel, panel.y + (int) Math.signum(vertical) * SCROLL);
             if (!searching()) {
                 custom = true;
                 saveLayout();
