@@ -117,6 +117,10 @@ public class AutoCrystal extends Module {
     private static final float TURN_COST = 0.02f;
     private static final float KEEP_BONUS = 0.75f;
     private static final long KEEP_MS = 100;
+    private static final float PREFERRED_AIM_SLACK = 15.0f;
+    private static final double AIM_INSET = 0.05;
+    private static final float OTHERS_WEIGHT = 0.3f;
+    private static final double PREFERRED_LOS_LIFT = 0.15;
     private static final float LOW_HEALTH_BONUS = 3.0f;
     private static final int GAP_PLACES = 1;
     private static final float MINE_AHEAD_PROGRESS = 0.6f;
@@ -1376,6 +1380,7 @@ public class AutoCrystal extends Module {
 
         boolean chipping = !low && self <= chipSelf.get();
         Choice best = null;
+        float total = 0;
         for (Target target : targets) {
             float least = floor(target, chipping);
             float bound = ExplosionDamage.upperBound(target.player, target.feet, crystal);
@@ -1410,6 +1415,7 @@ public class AutoCrystal extends Module {
             }
 
             float counted = Math.min(damage, target.health);
+            total += counted;
             float score = counted - self * selfWeight.get().floatValue() + (target.player == focus ? FOCUS_BONUS : 0)
                 + LOW_HEALTH_BONUS * Math.min(damage / Math.max(target.health, 1.0f), 1.0f);
             if (damage >= target.health + LETHAL_MARGIN) score += LETHAL_BONUS;
@@ -1419,6 +1425,10 @@ public class AutoCrystal extends Module {
             if (choice.beats(best)) best = choice;
         }
 
+        if (best != null) {
+            float others = total - Math.min(best.damage(), best.target().health);
+            if (others > 0) best = new Choice(best.target(), best.damage(), best.raw(), best.self(), best.score() + others * OTHERS_WEIGHT);
+        }
         return best;
     }
 
@@ -1432,15 +1442,18 @@ public class AutoCrystal extends Module {
         if (!rotate.get()) return 0;
         RotationManager rotations = RotationManager.get();
         if (rotations.isLookingAt(new Box(base), placeRange.get() + 1)) return 0;
+        return Math.max(0, turn(InteractionManager.get().crystalAim(base)) - TURN_FREE) * TURN_COST;
+    }
+
+    private float turn(Vec3d aim) {
+        RotationManager rotations = RotationManager.get();
         Vec3d eye = mc.player.getEyePos();
-        Vec3d aim = InteractionManager.get().crystalAim(base);
         double dx = aim.x - eye.x;
         double dy = aim.y - eye.y;
         double dz = aim.z - eye.z;
         float yaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90.0f;
         float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
-        float turn = Math.abs(MathHelper.wrapDegrees(yaw - rotations.serverYaw())) + Math.abs(pitch - rotations.serverPitch());
-        return Math.max(0, turn - TURN_FREE) * TURN_COST;
+        return Math.abs(MathHelper.wrapDegrees(yaw - rotations.serverYaw())) + Math.abs(pitch - rotations.serverPitch());
     }
 
     private static boolean holdsTotem(PlayerEntity player) {
@@ -1591,7 +1604,30 @@ public class AutoCrystal extends Module {
 
     private Vec3d breakAim(EndCrystalEntity crystal) {
         BlockPos base = crystal.getBlockPos().down();
-        return isBase(mc.world.getBlockState(base)) ? InteractionManager.get().crystalAim(base) : crystal.getBoundingBox().getCenter();
+        Box box = crystal.getBoundingBox();
+        Vec3d eye = mc.player.getEyePos();
+        Vec3d preferred = isBase(mc.world.getBlockState(base)) ? InteractionManager.get().crystalAim(base) : box.getCenter();
+        if (!rotate.get()) return preferred;
+
+        Vec3d look = Vec3d.fromPolar(RotationManager.get().serverPitch(), RotationManager.get().serverYaw());
+        Vec3d along = eye.add(look.multiply(Math.max(0, box.getCenter().subtract(eye).dotProduct(look))));
+        Box inner = box.contract(AIM_INSET);
+        Vec3d nearest = new Vec3d(MathHelper.clamp(along.x, inner.minX, inner.maxX), MathHelper.clamp(along.y, inner.minY, inner.maxY), MathHelper.clamp(along.z, inner.minZ, inner.maxZ));
+        Vec3d middle = box.getCenter();
+        Vec3d[] points = {preferred, nearest, middle, new Vec3d(middle.x, box.maxY - AIM_INSET, middle.z), new Vec3d(middle.x, box.minY + AIM_INSET, middle.z)};
+
+        Vec3d best = null;
+        float bestTurn = Float.MAX_VALUE;
+        for (int i = 0; i < points.length; i++) {
+            Vec3d point = points[i];
+            if (!throughWalls.get() && !clearLine(i == 0 ? point.add(0, PREFERRED_LOS_LIFT, 0) : point)) continue;
+            float turn = turn(point) - (i == 0 ? PREFERRED_AIM_SLACK : 0);
+            if (turn < bestTurn) {
+                best = point;
+                bestTurn = turn;
+            }
+        }
+        return best == null ? preferred : best;
     }
 
     private boolean canUse(BlockPos base) {
