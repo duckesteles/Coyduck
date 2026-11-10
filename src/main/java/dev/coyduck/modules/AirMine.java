@@ -1,6 +1,7 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.Setting;
@@ -43,6 +44,11 @@ public class AirMine extends Module {
         if (mc.player == null || mc.player.isOnGround() || mc.player.hasVehicle() || mc.player.getAbilities().flying) return false;
         if (mc.player.isGliding()) return true;
         return falling.get() && mc.player.fallDistance <= SAFE_FALL && !mc.player.isTouchingWater();
+    }
+
+    @EventHandler
+    private void onTick(TickEvent.Pre event) {
+        restore = false;
     }
 
     @EventHandler
