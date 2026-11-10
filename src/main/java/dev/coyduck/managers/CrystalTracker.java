@@ -155,6 +155,7 @@ public final class CrystalTracker {
     @EventHandler(priority = EventPriority.LOWEST)
     private void onAttack(AttackEntityEvent event) {
         if (event.isCancelled() || !(event.entity instanceof EndCrystalEntity crystal) || !InteractionManager.get().canHitWithHand()) return;
+        if (!RotationManager.get().isLookingAt(crystal.getBoundingBox(), mc.player.getEntityInteractionRange() + 1)) return;
         explodeAt(crystal.getEntityPos());
     }
 
