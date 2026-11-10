@@ -670,7 +670,7 @@ public class Surround extends Module {
             MiningTracker.Mining mining = MiningTracker.get().mining(cell);
             if (mining == null || mining.breaker() == mc.player.getId() || mc.world.getBlockState(cell).isReplaceable()) continue;
             for (Entity entity : mc.world.getOtherEntities(null, new Box(cell.up()))) {
-                if (!(entity instanceof EndCrystalEntity crystal) || CrystalTracker.get().isDead(crystal) || interaction.recentlyAttacked(crystal)) continue;
+                if (!(entity instanceof EndCrystalEntity crystal) || !crystal.getBlockPos().down().equals(cell) || CrystalTracker.get().isDead(crystal) || interaction.recentlyAttacked(crystal)) continue;
                 Verdict verdict = verdict(crystal);
                 if (verdict == Verdict.Unsafe) continue;
                 if (!interaction.attack(crystal, switchMode.get(), swing.get(), true, rotate.get(), crystal.getBoundingBox().getCenter())) return;
