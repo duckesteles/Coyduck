@@ -1,5 +1,7 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.events.WorldResetEvent;
+import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import dev.coyduck.utils.Trace;
 import dev.coyduck.Coyduck;
 import dev.coyduck.managers.InventoryManager;
@@ -106,6 +108,16 @@ public class PearlPhase extends Module {
             return;
         }
         aimTicks = 0;
+    }
+
+    @EventHandler
+    private void onGameLeft(GameLeftEvent event) {
+        toggle();
+    }
+
+    @EventHandler
+    private void onWorldReset(WorldResetEvent event) {
+        toggle();
     }
 
     @EventHandler
