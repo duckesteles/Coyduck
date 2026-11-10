@@ -58,6 +58,8 @@ import net.minecraft.util.Util;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.entity.player.PlayerEntity;
 import meteordevelopment.meteorclient.systems.friends.Friends;
+import net.minecraft.entity.FallingBlockEntity;
+import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.item.Items;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -74,6 +76,7 @@ import java.util.List;
 import java.util.Set;
 
 public class Surround extends Module {
+    private static final double ANVIL_RANGE = 1.5;
     public enum Disable {
         Never,
         Leave
@@ -231,7 +234,7 @@ public class Surround extends Module {
 
     private final Setting<Boolean> maceRoof = sgProtect.add(new BoolSetting.Builder()
         .name("mace-roof")
-        .description("Closes the cell above your head and the head level ring while an enemy holding a mace or flying with an elytra is above you, so mace smashes from above cannot reach you.")
+        .description("Closes the cell above your head and the head level ring while an enemy holding a mace or flying with an elytra is above you, or an anvil is falling on you, so nothing can hit you from above.")
         .defaultValue(true)
         .build()
     );
@@ -757,6 +760,13 @@ public class Surround extends Module {
             double dz = player.getZ() - mc.player.getZ();
             if (dx * dx + dz * dz > MACE_RANGE * MACE_RANGE) continue;
             if (player.getMainHandStack().isOf(Items.MACE) || player.isGliding()) return true;
+        }
+        for (Entity entity : mc.world.getEntities()) {
+            if (!(entity instanceof FallingBlockEntity falling) || !falling.getBlockState().isIn(BlockTags.ANVIL)) continue;
+            double dy = falling.getY() - mc.player.getY();
+            double dx = falling.getX() - mc.player.getX();
+            double dz = falling.getZ() - mc.player.getZ();
+            if (dy > 1 && dy < MACE_MAX_HEIGHT && dx * dx + dz * dz <= ANVIL_RANGE * ANVIL_RANGE) return true;
         }
         return false;
     }
