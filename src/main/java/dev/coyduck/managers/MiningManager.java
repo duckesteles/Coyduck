@@ -504,7 +504,8 @@ public final class MiningManager {
 
     private boolean canHold() {
         if (InventoryManager.get().wantsToEat() || InventoryManager.get().isEating()) return false;
-        if (!mc.player.getMainHandStack().contains(DataComponentTypes.DEATH_PROTECTION)) return true;
+        ItemStack displaced = holdSource != -1 ? InventoryManager.get().stack(holdSource) : mc.player.getMainHandStack();
+        if (!displaced.contains(DataComponentTypes.DEATH_PROTECTION)) return true;
 
         float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
         return health > HOLD_MIN_HEALTH || (AutoTotem.canAffordPop() && !lethalCrystalNear(health));
