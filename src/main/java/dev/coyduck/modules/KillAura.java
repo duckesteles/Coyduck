@@ -406,7 +406,7 @@ public class KillAura extends Module {
         int selected = inventory.selectedSlot();
         int best = best(entity);
         if (best == selected) return;
-        if (inventory.stack(selected).contains(DataComponentTypes.DEATH_PROTECTION) && AutoTotem.wantsMainTotem()) return;
+        if (inventory.stack(selected).contains(DataComponentTypes.DEATH_PROTECTION) && (AutoTotem.wantsMainTotem() || best >= InventoryManager.HOTBAR_END)) return;
 
         if (best < InventoryManager.HOTBAR_END) inventory.select(best);
         else inventory.swapWithHotbar(best, selected);
