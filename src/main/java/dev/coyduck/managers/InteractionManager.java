@@ -65,6 +65,7 @@ public final class InteractionManager {
     private static final InteractionManager INSTANCE = new InteractionManager();
 
     private static final double REACH_MARGIN = 0.05;
+    private static final double CENTER_REACH = 5.1;
     private static final int WEAPON_SETTLE = 2;
     private static final int DROP_RADIUS = 11;
     private static final double EXPLOSION_NOTICE = 20.0;
@@ -137,6 +138,10 @@ public final class InteractionManager {
         return mc.world.getOtherEntities(null, new Box(pos), entity -> !entity.isRemoved() && entity.intersectionChecked);
     }
 
+    public static boolean centerReach(BlockPos clicked) {
+        return Vec3d.ofCenter(clicked).squaredDistanceTo(mc.player.getEyePos()) <= CENTER_REACH * CENTER_REACH;
+    }
+
     public BlockHitResult hit(BlockPos pos, boolean airplace) {
         Vec3d eye = mc.player.getEyePos();
         double reach = mc.player.getBlockInteractionRange() - REACH_MARGIN;
@@ -154,7 +159,7 @@ public final class InteractionManager {
             if (state.isReplaceable() || BlockRules.isInteractable(state.getBlock())) continue;
 
             double distance = new Box(neighbor).squaredMagnitude(eye);
-            if (distance >= reachSquared) continue;
+            if (distance >= reachSquared || !centerReach(neighbor)) continue;
 
             Direction side = direction.getOpposite();
             Vec3d normal = Vec3d.of(side.getVector());
@@ -177,7 +182,7 @@ public final class InteractionManager {
 
         if (seen != null) return seen;
         if (facing != null || support || !airplace) return facing;
-        if (new Box(pos).squaredMagnitude(eye) >= reachSquared) return null;
+        if (new Box(pos).squaredMagnitude(eye) >= reachSquared || !centerReach(pos)) return null;
         for (Direction direction : Direction.values()) {
             Vec3d point = visiblePoint(pos, direction, eye, reachSquared);
             if (point != null) return new BlockHitResult(point, direction, pos, false);

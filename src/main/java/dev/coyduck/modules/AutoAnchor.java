@@ -789,7 +789,7 @@ public class AutoAnchor extends Module {
     }
 
     private boolean inRange(BlockPos pos) {
-        return new Box(pos).squaredMagnitude(mc.player.getEyePos()) <= placeRange.get() * placeRange.get();
+        return new Box(pos).squaredMagnitude(mc.player.getEyePos()) <= placeRange.get() * placeRange.get() && InteractionManager.centerReach(pos);
     }
 
     private boolean anchorsWork() {

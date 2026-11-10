@@ -1682,7 +1682,7 @@ public class AutoCrystal extends Module {
     }
 
     private boolean inPlaceRange(BlockPos base) {
-        return new Box(base).squaredMagnitude(mc.player.getEyePos()) <= placeRange.get() * placeRange.get();
+        return new Box(base).squaredMagnitude(mc.player.getEyePos()) <= placeRange.get() * placeRange.get() && InteractionManager.centerReach(base);
     }
 
     private int baseSlot() {
