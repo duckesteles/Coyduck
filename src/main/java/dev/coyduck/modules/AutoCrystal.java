@@ -822,7 +822,7 @@ public class AutoCrystal extends Module {
         BlockView minedView = mined == null ? null : new BlockOverlay(mc.world).set(mined, mc.world.getFluidState(mined).getBlockState());
         double aheadRange = MINE_AHEAD_RANGE * MINE_AHEAD_RANGE;
         for (BlockPos base : candidates) {
-            if (base.equals(mined) || !canUse(base)) continue;
+            if (base.equals(mined) && !overHead(mined, targets) || !canUse(base)) continue;
             Vec3d center = crystalCenter(base);
             boolean ahead = minedView != null && center.squaredDistanceTo(Vec3d.ofCenter(mined)) <= aheadRange;
             Choice choice = evaluate(targets, center, health, 0, ahead ? minedView : mc.world);
@@ -989,6 +989,14 @@ public class AutoCrystal extends Module {
             if (cityCell && Vec3d.ofCenter(cell).squaredDistanceTo(target.feet) <= CITY_CELL_RANGE * CITY_CELL_RANGE) return cell;
         }
         return null;
+    }
+
+    private static boolean overHead(BlockPos cell, List<Target> targets) {
+        long below = cell.down(2).asLong();
+        for (Target target : targets) {
+            if (Targets.columns(target.box).contains(below)) return true;
+        }
+        return false;
     }
 
     private boolean leavesLow(float self, float health) {

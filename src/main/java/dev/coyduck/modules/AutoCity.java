@@ -67,6 +67,13 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         .build()
     );
 
+    private final Setting<Boolean> cev = sgGeneral.add(new BoolSetting.Builder()
+        .name("cev")
+        .description("Also mines the block over the head of a target with a roof. AutoCrystal puts a crystal on that block just before it breaks and blows it up as it breaks, right on their head.")
+        .defaultValue(true)
+        .build()
+    );
+
     private final Setting<Boolean> burrow = sgGeneral.add(new BoolSetting.Builder()
         .name("burrow")
         .description("Mines the block a target is burrowed in before anything else.")
@@ -463,8 +470,29 @@ public class AutoCity extends Module implements MiningManager.StopGate {
             choices.add(new Choice(pos, damage - FACE_PENALTY, null));
         }
 
+        if (cev.get()) {
+            for (long key : columns) {
+                BlockPos pos = BlockPos.fromLong(key).up(2);
+                if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || !mining.inRange(pos) || own.contains(pos) || mine(pos)) continue;
+                if (mc.world.getBlockState(pos).isOf(Blocks.BEDROCK) || !Targets.canHoldCrystal(mc.world, pos)) continue;
+                float damage = cevDamage(pos, box, feet);
+                if (damage < minDamage.get()) continue;
+                choices.add(new Choice(pos, damage - FACE_PENALTY, null));
+            }
+        }
+
         choices.sort((a, b) -> Float.compare(b.score, a.score));
         return choices;
+    }
+
+    private float cevDamage(BlockPos block, Box box, Vec3d feet) {
+        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
+        double range = autoCrystal != null && autoCrystal.isActive() ? autoCrystal.placeRange() : 5.5;
+        if (new Box(block).squaredMagnitude(mc.player.getEyePos()) > range * range) return 0;
+        BlockOverlay view = new BlockOverlay(mc.world).set(block, Blocks.AIR.getDefaultState());
+        Vec3d crystal = Targets.crystalCenter(block);
+        if (!Targets.safe(crystal, view, maxSelfDamage.get())) return 0;
+        return ExplosionDamage.crystal(target, feet, box, crystal, view);
     }
 
     private boolean supportable(BlockPos support, List<BlockPos> own) {
