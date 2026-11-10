@@ -1,5 +1,6 @@
 package dev.coyduck.hud;
 
+import dev.coyduck.managers.LatencyManager;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
@@ -8,7 +9,6 @@ import meteordevelopment.meteorclient.systems.hud.HudElementInfo;
 import meteordevelopment.meteorclient.systems.hud.HudRenderer;
 import meteordevelopment.meteorclient.utils.Utils;
 import meteordevelopment.meteorclient.utils.world.TickRate;
-import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.client.network.ServerInfo;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
@@ -136,7 +136,6 @@ public class InfoHud extends HudElement {
 
     private static int latency() {
         if (mc.getNetworkHandler() == null || mc.player == null) return 0;
-        PlayerListEntry entry = mc.getNetworkHandler().getPlayerListEntry(mc.player.getUuid());
-        return entry == null ? 0 : entry.getLatency();
+        return LatencyManager.get().ping();
     }
 }
