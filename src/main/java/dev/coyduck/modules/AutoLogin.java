@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Locale;
 
 public class AutoLogin extends Module {
+    private static final long JOIN_WINDOW = 60_000;
+
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
     private final Setting<String> password = sgGeneral.add(new StringSetting.Builder()
@@ -43,28 +45,33 @@ public class AutoLogin extends Module {
     );
 
     private long sendAt;
+    private long joinedAt;
     private boolean sent;
 
     public AutoLogin() {
-        super(Coyduck.CATEGORY, "auto-login", "Types /login with your password when a server you listed asks for it after you join.");
+        super(Coyduck.CATEGORY, "auto-login", "Types /login with your password when a server you listed asks for it in the first minute after you join. Messages from other players never trigger it.");
     }
 
     @Override
     public void onActivate() {
         sendAt = 0;
         sent = false;
+        joinedAt = Util.getMeasuringTimeMs();
     }
 
     @EventHandler
     private void onJoin(GameJoinedEvent event) {
         sendAt = 0;
         sent = false;
+        joinedAt = Util.getMeasuringTimeMs();
     }
 
     @EventHandler
     private void onMessage(ReceiveMessageEvent event) {
         if (sent || sendAt != 0 || password.get().isEmpty() || !trusted()) return;
+        if (Util.getMeasuringTimeMs() - joinedAt > JOIN_WINDOW) return;
         String text = event.getMessage().getString().toLowerCase(Locale.ROOT);
+        if (text.contains("»") || text.startsWith("<") || text.contains("whispers") || text.contains(" -> ")) return;
         if (text.contains("/login") && (text.contains("please login") || text.contains("please log in") || text.contains("login with"))) {
             sendAt = Util.getMeasuringTimeMs() + delay.get();
         }

@@ -176,6 +176,7 @@ public class CoyGuiScreen extends Screen {
         final List<Action> actions = new ArrayList<>();
         int x;
         int y;
+        int bottom;
         boolean collapsed;
         boolean placed;
 
@@ -266,6 +267,7 @@ public class CoyGuiScreen extends Screen {
     private String hint;
 
     private boolean paint;
+    private boolean swallowChar;
     private int accent;
     private int enabledCell;
     private int enabledHover;
@@ -287,6 +289,8 @@ public class CoyGuiScreen extends Screen {
             buildExtra();
             loadLayout();
             page = MathHelper.clamp(lastPage, 0, pages.size() - 1);
+            showView(view);
+        } else if (window == null && (view == View.Config || view == View.Gui || view == View.Baritone)) {
             showView(view);
         }
         arrange();
@@ -406,11 +410,7 @@ public class CoyGuiScreen extends Screen {
         };
         switch (view) {
             case Config -> openWindow(new Window("Config", Config.get().settings, Config.get(), false, Config.get().settings::reset, null));
-            case Gui -> openWindow(new Window(owner.title, owner.settings, owner, false, () -> {
-                String saved = owner.layout.get();
-                owner.settings.reset();
-                owner.layout.set(saved);
-            }, null));
+            case Gui -> openWindow(new Window(owner.title, owner.settings, owner, false, owner::resetKeepingState, null));
             case Baritone -> {
                 Settings baritone = PathManagers.get().getSettings().get();
                 openWindow(new Window("Baritone", baritone, null, false, baritone::reset, () -> PathManagers.get().getSettings().save()));
@@ -637,6 +637,7 @@ public class CoyGuiScreen extends Screen {
         int[] measure = {y + HEADER + 1};
         if (!panel.collapsed) panelRows(context, panel, x, measure, -1, -1);
         int bottom = panel.collapsed ? y + HEADER : measure[0];
+        panel.bottom = bottom;
 
         if (!panel.collapsed) context.fill(x, y + HEADER, x + WIDTH, bottom, BODY);
         context.fillGradient(x, y, x + WIDTH, y + HEADER, tint(accent, 0.12f), accent);
@@ -1682,8 +1683,9 @@ public class CoyGuiScreen extends Screen {
         List<Panel> list = visiblePanels();
         for (int i = list.size() - 1; i >= 0; i--) {
             Panel panel = list.get(i);
-            if (mouseX < panel.x || mouseX >= panel.x + WIDTH || !shown(panel)) continue;
-            panel.y += (int) Math.signum(vertical) * SCROLL;
+            if (mouseX < panel.x || mouseX >= panel.x + WIDTH || mouseY < panel.y || mouseY >= Math.max(panel.bottom, panel.y + HEADER) || !shown(panel)) continue;
+            int length = Math.max(HEADER, panel.bottom - panel.y);
+            panel.y = MathHelper.clamp(panel.y + (int) Math.signum(vertical) * SCROLL, HEADER - length, Math.max(0, height - HEADER));
             if (!searching()) {
                 custom = true;
                 saveLayout();
@@ -1696,9 +1698,13 @@ public class CoyGuiScreen extends Screen {
     @Override
     public boolean keyPressed(KeyInput input) {
         int key = input.key();
+        swallowChar = false;
         if (binding != null) {
             if (key == GLFW.GLFW_KEY_ESCAPE || key == GLFW.GLFW_KEY_BACKSPACE || key == GLFW.GLFW_KEY_DELETE) applyBind(Keybind.none());
-            else applyBind(Keybind.fromKeys(key, input.modifiers()));
+            else {
+                applyBind(Keybind.fromKeys(key, input.modifiers()));
+                swallowChar = true;
+            }
             return true;
         }
         if (editing != null) {
@@ -1769,6 +1775,10 @@ public class CoyGuiScreen extends Screen {
 
     @Override
     public boolean charTyped(CharInput input) {
+        if (swallowChar) {
+            swallowChar = false;
+            return true;
+        }
         if (!input.isValidChar()) return false;
         if (editing == null) {
             if (view != View.Modules || binding != null || input.asString().isBlank()) return false;

@@ -8,7 +8,6 @@ import meteordevelopment.meteorclient.settings.StringSetting;
 import meteordevelopment.meteorclient.systems.hud.HudElement;
 import meteordevelopment.meteorclient.systems.hud.HudElementInfo;
 import meteordevelopment.meteorclient.systems.hud.HudRenderer;
-import net.minecraft.client.world.ClientWorld;
 
 import java.time.DateTimeException;
 import java.time.ZoneId;
@@ -93,7 +92,7 @@ public class ClockHud extends HudElement {
         .build()
     );
 
-    private ClientWorld world;
+    private Object connection;
     private long joined;
 
     public ClockHud() {
@@ -102,8 +101,8 @@ public class ClockHud extends HudElement {
 
     @Override
     public void render(HudRenderer r) {
-        if (mc.world != world) {
-            world = mc.world;
+        if (mc.getNetworkHandler() != connection) {
+            connection = mc.getNetworkHandler();
             joined = System.currentTimeMillis();
         }
 
@@ -123,7 +122,7 @@ public class ClockHud extends HudElement {
             small.add(id.getId());
         }
         if (greeting.get() && mc.player != null) small.add(greet(now.getHour()) + ", " + mc.player.getName().getString());
-        if (session.get() && world != null) small.add("Session " + duration(System.currentTimeMillis() - joined));
+        if (session.get() && connection != null) small.add("Session " + duration(System.currentTimeMillis() - joined));
 
         double scale = size.get();
         double big = scale * timeSize.get();

@@ -151,6 +151,20 @@ public class ClickGui extends Module {
         .build()
     );
 
+    public void resetKeepingState() {
+        String savedLayout = layout.get();
+        String savedTheme = previousTheme.get();
+        String savedFont = previousFont.get();
+        String savedFace = previousFace.get();
+        String savedHudFont = previousHudFont.get();
+        settings.reset();
+        layout.set(savedLayout);
+        previousTheme.set(savedTheme);
+        previousFont.set(savedFont);
+        previousFace.set(savedFace);
+        previousHudFont.set(savedHudFont);
+    }
+
     public ClickGui() {
         super(Coyduck.CATEGORY, "click-gui+", "Replaces the module menu with clean see-through columns and gives the other menus the same look.");
     }
