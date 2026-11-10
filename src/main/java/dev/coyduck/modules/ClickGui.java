@@ -152,6 +152,7 @@ public class ClickGui extends Module {
     );
 
     public void resetKeepingState() {
+        String live = GuiThemes.get().name;
         String savedLayout = layout.get();
         String savedTheme = previousTheme.get();
         String savedFont = previousFont.get();
@@ -159,7 +160,7 @@ public class ClickGui extends Module {
         String savedHudFont = previousHudFont.get();
         settings.reset();
         layout.set(savedLayout);
-        if (previousTheme.get().isEmpty()) previousTheme.set(savedTheme);
+        previousTheme.set(live.equals(CoyduckTheme.NAME) ? savedTheme : live);
         previousFont.set(savedFont);
         previousFace.set(savedFace);
         previousHudFont.set(savedHudFont);
