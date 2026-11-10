@@ -294,6 +294,7 @@ public class AutoTotem extends Module {
         for (Entity entity : mc.world.getOtherEntities(mc.player, sweep, entity -> entity instanceof EndCrystalEntity)) {
             if (entity.getBoundingBox().expand(PEARL_SIZE).raycast(start, end).isPresent() || entity.getBoundingBox().expand(PEARL_SIZE).contains(start)) {
                 event.cancel();
+                InventoryManager.get().resync();
                 warning("Pearl blocked, it would hit a crystal.");
                 return;
             }
