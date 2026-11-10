@@ -12,6 +12,7 @@ import dev.coyduck.utils.BlockRules;
 import dev.coyduck.utils.PacketBatch;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -38,6 +39,8 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.HandSwingC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerInteractBlockC2SPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
 import net.minecraft.util.Hand;
@@ -60,6 +63,9 @@ public final class InteractionManager {
     public static final int SURROUND_PRIORITY = 121;
     public static final int DEFENSE_PRIORITY = 120;
     public static final int TRAP_PRIORITY = 90;
+    private static final int CLICK_LIMIT = 52;
+    private static final int OFFENSE_RESERVE = 10;
+    private static final long CLICK_WINDOW = 2150;
     private static final float ROTATE_SPEED = 180;
     private static final double[][] FACE_POINTS = {{0, 0}, {0.3, 0.3}, {-0.3, 0.3}, {0.3, -0.3}, {-0.3, -0.3}, {0.45, 0}, {-0.45, 0}, {0, 0.45}, {0, -0.45}};
     private static final InteractionManager INSTANCE = new InteractionManager();
@@ -89,6 +95,7 @@ public final class InteractionManager {
 
     private final Long2ObjectOpenHashMap<Pending> pending = new Long2ObjectOpenHashMap<>();
     private final Long2LongOpenHashMap placedAt = new Long2LongOpenHashMap();
+    private final LongArrayFIFOQueue clicks = new LongArrayFIFOQueue();
     private final Long2LongOpenHashMap rejectedAt = new Long2LongOpenHashMap();
     private static final int STUCK_HITS = 3;
     private static final long STUCK_TIME = 1_500;
@@ -225,7 +232,22 @@ public final class InteractionManager {
         place(pos, hit, swing, false, 0);
     }
 
+    public boolean canClick(int count, boolean defense) {
+        long now = Util.getMeasuringTimeMs();
+        while (!clicks.isEmpty() && now - clicks.firstLong() > CLICK_WINDOW) clicks.dequeueLong();
+        return clicks.size() + count <= CLICK_LIMIT - (defense ? 0 : OFFENSE_RESERVE);
+    }
+
+    @EventHandler
+    private void onClickSent(PacketEvent.Sent event) {
+        if (event.packet instanceof PlayerInteractBlockC2SPacket
+            || event.packet instanceof PlayerActionC2SPacket packet && packet.getAction() == PlayerActionC2SPacket.Action.START_DESTROY_BLOCK) {
+            clicks.enqueue(Util.getMeasuringTimeMs());
+        }
+    }
+
     public boolean place(BlockPos pos, BlockHitResult hit, SwingMode swing, boolean rotate, int priority) {
+        if (!canClick(1, priority >= DEFENSE_PRIORITY)) return false;
         if (rotate && !aimed(hit.getPos(), new Box(hit.getBlockPos()), priority)) return false;
         mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
         int sequence = ((ClientWorldAccessor) mc.world).coyduck$getPendingUpdateManager().getSequence();
@@ -286,6 +308,7 @@ public final class InteractionManager {
     }
 
     public boolean placeCrystal(BlockPos base, InventoryManager.SwitchMode mode, SwingMode swing, Runnable after, boolean whileEating) {
+        if (!canClick(1, false)) return false;
         BlockHitResult hit = new BlockHitResult(crystalAim(base), crystalFace(base), base, false);
 
         if (mc.player.getOffHandStack().isOf(Items.END_CRYSTAL)) {
