@@ -231,7 +231,7 @@ public class ElytraEvade extends Module {
         Box body = mc.player.getBoundingBox();
         for (double scale = 1; scale >= 0.125; scale /= 2) {
             Vec3d step = move.multiply(scale);
-            if (mc.world.isSpaceEmpty(mc.player, body.stretch(step).expand(0.05))) return step;
+            if (mc.world.isSpaceEmpty(mc.player, body.stretch(step))) return step;
         }
         return Vec3d.ZERO;
     }
