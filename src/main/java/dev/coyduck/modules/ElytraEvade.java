@@ -150,7 +150,7 @@ public class ElytraEvade extends Module {
             if (evading && !mc.player.isOnGround() && mc.player.getVelocity().y < 0 && mc.player.checkGliding()) {
                 mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
                 Trace.log("evade restarted the glide");
-            } else if (evading) {
+            } else if (evading && (mc.player.isOnGround() || mc.player.isTouchingWater() || mc.player.hasVehicle())) {
                 calm("not gliding");
             }
             return;
