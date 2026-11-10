@@ -200,6 +200,14 @@ public class Surround extends Module {
         .build()
     );
 
+    private final Setting<Boolean> antiCev = sgProtect.add(new BoolSetting.Builder()
+        .name("anti-cev")
+        .description("Breaks a crystal sitting on the block over your head or at your head level while an enemy mines that block, so it goes off while the block still shields you instead of when it breaks.")
+        .defaultValue(true)
+        .visible(breakCrystals::get)
+        .build()
+    );
+
     private final Setting<Boolean> blocker = sgProtect.add(new BoolSetting.Builder()
         .name("blocker")
         .description("Covers a surround block that is being mined or was just broken.")
@@ -461,7 +469,9 @@ public class Surround extends Module {
     }
 
     private void run() {
-        if (HoleSnap.snapping() || !updateAnchor() || budget <= 0) return;
+        if (HoleSnap.snapping() || !updateAnchor()) return;
+        antiCev();
+        if (budget <= 0) return;
 
         int slot = blockSlot();
         if (slot == -1) return;
@@ -646,6 +656,30 @@ public class Surround extends Module {
         Safe,
         Pop,
         Unsafe
+    }
+
+    private void antiCev() {
+        if (!antiCev.get() || !breakCrystals.get()) return;
+        BlockPos feet = mc.player.getBlockPos();
+        List<BlockPos> cells = new ArrayList<>();
+        cells.add(feet.up(2));
+        for (Direction direction : Direction.Type.HORIZONTAL) cells.add(feet.up().offset(direction));
+
+        InteractionManager interaction = InteractionManager.get();
+        for (BlockPos cell : cells) {
+            MiningTracker.Mining mining = MiningTracker.get().mining(cell);
+            if (mining == null || mining.breaker() == mc.player.getId() || mc.world.getBlockState(cell).isReplaceable()) continue;
+            for (Entity entity : mc.world.getOtherEntities(null, new Box(cell.up()))) {
+                if (!(entity instanceof EndCrystalEntity crystal) || CrystalTracker.get().isDead(crystal) || interaction.recentlyAttacked(crystal)) continue;
+                Verdict verdict = verdict(crystal);
+                if (verdict == Verdict.Unsafe) continue;
+                if (!interaction.attack(crystal, switchMode.get(), swing.get(), true, rotate.get(), crystal.getBoundingBox().getCenter())) return;
+                CrystalTracker.get().explodeAt(crystal.getEntityPos());
+                if (verdict == Verdict.Pop) AutoTotem.notePop();
+                Trace.log("surround anti cev broke the crystal on {}", cell);
+                return;
+            }
+        }
     }
 
     private Verdict verdict(EndCrystalEntity crystal) {
