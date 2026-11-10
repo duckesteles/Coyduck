@@ -57,20 +57,20 @@ public class AutoEz extends Module {
 
     private final Setting<Boolean> whisper = sgGeneral.add(new BoolSetting.Builder()
         .name("whisper")
-        .description("Whispers the message to the player you killed. Turning it on turns public-chat off.")
+        .description("Whispers the message to the player you killed. Turning it on turns public-chat off, turning it off turns public-chat on.")
         .defaultValue(true)
         .onChanged(on -> {
-            if (on && this.publicChat != null && this.publicChat.get()) this.publicChat.set(false);
+            if (this.publicChat != null && on == this.publicChat.get()) this.publicChat.set(!on);
         })
         .build()
     );
 
     private final Setting<Boolean> publicChat = sgGeneral.add(new BoolSetting.Builder()
         .name("public-chat")
-        .description("Writes the message with the player's name in public chat instead of whispering. Turning it on turns whisper off.")
+        .description("Writes the message with the player's name in public chat instead of whispering. Turning it on turns whisper off, turning it off turns whisper on.")
         .defaultValue(false)
         .onChanged(on -> {
-            if (on && this.whisper.get()) this.whisper.set(false);
+            if (on == this.whisper.get()) this.whisper.set(!on);
         })
         .build()
     );
