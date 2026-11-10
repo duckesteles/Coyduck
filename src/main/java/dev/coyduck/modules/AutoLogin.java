@@ -15,9 +15,11 @@ import net.minecraft.util.Util;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 public class AutoLogin extends Module {
     private static final long JOIN_WINDOW = 60_000;
+    private static final Pattern TIMESTAMP = Pattern.compile("^<\\d{1,2}:\\d{2}(?::\\d{2})?> ");
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -70,7 +72,7 @@ public class AutoLogin extends Module {
     private void onMessage(ReceiveMessageEvent event) {
         if (sent || sendAt != 0 || password.get().isEmpty() || !trusted()) return;
         if (Util.getMeasuringTimeMs() - joinedAt > JOIN_WINDOW) return;
-        String text = event.getMessage().getString().toLowerCase(Locale.ROOT);
+        String text = TIMESTAMP.matcher(event.getMessage().getString().toLowerCase(Locale.ROOT)).replaceFirst("");
         if (text.contains("»") || text.startsWith("<") || text.contains("whispers") || text.contains(" -> ")) return;
         if (text.contains("/login") && (text.contains("please login") || text.contains("please log in") || text.contains("login with"))) {
             sendAt = Util.getMeasuringTimeMs() + delay.get();
