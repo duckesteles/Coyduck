@@ -920,7 +920,7 @@ public class AutoCrystal extends Module {
 
         for (Entity entity : mc.world.getEntities()) {
             if (breakBudget <= 0) return;
-            if (!(entity instanceof EndCrystalEntity crystal) || !tracker.isAlive(crystal)) continue;
+            if (!(entity instanceof EndCrystalEntity crystal) || !tracker.isAlive(crystal) || InteractionManager.get().stuck(crystal)) continue;
             long base = crystal.getBlockPos().down().asLong();
             if (!clearing.containsKey(base) || crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > range || !canHit(crystal)) continue;
 
@@ -1030,7 +1030,7 @@ public class AutoCrystal extends Module {
         EndCrystalEntity best = null;
         double bestDistance = CLEAR_RANGE * CLEAR_RANGE;
         for (Entity entity : mc.world.getEntities()) {
-            if (!(entity instanceof EndCrystalEntity crystal) || !tracker.isAlive(crystal)) continue;
+            if (!(entity instanceof EndCrystalEntity crystal) || !tracker.isAlive(crystal) || InteractionManager.get().stuck(crystal)) continue;
             if (crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > reach || !canHit(crystal)) continue;
             double distance = crystal.getEntityPos().squaredDistanceTo(middle);
             if (distance >= bestDistance || !selfSafe(crystal.getEntityPos(), health, arrival, mc.world) || hurtsFriend(crystal.getEntityPos(), mc.world)) continue;
@@ -1053,10 +1053,10 @@ public class AutoCrystal extends Module {
     private boolean canFillGap(BlockPos gap, Target target, float health) {
         BlockPos base = gap.down();
         if (!mc.world.getBlockState(gap).isAir() || !isBase(mc.world.getBlockState(base))) return false;
-        if (CrystalTracker.get().placingOverlaps(base) || blocked(base) || !inPlaceRange(base) || !breakable(base) || overlapsOwnCells(base) || !canUse(base)) return false;
+        if (CrystalTracker.get().placingOverlaps(base) || CrystalTracker.get().isBlacklisted(base) || blocked(base) || !inPlaceRange(base) || !breakable(base) || overlapsOwnCells(base) || !canUse(base)) return false;
 
         Vec3d center = crystalCenter(base);
-        if (selfDamage(center, mc.world) >= health || hurtsFriend(center, mc.world)) return false;
+        if (!selfSafe(center, health, 0, mc.world) || hurtsFriend(center, mc.world)) return false;
 
         float raw = ExplosionDamage.crystalRaw(target.player, target.feet, target.box, center, mc.world);
         float damage = ExplosionDamage.mitigate(target.player, raw);
@@ -1079,7 +1079,7 @@ public class AutoCrystal extends Module {
             Choice bestChoice = null;
 
             for (Entity entity : mc.world.getEntities()) {
-                if (!(entity instanceof EndCrystalEntity crystal) || !tracker.isAlive(crystal)) continue;
+                if (!(entity instanceof EndCrystalEntity crystal) || !tracker.isAlive(crystal) || InteractionManager.get().stuck(crystal)) continue;
                 if (crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > breakRange.get() * breakRange.get() || !canHit(crystal)) continue;
 
                 Vec3d center = crystal.getEntityPos();
@@ -1140,7 +1140,7 @@ public class AutoCrystal extends Module {
 
         for (Entity entity : mc.world.getEntities()) {
             if (breakBudget <= 0) return broke;
-            if (!(entity instanceof EndCrystalEntity crystal) || !tracker.isAlive(crystal)) continue;
+            if (!(entity instanceof EndCrystalEntity crystal) || !tracker.isAlive(crystal) || InteractionManager.get().stuck(crystal)) continue;
             if (crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > range || !canHit(crystal)) continue;
 
             Vec3d center = crystal.getEntityPos();

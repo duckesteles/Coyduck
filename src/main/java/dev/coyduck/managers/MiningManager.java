@@ -179,7 +179,7 @@ public final class MiningManager {
     public boolean mineTwo(Object owner, int priority, BlockPos first, BlockPos second, boolean autoStop, InventoryManager.SwitchMode switchMode, InteractionManager.SwingMode swing) {
         if (background != null || first.equals(second)) return mine(owner, priority, first, autoStop, switchMode, swing);
         if (!mine(owner, priority, second, autoStop, switchMode, swing)) return false;
-        if (broken || mc.world.getBlockState(second).isReplaceable()) return mine(owner, priority, first, autoStop, switchMode, swing);
+        if (broken || startPending || mc.world.getBlockState(second).isReplaceable()) return mine(owner, priority, first, autoStop, switchMode, swing);
 
         send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK, pos, side, false);
         background = pos;

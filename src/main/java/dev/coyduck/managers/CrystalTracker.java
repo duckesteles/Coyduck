@@ -115,7 +115,7 @@ public final class CrystalTracker {
         for (Entity entity : mc.world.getEntities()) {
             double distance = entity.getEntityPos().squaredDistanceTo(center);
             if (entity instanceof EndCrystalEntity) {
-                if (distance <= range && ExplosionDamage.exposure(center, entity.getBoundingBox(), mc.world, ShapeContext.absent()) > 0) kill(entity, duration);
+                if (distance <= range) kill(entity, duration);
             }
             else if ((entity instanceof ItemEntity || entity instanceof ExperienceOrbEntity) && distance <= dropRange
                 && ExplosionDamage.exposure(center, entity.getBoundingBox(), mc.world, ShapeContext.absent()) > 0) kill(entity, duration);
@@ -251,8 +251,7 @@ public final class CrystalTracker {
         long duration = LatencyManager.get().timeout() * 2L;
 
         for (Entity entity : mc.world.getEntities()) {
-            if (entity instanceof EndCrystalEntity && entity.getEntityPos().squaredDistanceTo(center) <= squared
-                && ExplosionDamage.exposure(center, entity.getBoundingBox(), mc.world, ShapeContext.absent()) > 0) kill(entity, duration);
+            if (entity instanceof EndCrystalEntity && entity.getEntityPos().squaredDistanceTo(center) <= squared) kill(entity, duration);
         }
     }
 }
