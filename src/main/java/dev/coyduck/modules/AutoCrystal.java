@@ -99,6 +99,8 @@ public class AutoCrystal extends Module {
     private static final double CLEAR_RANGE = 4.0;
 
     private BlockPos stoppedAt;
+    private BlockPos lastSpot;
+    private long lastSpotAt;
 
     private static final double CITY_CELL_RANGE = 3.0;
     private record Target(PlayerEntity player, Box box, Vec3d feet, float health, float minDamage, LongSet gaps) {}
@@ -109,6 +111,10 @@ public class AutoCrystal extends Module {
     private static final long BROKEN_GAP_TIME = 2_000;
     private static final float GAP_BONUS = 2.0f;
     private static final float HIDDEN_PENALTY = 2.0f;
+    private static final float TURN_FREE = 20.0f;
+    private static final float TURN_COST = 0.02f;
+    private static final float KEEP_BONUS = 0.75f;
+    private static final long KEEP_MS = 100;
     private static final float LOW_HEALTH_BONUS = 3.0f;
     private static final int GAP_PLACES = 1;
     private static final float MINE_AHEAD_PROGRESS = 0.6f;
@@ -815,6 +821,7 @@ public class AutoCrystal extends Module {
             boolean ahead = minedView != null && center.squaredDistanceTo(Vec3d.ofCenter(mined)) <= aheadRange;
             Choice choice = evaluate(targets, center, health, 0, ahead ? minedView : mc.world);
             if (choice == null) continue;
+            choice = steadied(choice, base);
             if (choice.beats(spotChoice)) {
                 spot = base;
                 spotChoice = choice;
@@ -841,6 +848,8 @@ public class AutoCrystal extends Module {
         }
 
         if (spot != null) {
+            lastSpot = spot;
+            lastSpotAt = Util.getMeasuringTimeMs();
             placeCrystal(spot, spotChoice);
             boolean ahead = minedView != null && crystalCenter(spot).squaredDistanceTo(Vec3d.ofCenter(mined)) <= aheadRange;
             if (ahead && status != null && status.endsWith("dmg")) status = "ahead " + status;
@@ -1409,6 +1418,27 @@ public class AutoCrystal extends Module {
         }
 
         return best;
+    }
+
+    private Choice steadied(Choice choice, BlockPos base) {
+        float score = choice.score() - turnPenalty(base);
+        if (base.equals(lastSpot) && Util.getMeasuringTimeMs() - lastSpotAt <= LatencyManager.get().rtt() + KEEP_MS) score += KEEP_BONUS;
+        return score == choice.score() ? choice : new Choice(choice.target(), choice.damage(), choice.raw(), choice.self(), score);
+    }
+
+    private float turnPenalty(BlockPos base) {
+        if (!rotate.get()) return 0;
+        RotationManager rotations = RotationManager.get();
+        if (rotations.isLookingAt(new Box(base), placeRange.get() + 1)) return 0;
+        Vec3d eye = mc.player.getEyePos();
+        Vec3d aim = InteractionManager.get().crystalAim(base);
+        double dx = aim.x - eye.x;
+        double dy = aim.y - eye.y;
+        double dz = aim.z - eye.z;
+        float yaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90.0f;
+        float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
+        float turn = Math.abs(MathHelper.wrapDegrees(yaw - rotations.serverYaw())) + Math.abs(pitch - rotations.serverPitch());
+        return Math.max(0, turn - TURN_FREE) * TURN_COST;
     }
 
     private static boolean holdsTotem(PlayerEntity player) {
