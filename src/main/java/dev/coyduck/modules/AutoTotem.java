@@ -205,6 +205,11 @@ public class AutoTotem extends Module {
             && !popInFlight() && isTotem(module.mc.player.getOffHandStack()) && module.totems >= 2;
     }
 
+    public static int totemSlot() {
+        AutoTotem module = Modules.get().get(AutoTotem.class);
+        return module == null ? 8 : module.slot.get() - 1;
+    }
+
     public static boolean wantsMainTotem() {
         AutoTotem module = Modules.get().get(AutoTotem.class);
         if (module == null || !module.isActive()) return false;

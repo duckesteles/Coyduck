@@ -1,5 +1,6 @@
 package dev.coyduck.managers;
 
+import dev.coyduck.modules.AutoTotem;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
@@ -239,9 +240,10 @@ public final class InventoryManager {
 
         Item item = stack(index).getItem();
         Integer home = homes.get(item);
-        int target = home != null && home != selected && stack(home).isEmpty() ? home : -1;
+        int reserved = item == Items.TOTEM_OF_UNDYING ? -1 : AutoTotem.totemSlot();
+        int target = home != null && home != selected && home != reserved && stack(home).isEmpty() ? home : -1;
         for (int i = 0; target == -1 && i < HOTBAR_END; i++) {
-            if (i != selected && stack(i).isEmpty()) target = i;
+            if (i != selected && i != reserved && stack(i).isEmpty()) target = i;
         }
         if (target == -1 || !swapWithHotbar(index, target)) return -1;
 
@@ -251,7 +253,7 @@ public final class InventoryManager {
     }
 
     private void remember(Item item, int slot) {
-        if (item == Items.AIR) return;
+        if (item == Items.AIR || item != Items.TOTEM_OF_UNDYING && slot == AutoTotem.totemSlot()) return;
         homes.values().removeIf(home -> home == slot);
         homes.put(item, slot);
     }
