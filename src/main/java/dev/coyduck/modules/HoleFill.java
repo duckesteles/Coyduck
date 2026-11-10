@@ -33,6 +33,7 @@ import java.util.Comparator;
 import java.util.List;
 
 public class HoleFill extends Module {
+    private static final double MAX_STEP_UP = 1.3;
     private static final float STRONG = 600;
     private static final int MAX_PREDICT_TICKS = 8;
 
@@ -100,6 +101,13 @@ public class HoleFill extends Module {
         .build()
     );
 
+    private final Setting<Boolean> leaveOwn = sgGeneral.add(new BoolSetting.Builder()
+        .name("leave-own")
+        .description("Leaves holes that are closer to you than to the enemy, so you can still get into them.")
+        .defaultValue(true)
+        .build()
+    );
+
     private PlayerEntity target;
 
     public HoleFill() {
@@ -161,6 +169,9 @@ public class HoleFill extends Module {
                     BlockPos pos = center.add(dx, dy, dz);
                     if (Vec3d.ofBottomCenter(pos).squaredDistanceTo(heading) > range) continue;
                     if (self.intersects(new Box(pos)) || enemy.intersects(new Box(pos))) continue;
+                    Vec3d bottom = Vec3d.ofBottomCenter(pos);
+                    if (leaveOwn.get() && bottom.squaredDistanceTo(mc.player.getEntityPos()) <= bottom.squaredDistanceTo(target.getEntityPos())) continue;
+                    if (pos.getY() > target.getY() + MAX_STEP_UP) continue;
                     if (isHole(pos, null) || doubles.get() && isDouble(pos)) holes.add(pos);
                 }
             }
