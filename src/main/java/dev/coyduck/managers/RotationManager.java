@@ -6,6 +6,7 @@ import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.entity.Entity;
+import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientPlayerEntityAccessor;
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
@@ -58,8 +59,9 @@ public final class RotationManager {
         if (pending == null || priority >= pending.priority) pending = new Request(priority, yaw, pitch, speed, moveFix);
     }
 
-    public void lookNow(Vec3d target) {
-        if (mc.player == null || mc.getNetworkHandler() == null) return;
+    public boolean lookNow(Vec3d target, int priority) {
+        if (mc.player == null || mc.getNetworkHandler() == null) return false;
+        if (current != null && current.priority > priority || pending != null && pending.priority > priority) return false;
         Vec3d eye = mc.player.getEyePos();
         double dx = target.x - eye.x;
         double dy = target.y - eye.y;
@@ -72,6 +74,7 @@ public final class RotationManager {
         float deltaYaw = Math.round(MathHelper.wrapDegrees(wantYaw - base) / gcd) * gcd;
         float deltaPitch = Math.round((wantPitch - basePitch) / gcd) * gcd;
         mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(base + deltaYaw, MathHelper.clamp(basePitch + deltaPitch, -90.0f, 90.0f), mc.player.isOnGround(), mc.player.horizontalCollision));
+        return true;
     }
 
     public boolean isLookingAt(Box box, double range) {
@@ -153,6 +156,8 @@ public final class RotationManager {
             serverPitch = mc.player.getPitch();
             known = true;
         }
+        ((ClientPlayerEntityAccessor) mc.player).coyduck$setLastYawClient(serverYaw);
+        ((ClientPlayerEntityAccessor) mc.player).coyduck$setLastPitchClient(serverPitch);
 
         if (pending != null) {
             current = pending;
@@ -203,7 +208,16 @@ public final class RotationManager {
     }
 
     @EventHandler
+    private void onWorldReset(WorldResetEvent event) {
+        reset();
+    }
+
+    @EventHandler
     private void onGameLeft(GameLeftEvent event) {
+        reset();
+    }
+
+    private void reset() {
         pending = null;
         current = null;
         active = false;

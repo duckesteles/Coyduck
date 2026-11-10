@@ -1216,11 +1216,10 @@ public class AutoCrystal extends Module {
         Box box = new Box(base);
         Vec3d aim = InteractionManager.get().crystalAim(base);
         if (!rotationReady(box, aim, placeRange.get() + 1, PLACE_PRIORITY)) {
-            if (!instantAim.get()) {
+            if (!instantAim.get() || !RotationManager.get().lookNow(aim, PLACE_PRIORITY)) {
                 status = "rotating";
                 return;
             }
-            RotationManager.get().lookNow(aim);
         }
 
         Runnable after = idPredict.get() ? () -> predictAttack(base, choice) : null;
