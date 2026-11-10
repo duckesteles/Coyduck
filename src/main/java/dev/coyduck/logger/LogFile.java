@@ -20,6 +20,7 @@ public final class LogFile {
     private final AtomicLong dropped = new AtomicLong();
     private final Thread thread;
     private volatile boolean dead;
+    private volatile boolean closing;
 
     private LogFile(Path path, BufferedWriter writer) {
         this.path = path;
@@ -54,10 +55,8 @@ public final class LogFile {
     }
 
     public void close() {
-        if (!queue.offer(END)) {
-            queue.clear();
-            queue.offer(END);
-        }
+        closing = true;
+        queue.offer(END);
     }
 
     public void await() {
@@ -71,8 +70,9 @@ public final class LogFile {
     private void drain(BufferedWriter writer) {
         try (writer) {
             while (true) {
-                String text = queue.poll(1, TimeUnit.SECONDS);
+                String text = queue.poll(closing ? 50 : 1000, TimeUnit.MILLISECONDS);
                 if (text == null) {
+                    if (closing) return;
                     writer.flush();
                     continue;
                 }
