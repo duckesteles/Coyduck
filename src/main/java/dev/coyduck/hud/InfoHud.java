@@ -136,6 +136,6 @@ public class InfoHud extends HudElement {
 
     private static int latency() {
         if (mc.getNetworkHandler() == null || mc.player == null) return 0;
-        return LatencyManager.get().ping();
+        return Math.max(LatencyManager.get().measuredPing(), 0);
     }
 }

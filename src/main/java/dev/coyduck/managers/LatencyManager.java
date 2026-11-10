@@ -44,12 +44,17 @@ public final class LatencyManager {
     }
 
     public int ping() {
+        int measured = measuredPing();
+        return measured >= 0 ? measured : FALLBACK;
+    }
+
+    public int measuredPing() {
         long now = Util.getMeasuringTimeMs();
         if (network.fresh(now)) return (int) network.mean();
         int tab = tabLatency();
         if (tab > 0) return tab;
         if (action.fresh(now)) return (int) Math.max(action.mean() - TICK_WAIT, 0);
-        return FALLBACK;
+        return -1;
     }
 
     public int rtt() {
