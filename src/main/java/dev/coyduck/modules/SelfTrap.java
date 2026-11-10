@@ -392,9 +392,11 @@ public class SelfTrap extends Module {
 
         EndCrystalEntity target = null;
         boolean pop = false;
+        int remaining = 0;
         for (Entity entity : entities) {
             if (!(entity instanceof EndCrystalEntity crystal)) return false;
-            if (interaction.recentlyAttacked(crystal)) return true;
+            if (interaction.recentlyAttacked(crystal)) continue;
+            remaining++;
 
             float raw = ExplosionDamage.crystalRaw(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), crystal.getEntityPos(), mc.world);
             float damage = HurtTracker.get().effectiveOnSelf(raw, Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2);
@@ -410,11 +412,12 @@ public class SelfTrap extends Module {
             }
         }
 
+        if (remaining == 0) return true;
         if (target == null || !interaction.attack(target, switchMode.get(), swing.get(), true, rotate.get(), interaction.clearAim(target, pos, airplace.get()))) return false;
 
         CrystalTracker.get().explodeAt(target.getEntityPos());
         if (pop) AutoTotem.notePop();
-        return true;
+        return remaining == 1;
     }
 
     private int blockSlot(boolean roof) {
