@@ -304,8 +304,9 @@ public class CoyGuiScreen extends Screen {
     }
 
     private void moveY(Panel panel, int y) {
+        boolean measured = panel.collapsed || panel.bottom > panel.y;
         int length = panel.collapsed ? HEADER : Math.max(HEADER, panel.bottom - panel.y);
-        int clamped = MathHelper.clamp(y, HEADER - length, Math.max(0, height - HEADER));
+        int clamped = measured ? MathHelper.clamp(y, HEADER - length, Math.max(0, height - HEADER)) : Math.min(y, Math.max(0, height - HEADER));
         panel.bottom += clamped - panel.y;
         panel.y = clamped;
     }
