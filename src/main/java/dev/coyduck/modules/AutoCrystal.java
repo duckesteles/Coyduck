@@ -118,7 +118,7 @@ public class AutoCrystal extends Module {
     private static final float KEEP_BONUS = 0.75f;
     private static final long KEEP_MS = 100;
     private static final float PREFERRED_AIM_SLACK = 15.0f;
-    private static final double AIM_INSET = 0.05;
+    private static final double AIM_INSET = 0.2;
     private static final float OTHERS_WEIGHT = 0.3f;
     private static final double PREFERRED_LOS_LIFT = 0.15;
     private static final float LOW_HEALTH_BONUS = 3.0f;
@@ -822,7 +822,7 @@ public class AutoCrystal extends Module {
         BlockView minedView = mined == null ? null : new BlockOverlay(mc.world).set(mined, mc.world.getFluidState(mined).getBlockState());
         double aheadRange = MINE_AHEAD_RANGE * MINE_AHEAD_RANGE;
         for (BlockPos base : candidates) {
-            if (base.equals(mined) && !overHead(mined, targets) || !canUse(base)) continue;
+            if (base.equals(stoppedAt) || base.equals(mined) && !overHead(mined, targets) || !canUse(base)) continue;
             Vec3d center = crystalCenter(base);
             boolean ahead = minedView != null && center.squaredDistanceTo(Vec3d.ofCenter(mined)) <= aheadRange;
             Choice choice = evaluate(targets, center, health, 0, ahead ? minedView : mc.world);
@@ -1393,7 +1393,7 @@ public class AutoCrystal extends Module {
             float least = floor(target, chipping);
             float bound = ExplosionDamage.upperBound(target.player, target.feet, crystal);
             if (bound < least && bound < target.health) continue;
-            float bonus = FOCUS_BONUS + (bound >= target.health ? LETHAL_BONUS : 0) + (antiSurround.get() && target.gaps.contains(key) ? GAP_BONUS : 0)
+            float bonus = FOCUS_BONUS + (bound >= target.health ? LETHAL_BONUS * (holdsTotem(target.player) ? 1 : 2) : 0) + (antiSurround.get() && target.gaps.contains(key) ? GAP_BONUS : 0)
                 + LOW_HEALTH_BONUS * Math.min(bound / Math.max(target.health, 1.0f), 1.0f);
             if (best != null && bound + bonus < best.score) continue;
 
@@ -1485,7 +1485,7 @@ public class AutoCrystal extends Module {
         Vec3d velocity = mc.player.getVelocity();
         if (velocity.horizontalLengthSquared() > SELF_PREDICT_SPEED * SELF_PREDICT_SPEED) {
             int ticks = MathHelper.clamp(MathHelper.ceil(LatencyManager.get().rtt() / 50.0), 1, MAX_SELF_PREDICT);
-            Vec3d move = velocity.multiply(ticks);
+            Vec3d move = new Vec3d(velocity.x * ticks, mc.player.isOnGround() ? 0 : velocity.y * ticks, velocity.z * ticks);
             raw = Math.max(raw, ExplosionDamage.crystalRaw(mc.player, mc.player.getEntityPos().add(move), mc.player.getBoundingBox().offset(move), crystal, view));
         }
         if (cached) selfCache.put(key, raw);
@@ -1628,6 +1628,7 @@ public class AutoCrystal extends Module {
         float bestTurn = Float.MAX_VALUE;
         for (int i = 0; i < points.length; i++) {
             Vec3d point = points[i];
+            if (i == 0 && box.raycast(eye, eye.add(point.subtract(eye).normalize().multiply(breakRange.get() + 1))).isEmpty()) continue;
             if (!throughWalls.get() && !clearLine(i == 0 ? point.add(0, PREFERRED_LOS_LIFT, 0) : point)) continue;
             float turn = turn(point) - (i == 0 ? PREFERRED_AIM_SLACK : 0);
             if (turn < bestTurn) {
