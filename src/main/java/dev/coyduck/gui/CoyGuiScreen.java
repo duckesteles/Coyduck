@@ -107,7 +107,7 @@ public class CoyGuiScreen extends Screen {
         Map.entry("speed+", "Movement"), Map.entry("no-climb", "Movement"), Map.entry("elytra-evade", "Movement"),
         Map.entry("boat-fly+", "Movement"),
         Map.entry("break-esp+", "Render"), Map.entry("crystal-chams", "Render"), Map.entry("custom-fov", "Render"),
-        Map.entry("esp+", "Render"), Map.entry("hide-rich", "Render"), Map.entry("hole-esp+", "Render"),
+        Map.entry("esp+", "Render"), Map.entry("hole-esp+", "Render"),
         Map.entry("kill-effects", "Render"), Map.entry("no-explosion", "Render"), Map.entry("shaders+", "Render"),
         Map.entry("schem-builder", "World")
     );
