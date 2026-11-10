@@ -63,13 +63,15 @@ public class ModuleList extends HudElement {
         }
 
         List<Module> list = new ArrayList<>(shown.keySet());
-        list.sort((a, b) -> Double.compare(rowWidth(r, b), rowWidth(r, a)));
+        Map<Module, Double> widths = new HashMap<>();
+        for (Module module : list) widths.put(module, rowWidth(r, module));
+        list.sort((a, b) -> Double.compare(widths.get(b), widths.get(a)));
 
         double rowHeight = r.textHeight() + 5;
         double widest = 0;
         double total = 0;
         for (Module module : list) {
-            widest = Math.max(widest, rowWidth(r, module));
+            widest = Math.max(widest, widths.get(module));
             total += rowHeight * shown.get(module);
         }
         if (list.isEmpty() && isInEditor()) {
