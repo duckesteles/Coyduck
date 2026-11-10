@@ -72,7 +72,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
     private final Setting<Boolean> cev = sgGeneral.add(new BoolSetting.Builder()
         .name("cev")
         .description("Also mines the block over the head of a target with a roof. AutoCrystal puts a crystal on that block just before it breaks and blows it up as it breaks, right on their head.")
-        .defaultValue(true)
+        .defaultValue(false)
         .build()
     );
 
