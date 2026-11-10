@@ -1216,7 +1216,7 @@ public class AutoCrystal extends Module {
         Box box = new Box(base);
         Vec3d aim = InteractionManager.get().crystalAim(base);
         if (!rotationReady(box, aim, placeRange.get() + 1, PLACE_PRIORITY)) {
-            if (!instantAim.get() || !RotationManager.get().lookNow(aim, PLACE_PRIORITY)) {
+            if (!instantAim.get() || !RotationManager.get().lookNow(aim, BREAK_PRIORITY)) {
                 status = "rotating";
                 return;
             }
