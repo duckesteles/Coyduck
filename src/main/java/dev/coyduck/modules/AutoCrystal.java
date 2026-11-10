@@ -90,6 +90,7 @@ public class AutoCrystal extends Module {
     private static final int BREAK_PRIORITY = 110;
     private static final int PREDICT_DROP = 3;
     private static final float LETHAL_BONUS = 100.0f;
+    private static final float LETHAL_MARGIN = 0.5f;
     private static final float DEFENSE_THREAT = 4.0f;
     private static final float DEFENSE_FREE = 0.5f;
     private static final double RAY_SLACK = 2.0;
@@ -221,7 +222,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Double> maxSelfDamage = sgDamage.add(new DoubleSetting.Builder()
         .name("max-self-damage")
-        .description("Most damage a crystal may deal to you. A crystal that would pop or kill you is never used.")
+        .description("Most damage a crystal may deal to you. It is only exceeded for a crystal that kills an enemy holding no totem, and a crystal that would pop or kill you is never used.")
         .defaultValue(8)
         .range(0, 36)
         .sliderRange(0, 36)
@@ -1070,6 +1071,8 @@ public class AutoCrystal extends Module {
     private boolean breakCrystals(List<Target> targets, float health) {
         CrystalTracker tracker = CrystalTracker.get();
         long arrival = Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2;
+        BlockView stopView = stoppedAt == null ? null : new BlockOverlay(mc.world).set(stoppedAt, mc.world.getFluidState(stoppedAt).getBlockState());
+        double aheadRange = MINE_AHEAD_RANGE * MINE_AHEAD_RANGE;
         long release = 0;
         boolean held = false;
         boolean broke = false;
@@ -1083,14 +1086,15 @@ public class AutoCrystal extends Module {
                 if (crystal.getBoundingBox().squaredMagnitude(mc.player.getEyePos()) > breakRange.get() * breakRange.get() || !canHit(crystal)) continue;
 
                 Vec3d center = crystal.getEntityPos();
-                Choice choice = evaluate(targets, center, health, hurtSync.get() ? arrival : 0, mc.world);
+                BlockView view = stopView != null && center.squaredDistanceTo(Vec3d.ofCenter(stoppedAt)) <= aheadRange ? stopView : mc.world;
+                Choice choice = evaluate(targets, center, health, hurtSync.get() ? arrival : 0, view);
                 if (choice != null && hurtSync.get() && choice.damage < choice.target.health) {
-                    Choice full = evaluate(targets, center, health, 0, mc.world);
+                    Choice full = evaluate(targets, center, health, 0, view);
                     if (full != null && choice.damage < full.damage * HURT_WORTH) choice = null;
                 }
                 if (choice == null) {
                     if (hurtSync.get()) {
-                        Choice ready = evaluate(targets, center, health, 0, mc.world);
+                        Choice ready = evaluate(targets, center, health, 0, view);
                         if (ready != null) {
                             if (rotate.get()) rotationReady(crystal.getBoundingBox(), breakAim(crystal), breakRange.get(), HOLD_PRIORITY);
                             held = true;
@@ -1117,6 +1121,7 @@ public class AutoCrystal extends Module {
             if (!InteractionManager.get().attack(best, switchMode.get(), swing.get(), !pauseEating.get())) break;
 
             tracker.explodeAt(best.getEntityPos());
+            if (stopView != null && Trace.on()) Trace.log("crystal broken with the stop at {} for {}", stoppedAt, bestChoice.damage);
             for (Target target : targets) {
                 float hit = target == bestChoice.target ? bestChoice.raw : ExplosionDamage.crystalRaw(target.player, target.feet, target.box, best.getEntityPos(), mc.world);
                 if (hit > 0) HurtTracker.get().expect(target.player, hit);
@@ -1352,10 +1357,7 @@ public class AutoCrystal extends Module {
             return null;
         }
         boolean low = leavesLow(self, health);
-        if (self > maxSelfDamage.get()) {
-            rejectedSelf = true;
-            return null;
-        }
+        boolean overSelf = self > maxSelfDamage.get();
         if (hurtsFriend(crystal, view)) {
             rejectedFriend = true;
             return null;
@@ -1382,7 +1384,12 @@ public class AutoCrystal extends Module {
 
             float damage = arrival != 0 ? HurtTracker.get().effective(target.player, raw, arrival) : ExplosionDamage.mitigate(target.player, raw);
             if (damage < least && damage < target.health) continue;
-            if (low && !(damage >= target.health && AutoTotem.canAffordPop())) {
+            boolean kills = damage >= target.health + LETHAL_MARGIN && !holdsTotem(target.player);
+            if (overSelf && !(kills && !low)) {
+                rejectedSelf = true;
+                continue;
+            }
+            if (low && !(damage >= target.health + LETHAL_MARGIN && AutoTotem.canAffordPop())) {
                 rejectedSelf = true;
                 continue;
             }
@@ -1394,13 +1401,18 @@ public class AutoCrystal extends Module {
             float counted = Math.min(damage, target.health);
             float score = counted - self * selfWeight.get().floatValue() + (target.player == focus ? FOCUS_BONUS : 0)
                 + LOW_HEALTH_BONUS * Math.min(damage / Math.max(target.health, 1.0f), 1.0f);
-            if (damage >= target.health) score += LETHAL_BONUS;
+            if (damage >= target.health + LETHAL_MARGIN) score += LETHAL_BONUS;
+            if (kills) score += LETHAL_BONUS;
             if (antiSurround.get() && target.gaps.contains(key)) score += GAP_BONUS;
             Choice choice = new Choice(target, damage, raw, self, score);
             if (choice.beats(best)) best = choice;
         }
 
         return best;
+    }
+
+    private static boolean holdsTotem(PlayerEntity player) {
+        return player.getMainHandStack().isOf(Items.TOTEM_OF_UNDYING) || player.getOffHandStack().isOf(Items.TOTEM_OF_UNDYING);
     }
 
     private float floor(Target target, boolean chipping) {
@@ -1566,6 +1578,10 @@ public class AutoCrystal extends Module {
         if (!rotateBreak.get() && priority != PLACE_PRIORITY && priority != GAP_PRIORITY && priority != AIM_PRIORITY) return true;
 
         RotationManager rotations = RotationManager.get();
+        if (rotations.isLookingAt(box, range + RAY_SLACK)) {
+            rotations.request(priority, rotations.serverYaw(), rotations.serverPitch(), rotateSpeed.get().floatValue(), moveFix.get());
+            return true;
+        }
         rotations.request(priority, aim, rotateSpeed.get().floatValue(), moveFix.get());
         return rotations.isLookingAt(box, range + RAY_SLACK);
     }
