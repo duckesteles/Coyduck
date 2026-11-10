@@ -529,10 +529,6 @@ public class AutoAnchor extends Module {
             status = "rotating";
             return;
         }
-        if (!interaction.canClick(placed ? 2 : 3, false)) {
-            status = "click limit";
-            return;
-        }
 
         boolean[] done = {false};
         PacketBatch.run(() -> {
