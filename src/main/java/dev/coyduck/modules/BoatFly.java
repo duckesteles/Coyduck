@@ -19,6 +19,7 @@ import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.vehicle.AbstractBoatEntity;
+import net.minecraft.network.packet.c2s.play.PlayerInputC2SPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.network.packet.s2c.play.VehicleMoveS2CPacket;
 import net.minecraft.util.Hand;
@@ -212,6 +213,9 @@ public class BoatFly extends Module {
     public void onDeactivate() {
         release();
         lastBoat = null;
+        if (mc.player != null && mc.getNetworkHandler() != null && mc.player.hasVehicle() && mc.player.input.playerInput.sneak()) {
+            mc.getNetworkHandler().sendPacket(new PlayerInputC2SPacket(mc.player.input.playerInput));
+        }
     }
 
     @Override
