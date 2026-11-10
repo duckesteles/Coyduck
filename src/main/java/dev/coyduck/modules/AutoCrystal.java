@@ -91,6 +91,8 @@ public class AutoCrystal extends Module {
     private static final int PREDICT_DROP = 3;
     private static final float LETHAL_BONUS = 100.0f;
     private static final float LETHAL_MARGIN = 0.5f;
+    private static final double SELF_PREDICT_SPEED = 0.25;
+    private static final int MAX_SELF_PREDICT = 6;
     private static final float DEFENSE_THREAT = 4.0f;
     private static final float DEFENSE_FREE = 0.5f;
     private static final double RAY_SLACK = 2.0;
@@ -1459,6 +1461,12 @@ public class AutoCrystal extends Module {
         if (cached && selfCache.containsKey(key)) return selfCache.get(key);
 
         float raw = ExplosionDamage.crystalRaw(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), crystal, view);
+        Vec3d velocity = mc.player.getVelocity();
+        if (velocity.horizontalLengthSquared() > SELF_PREDICT_SPEED * SELF_PREDICT_SPEED) {
+            int ticks = MathHelper.clamp(MathHelper.ceil(LatencyManager.get().rtt() / 50.0), 1, MAX_SELF_PREDICT);
+            Vec3d move = velocity.multiply(ticks);
+            raw = Math.max(raw, ExplosionDamage.crystalRaw(mc.player, mc.player.getEntityPos().add(move), mc.player.getBoundingBox().offset(move), crystal, view));
+        }
         if (cached) selfCache.put(key, raw);
         return raw;
     }
