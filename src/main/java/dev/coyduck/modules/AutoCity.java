@@ -29,6 +29,8 @@ import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.entity.ExperienceOrbEntity;
+import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.util.Util;
 import net.minecraft.entity.player.PlayerEntity;
@@ -359,9 +361,12 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         if (!mc.world.getBlockState(pos).isReplaceable() && MiningManager.get().wasBroken()) return true;
         Box box = Targets.box(target);
         BlockPos support = currentSupport != null && !Targets.isBase(mc.world.getBlockState(currentSupport)) ? currentSupport : null;
-        float damage = cev.get() && Targets.columns(box).contains(pos.down(2).asLong())
-            ? cevDamage(pos, box, Targets.feet(box))
-            : gapDamage(pos, box, Targets.feet(box), support);
+        boolean roof = cev.get() && Targets.columns(box).contains(pos.down(2).asLong());
+        if (roof && !roofCrystal(pos)) {
+            if (Trace.on() && stopHeldSince == 0) Trace.log("city waits on {}, no crystal on the roof yet", pos);
+            return false;
+        }
+        float damage = roof ? cevDamage(pos, box, Targets.feet(box)) : gapDamage(pos, box, Targets.feet(box), support);
         if (damage >= minDamage.get() || damage >= target.getHealth() + target.getAbsorptionAmount()) return true;
         if (Trace.on() && stopHeldSince == 0) Trace.log("city waits on {}, the gap would only allow {} damage now", pos, damage);
         return false;
@@ -477,7 +482,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
             for (long key : columns) {
                 BlockPos pos = BlockPos.fromLong(key).up(2);
                 if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || !mining.inRange(pos) || own.contains(pos) || mine(pos)) continue;
-                if (!mc.world.getBlockState(pos).isOf(Blocks.OBSIDIAN) || !mc.world.getBlockState(pos.up()).isAir()) continue;
+                if (!mc.world.getBlockState(pos).isOf(Blocks.OBSIDIAN) || !mc.world.getBlockState(pos.up()).isAir() || roofBlocked(pos)) continue;
                 float damage = cevDamage(pos, box, feet);
                 if (damage < minDamage.get()) continue;
                 choices.add(new Choice(pos, damage - FACE_PENALTY, null));
@@ -486,6 +491,18 @@ public class AutoCity extends Module implements MiningManager.StopGate {
 
         choices.sort((a, b) -> Float.compare(b.score, a.score));
         return choices;
+    }
+
+    private boolean roofCrystal(BlockPos pos) {
+        return !mc.world.getOtherEntities(null, new Box(pos.up()), entity -> entity instanceof EndCrystalEntity crystal
+            && crystal.getBlockPos().down().equals(pos) && CrystalTracker.get().isAlive(crystal)).isEmpty();
+    }
+
+    private boolean roofBlocked(BlockPos pos) {
+        BlockPos above = pos.up();
+        Box space = new Box(above.getX(), above.getY(), above.getZ(), above.getX() + 1, above.getY() + 2, above.getZ() + 1);
+        return !mc.world.getOtherEntities(null, space, entity -> !(entity instanceof EndCrystalEntity) && !entity.isSpectator() && entity.isAlive()
+            && !(entity instanceof ItemEntity) && !(entity instanceof ExperienceOrbEntity)).isEmpty();
     }
 
     private float cevDamage(BlockPos block, Box box, Vec3d feet) {
