@@ -359,7 +359,9 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         if (!mc.world.getBlockState(pos).isReplaceable() && MiningManager.get().wasBroken()) return true;
         Box box = Targets.box(target);
         BlockPos support = currentSupport != null && !Targets.isBase(mc.world.getBlockState(currentSupport)) ? currentSupport : null;
-        float damage = gapDamage(pos, box, Targets.feet(box), support);
+        float damage = cev.get() && Targets.columns(box).contains(pos.down(2).asLong())
+            ? cevDamage(pos, box, Targets.feet(box))
+            : gapDamage(pos, box, Targets.feet(box), support);
         if (damage >= minDamage.get() || damage >= target.getHealth() + target.getAbsorptionAmount()) return true;
         if (Trace.on() && stopHeldSince == 0) Trace.log("city waits on {}, the gap would only allow {} damage now", pos, damage);
         return false;
@@ -400,7 +402,8 @@ public class AutoCity extends Module implements MiningManager.StopGate {
     private boolean stillValid(BlockPos pos, LongSet columns) {
         if (!MiningManager.get().inRange(pos) || Targets.ownRing().contains(pos) || mine(pos)) return false;
 
-        boolean partOfHole = columns.contains(pos.asLong()) || Targets.ring(columns, 0).contains(pos) || Targets.ring(columns, 1).contains(pos);
+        boolean partOfHole = columns.contains(pos.asLong()) || Targets.ring(columns, 0).contains(pos) || Targets.ring(columns, 1).contains(pos)
+            || cev.get() && columns.contains(pos.down(2).asLong());
         if (!partOfHole) return false;
 
         if (webbed(pos)) return false;
@@ -474,7 +477,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
             for (long key : columns) {
                 BlockPos pos = BlockPos.fromLong(key).up(2);
                 if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || !mining.inRange(pos) || own.contains(pos) || mine(pos)) continue;
-                if (mc.world.getBlockState(pos).isOf(Blocks.BEDROCK) || !Targets.canHoldCrystal(mc.world, pos)) continue;
+                if (!mc.world.getBlockState(pos).isOf(Blocks.OBSIDIAN) || !mc.world.getBlockState(pos.up()).isAir()) continue;
                 float damage = cevDamage(pos, box, feet);
                 if (damage < minDamage.get()) continue;
                 choices.add(new Choice(pos, damage - FACE_PENALTY, null));
