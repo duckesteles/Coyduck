@@ -170,7 +170,7 @@ public class HoleFill extends Module {
                     if (Vec3d.ofBottomCenter(pos).squaredDistanceTo(heading) > range) continue;
                     if (self.intersects(new Box(pos)) || enemy.intersects(new Box(pos))) continue;
                     Vec3d bottom = Vec3d.ofBottomCenter(pos);
-                    if (leaveOwn.get() && bottom.squaredDistanceTo(mc.player.getEntityPos()) <= bottom.squaredDistanceTo(target.getEntityPos())) continue;
+                    if (leaveOwn.get() && bottom.squaredDistanceTo(mc.player.getEntityPos()) <= Math.min(bottom.squaredDistanceTo(target.getEntityPos()), bottom.squaredDistanceTo(heading))) continue;
                     if (pos.getY() > target.getY() + MAX_STEP_UP) continue;
                     if (isHole(pos, null) || doubles.get() && isDouble(pos)) holes.add(pos);
                 }
