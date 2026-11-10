@@ -178,7 +178,7 @@ public class ElytraEvade extends Module {
             if (spot != best) Trace.log("evade goes to spot {} {} (risk {})", best, spots.get(best), bestScore);
             spot = best;
         }
-        ElytraFly.pilot(toward(spots.get(spot)));
+        ElytraFly.pilot(safeStep(toward(spots.get(spot))));
     }
 
     private void calm(String why) {
@@ -225,6 +225,15 @@ public class ElytraEvade extends Module {
             if (mc.world.getBlockState(pos).isOf(Blocks.COBWEB)) return true;
         }
         return false;
+    }
+
+    private Vec3d safeStep(Vec3d move) {
+        Box body = mc.player.getBoundingBox();
+        for (double scale = 1; scale >= 0.125; scale /= 2) {
+            Vec3d step = move.multiply(scale);
+            if (mc.world.isSpaceEmpty(mc.player, body.stretch(step).expand(0.05))) return step;
+        }
+        return Vec3d.ZERO;
     }
 
     private Vec3d toward(Vec3d goal) {
