@@ -159,7 +159,7 @@ public class ClickGui extends Module {
         String savedHudFont = previousHudFont.get();
         settings.reset();
         layout.set(savedLayout);
-        previousTheme.set(savedTheme);
+        if (previousTheme.get().isEmpty()) previousTheme.set(savedTheme);
         previousFont.set(savedFont);
         previousFace.set(savedFace);
         previousHudFont.set(savedHudFont);
