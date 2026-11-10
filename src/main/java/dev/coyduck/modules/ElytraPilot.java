@@ -341,9 +341,12 @@ public class ElytraPilot extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
+        ElytraEvade evade = Modules.get().get(ElytraEvade.class);
+        if (evade != null && evade.evading()) return;
         ElytraFly.pilot(null);
         if (mc.player == null || mc.world == null) return;
         ticks++;
+        if (!eating && eatReturn != -1 && !mc.player.isUsingItem() && InventoryManager.get().select(eatReturn)) eatReturn = -1;
 
         if (!mc.player.isAlive()) {
             toggle();
@@ -954,8 +957,7 @@ public class ElytraPilot extends Module {
         if (!eating) return;
         eating = false;
         mc.options.useKey.setPressed(false);
-        if (eatReturn != -1 && mc.player != null) InventoryManager.get().select(eatReturn);
-        eatReturn = -1;
+        if (eatReturn != -1 && mc.player != null && InventoryManager.get().select(eatReturn)) eatReturn = -1;
     }
 
     private boolean free(Vec3d from, Vec3d to) {

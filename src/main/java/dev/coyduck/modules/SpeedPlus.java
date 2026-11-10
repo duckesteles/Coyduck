@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.managers.RotationManager;
 import dev.coyduck.Coyduck;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
@@ -225,7 +226,7 @@ public class SpeedPlus extends Module {
         if (oddIn(box)) return true;
 
         Vec2f input = mc.player.input.getMovementInput();
-        float yaw = mc.player.getYaw() * MathHelper.RADIANS_PER_DEGREE;
+        float yaw = RotationManager.get().physicsYaw(mc.player, mc.player.getYaw()) * MathHelper.RADIANS_PER_DEGREE;
         double x = input.x * MathHelper.cos(yaw) - input.y * MathHelper.sin(yaw);
         double z = input.y * MathHelper.cos(yaw) + input.x * MathHelper.sin(yaw);
         double length = Math.sqrt(x * x + z * z);
@@ -242,7 +243,7 @@ public class SpeedPlus extends Module {
     }
 
     private void setHorizontal(PlayerMoveEvent event, double amount, Vec2f input) {
-        float yaw = mc.player.getYaw() * MathHelper.RADIANS_PER_DEGREE;
+        float yaw = RotationManager.get().physicsYaw(mc.player, mc.player.getYaw()) * MathHelper.RADIANS_PER_DEGREE;
         double x = input.x * MathHelper.cos(yaw) - input.y * MathHelper.sin(yaw);
         double z = input.y * MathHelper.cos(yaw) + input.x * MathHelper.sin(yaw);
         double length = Math.sqrt(x * x + z * z);

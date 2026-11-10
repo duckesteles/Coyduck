@@ -324,6 +324,7 @@ public class MaceStrike extends Module {
     }
 
     private void groundTick() {
+        if (owed > 0) return;
         if (!onFoot.get() || mc.player.isGliding()) {
             target = null;
             return;

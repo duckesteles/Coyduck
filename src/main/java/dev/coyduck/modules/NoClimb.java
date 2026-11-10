@@ -33,7 +33,7 @@ public class NoClimb extends Module {
 
     private final Setting<Boolean> webs = sgGeneral.add(new BoolSetting.Builder()
         .name("webs")
-        .description("Cobwebs don't slow you down. Grim simulates web slowdown and sets you back, so it is off by default.")
+        .description("Cobwebs don't slow you down. The server checks web slowdown and sets you back, so it is off by default.")
         .defaultValue(false)
         .build()
     );

@@ -6,6 +6,8 @@ import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.entity.Entity;
+import dev.coyduck.mixin.ClientPlayerEntityAccessor;
+import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.util.PlayerInput;
 import net.minecraft.util.math.Box;
@@ -189,6 +191,14 @@ public final class RotationManager {
             serverYaw = packet.getYaw(serverYaw);
             serverPitch = packet.getPitch(serverPitch);
             known = true;
+        } else if (event.packet instanceof PlayerInteractItemC2SPacket packet) {
+            serverYaw = packet.getYaw();
+            serverPitch = packet.getPitch();
+            known = true;
+            if (mc.player != null) {
+                ((ClientPlayerEntityAccessor) mc.player).coyduck$setLastYawClient(packet.getYaw());
+                ((ClientPlayerEntityAccessor) mc.player).coyduck$setLastPitchClient(packet.getPitch());
+            }
         }
     }
 

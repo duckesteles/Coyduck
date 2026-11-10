@@ -134,7 +134,7 @@ public class AutoTotem extends Module {
 
     private final Setting<Boolean> hotbarSwap = sgGeneral.add(new BoolSetting.Builder()
         .name("hotbar-swap")
-        .description("Refills the offhand from a hotbar totem with the swap-hands key instead of an inventory click. Grim drops inventory clicks while you move, sprint or sneak, but not the swap-hands key. Keep a few spare totems in your hotbar.")
+        .description("Refills the offhand from a hotbar totem with the swap-hands key instead of an inventory click. NoCheatPlus drops inventory clicks while you move, sprint or use an item, but not the swap-hands key. Keep a few spare totems in your hotbar.")
         .defaultValue(true)
         .build()
     );

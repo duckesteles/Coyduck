@@ -146,18 +146,20 @@ public class Burrow extends Module {
         float yaw = mc.player.getYaw();
         boolean collision = mc.player.horizontalCollision;
 
-        mc.player.setPosition(x, y, z);
-        for (double offset : JUMP) {
-            mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.Full(x, y + offset, z, yaw, 90, false, collision));
-        }
-
         BlockHitResult hit = new BlockHitResult(new Vec3d(x, y, z), Direction.UP, feet.down(), false);
-        InventoryManager.get().withItem(slot, InventoryManager.SwitchMode.Silent, () -> {
+        boolean sent = InventoryManager.get().withItem(slot, InventoryManager.SwitchMode.Silent, () -> {
+            mc.player.setPosition(x, y, z);
+            for (double offset : JUMP) {
+                mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.Full(x, y + offset, z, yaw, 90, false, collision));
+            }
             mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
             InteractionManager.get().swing(InteractionManager.SwingMode.Packet);
+            mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.Full(x, y + rubberband.get(), z, yaw, 90, false, collision));
         });
-
-        mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.Full(x, y + rubberband.get(), z, yaw, 90, false, collision));
+        if (!sent) {
+            if (verbose) error("Could not switch to the block right now.");
+            return;
+        }
         spot = feet.toImmutable();
         warned = false;
         Trace.log("burrow sent at {}", feet);

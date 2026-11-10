@@ -119,6 +119,10 @@ public class ElytraEvade extends Module {
         return threat == null ? null : threat.getName().getString();
     }
 
+    public boolean evading() {
+        return isActive() && threat != null;
+    }
+
     @EventHandler(priority = EventPriority.HIGH)
     private void onTick(TickEvent.Pre event) {
         if (mc.player == null || mc.world == null || !Modules.get().isActive(ElytraFly.class)) return;

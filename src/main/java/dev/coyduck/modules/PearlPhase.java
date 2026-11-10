@@ -26,7 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class PearlPhase extends Module {
-    private static final int ROTATE_PRIORITY = 115;
+    private static final int ROTATE_PRIORITY = 130;
     private static final double SPEED = 1.5;
     private static final double GRAVITY = 0.03;
     private static final double DRAG = 0.99;
@@ -115,7 +115,12 @@ public class PearlPhase extends Module {
         RotationManager rotations = RotationManager.get();
         rotations.request(ROTATE_PRIORITY, targetYaw, targetPitch, 180, false);
         boolean aimed = Math.abs(MathHelper.wrapDegrees(rotations.serverYaw() - targetYaw)) < 0.5 && Math.abs(rotations.serverPitch() - targetPitch) < 0.5;
-        if (!aimed && ++aimTicks < AIM_TICKS) return;
+        if (!aimed) {
+            if (++aimTicks < AIM_TICKS) return;
+            error("Could not turn to the throw angle in time, so no pearl was thrown.");
+            toggle();
+            return;
+        }
         if (mc.player.getEntityPos().squaredDistanceTo(planned) > 0.05 * 0.05 && !plan()) {
             error("You moved and there is no wall to phase into now.");
             toggle();
