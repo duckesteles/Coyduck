@@ -9,7 +9,7 @@ public final class CoyduckLogger implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> Recorder.get().close("game closed"), "Coyduck Logger shutdown"));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> Recorder.get().shutdown(), "Coyduck Logger shutdown"));
         LOG.info("Coyduck Logger ready, fights are recorded to coyduck-logger without coordinates");
     }
 }

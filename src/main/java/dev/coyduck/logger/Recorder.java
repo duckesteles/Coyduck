@@ -72,6 +72,7 @@ public final class Recorder {
     private static final double START_RANGE = 24;
     private static final double TRACK_RANGE = 48;
     private static final double MAX_SPAN = 96;
+    private static final double MAX_REL = MAX_SPAN + 48;
     private static final double NEAR_BLOCKS = 6;
     private static final long IDLE_MS = 30_000;
     private static final long COOLDOWN_MS = 20_000;
@@ -98,6 +99,7 @@ public final class Recorder {
     private Stats stats;
 
     private Vec3d beforeTeleport;
+    private Entity beforeTeleportEntity;
     private final Map<BlockPos, BlockState> before = new HashMap<>();
     private final Map<Integer, Long> crystals = new HashMap<>();
     private final Map<Integer, Float> health = new HashMap<>();
@@ -125,15 +127,15 @@ public final class Recorder {
 
     private void joinSafely() {
         closeSafely("joined another world");
-        String name = LocalDateTime.now().format(FILE) + ".log";
-        Path path = mc.runDirectory.toPath().resolve("coyduck-logger").resolve(name);
+        Path directory = mc.runDirectory.toPath().resolve("coyduck-logger");
         try {
-            file = new LogFile(path);
+            file = LogFile.open(directory, LocalDateTime.now().format(FILE));
         } catch (IOException e) {
-            CoyduckLogger.LOG.error("Could not open {}", path, e);
+            CoyduckLogger.LOG.error("Could not open a log in {}", directory, e);
             file = null;
             return;
         }
+        String name = file.path().getFileName().toString();
         tick = 0;
         anchor = null;
         window = 0;
@@ -160,10 +162,19 @@ public final class Recorder {
         }
     }
 
+    public void shutdown() {
+        LogFile last;
+        synchronized (this) {
+            last = file;
+            close("game closed");
+        }
+        if (last != null) last.await();
+    }
+
     private void closeSafely(String reason) {
         if (file == null) return;
         if (anchor != null) endWindow(reason);
-        raw("END " + reason + ", scrubbed " + guard.scrubbed() + " numbers that looked like coordinates");
+        raw("END " + reason + ", scrubbed " + guard.scrubbed() + " numbers that looked like coordinates" + (file.dropped() > 0 ? ", " + file.dropped() + " lines dropped" : ""));
         file.close();
         file = null;
     }
@@ -172,7 +183,7 @@ public final class Recorder {
         raw("HDR Coyduck Logger " + FabricLoader.getInstance().getModContainer("coyduck-logger").map(m -> m.getMetadata().getVersion().getFriendlyString()).orElse("?")
             + " on Minecraft " + SharedConstants.getGameVersion().name());
         raw("HDR privacy: positions are written only inside fight windows, relative to where the window opened (W lines). A window closes after "
-            + (int) MAX_SPAN + " blocks of travel and the next cannot open for " + COOLDOWN_MS / 1000 + "s, so windows cannot be chained into a route. Any other number of 1000 or more is replaced by ?.");
+            + (int) MAX_SPAN + " blocks of travel, a far teleport or a respawn, and after any window ends the next cannot open for " + COOLDOWN_MS / 1000 + "s, so windows cannot be chained into a route. Teleports outside windows are written without distances. Any other number of 1000 or more is replaced by ?.");
         raw("HDR player " + (mc.player == null ? "?" : mc.player.getName().getString()) + ", server " + server() + ", dimension " + dimension);
         List<String> mods = new ArrayList<>();
         for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
@@ -187,9 +198,11 @@ public final class Recorder {
 
     private String server() {
         if (mc.getCurrentServerEntry() == null) return mc.isInSingleplayer() ? "singleplayer" : "?";
-        String address = mc.getCurrentServerEntry().address;
+        String address = mc.getCurrentServerEntry().address.trim();
+        if (address.startsWith("[") || address.chars().filter(c -> c == ':').count() > 1) return "an ip address";
         int port = address.lastIndexOf(':');
-        return port > 0 ? address.substring(0, port) : address;
+        String host = port > 0 ? address.substring(0, port) : address;
+        return host.matches("[0-9.]+") ? "an ip address" : host;
     }
 
     public synchronized void tick() {
@@ -230,7 +243,6 @@ public final class Recorder {
 
         if (mc.player.getEntityPos().distanceTo(anchor) > MAX_SPAN) {
             endWindow("moved " + (int) MAX_SPAN + " blocks from the start");
-            cooldownUntil = time + COOLDOWN_MS;
             return;
         }
         if (time - lastActivity > IDLE_MS) {
@@ -279,6 +291,8 @@ public final class Recorder {
         crystals.clear();
         before.clear();
         beforeTeleport = null;
+        beforeTeleportEntity = null;
+        cooldownUntil = Util.getMeasuringTimeMs() + COOLDOWN_MS;
     }
 
     private void trackPlayers() {
@@ -339,6 +353,10 @@ public final class Recorder {
                 movesThisTick++;
                 count("moves sent");
                 if (anchor == null) return;
+                if (move.changesPosition() && new Vec3d(move.getX(0), move.getY(0), move.getZ(0)).distanceTo(anchor) > MAX_SPAN) {
+                    endWindow("moved or was moved " + (int) MAX_SPAN + " blocks from the start");
+                    return;
+                }
                 StringBuilder out = new StringBuilder("> move");
                 if (move.changesPosition()) out.append(" pos=").append(rel(new Vec3d(move.getX(0), move.getY(0), move.getZ(0))));
                 if (move.changesLook()) out.append(" look=").append(Describe.one(move.getYaw(0))).append(',').append(Describe.one(move.getPitch(0)));
@@ -452,7 +470,15 @@ public final class Recorder {
 
     private void beforeReceived(Packet<?> packet) {
         switch (packet) {
-            case PlayerPositionLookS2CPacket ignored -> beforeTeleport = mc.player.getEntityPos();
+            case PlayerPositionLookS2CPacket ignored -> {
+                beforeTeleport = mc.player.getEntityPos();
+                beforeTeleportEntity = mc.player;
+            }
+            case net.minecraft.network.packet.s2c.play.PlayerRespawnS2CPacket ignored -> {
+                if (anchor != null) endWindow("respawned");
+                beforeTeleport = null;
+                beforeTeleportEntity = null;
+            }
             case BlockUpdateS2CPacket update -> remember(update.getPos());
             case ChunkDeltaUpdateS2CPacket delta -> delta.visitUpdates((pos, state) -> remember(pos));
             default -> {
@@ -482,10 +508,19 @@ public final class Recorder {
             }
             case PlayerPositionLookS2CPacket teleport -> {
                 count("server teleports");
-                lastActivity = anchor != null ? Util.getMeasuringTimeMs() : lastActivity;
-                Vec3d moved = beforeTeleport == null ? Vec3d.ZERO : mc.player.getEntityPos().subtract(beforeTeleport);
-                line("< teleport id=" + teleport.teleportId() + " moved " + Describe.vec(moved) + " (" + Describe.num(moved.length()) + " blocks)");
+                boolean known = beforeTeleport != null && beforeTeleportEntity == mc.player;
+                Vec3d moved = known ? mc.player.getEntityPos().subtract(beforeTeleport) : null;
                 beforeTeleport = null;
+                beforeTeleportEntity = null;
+                if (anchor == null) {
+                    line("< teleport id=" + teleport.teleportId());
+                } else if (moved == null || moved.length() > MAX_SPAN || mc.player.getEntityPos().distanceTo(anchor) > MAX_SPAN) {
+                    line("< teleport id=" + teleport.teleportId() + " far");
+                    endWindow("teleported far");
+                } else {
+                    lastActivity = Util.getMeasuringTimeMs();
+                    line("< teleport id=" + teleport.teleportId() + " moved " + Describe.vec(moved) + " (" + Describe.num(moved.length()) + " blocks)");
+                }
             }
             case PlayerActionResponseS2CPacket ack -> {
                 if (anchor != null) line("< ack seq=" + ack.sequence());
@@ -626,13 +661,19 @@ public final class Recorder {
     }
 
     private String rel(Vec3d pos) {
-        return anchor == null ? "-" : Describe.vec(pos.subtract(anchor));
+        if (anchor == null) return "-";
+        Vec3d offset = pos.subtract(anchor);
+        return offset.length() > MAX_REL ? "far" : Describe.vec(offset);
     }
 
     private String relBlock(BlockPos pos) {
         if (anchor == null) return "-";
         BlockPos origin = BlockPos.ofFloored(anchor);
-        return (pos.getX() - origin.getX()) + "," + (pos.getY() - origin.getY()) + "," + (pos.getZ() - origin.getZ());
+        int x = pos.getX() - origin.getX();
+        int y = pos.getY() - origin.getY();
+        int z = pos.getZ() - origin.getZ();
+        if (Math.sqrt((double) x * x + (double) y * y + (double) z * z) > MAX_REL) return "far";
+        return x + "," + y + "," + z;
     }
 
     private void count(String key) {
