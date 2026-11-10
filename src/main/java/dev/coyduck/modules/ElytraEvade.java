@@ -109,6 +109,7 @@ public class ElytraEvade extends Module {
 
     @Override
     public void onDeactivate() {
+        if (threat != null) ElytraFly.pilot(null);
         anchor = null;
         spot = -1;
         threat = null;
@@ -120,12 +121,16 @@ public class ElytraEvade extends Module {
     }
 
     public boolean evading() {
-        return isActive() && threat != null;
+        return isActive() && threat != null && Modules.get().isActive(ElytraFly.class);
     }
 
     @EventHandler(priority = EventPriority.HIGH)
     private void onTick(TickEvent.Pre event) {
-        if (mc.player == null || mc.world == null || !Modules.get().isActive(ElytraFly.class)) return;
+        if (mc.player == null || mc.world == null) return;
+        if (!Modules.get().isActive(ElytraFly.class)) {
+            if (threat != null) calm("elytra-fly+ is off");
+            return;
+        }
         MaceStrike mace = Modules.get().get(MaceStrike.class);
         if (mace != null && mace.hunting()) {
             calm("mace-strike is hunting");
@@ -145,6 +150,8 @@ public class ElytraEvade extends Module {
             if (evading && !mc.player.isOnGround() && mc.player.getVelocity().y < 0 && mc.player.checkGliding()) {
                 mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
                 Trace.log("evade restarted the glide");
+            } else if (evading) {
+                calm("not gliding");
             }
             return;
         }
@@ -176,6 +183,7 @@ public class ElytraEvade extends Module {
 
     private void calm(String why) {
         if (threat != null) Trace.log("evade stops, {}", why);
+        if (threat != null) ElytraFly.pilot(null);
         threat = null;
         spot = -1;
         calmSince = System.currentTimeMillis();
