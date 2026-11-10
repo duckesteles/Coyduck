@@ -343,8 +343,10 @@ public class ElytraPilot extends Module {
     private void onTick(TickEvent.Pre event) {
         ElytraEvade evade = Modules.get().get(ElytraEvade.class);
         if (evade != null && evade.evading()) {
-            ticks++;
-            if (eating && mc.player != null) autoEat();
+            if (eating && mc.player != null) {
+                eatTick--;
+                autoEat();
+            }
             return;
         }
         ElytraFly.pilot(null);
