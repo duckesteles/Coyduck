@@ -854,10 +854,14 @@ public class AutoCrystal extends Module {
         }
 
         if (spot != null) {
+            boolean ahead = minedView != null && crystalCenter(spot).squaredDistanceTo(Vec3d.ofCenter(mined)) <= aheadRange;
+            if (stoppedAt == null && !ahead && CrystalTracker.get().hasPlacing()) {
+                status = "waiting";
+                return;
+            }
             lastSpot = spot;
             lastSpotAt = Util.getMeasuringTimeMs();
             placeCrystal(spot, spotChoice);
-            boolean ahead = minedView != null && crystalCenter(spot).squaredDistanceTo(Vec3d.ofCenter(mined)) <= aheadRange;
             if (ahead && status != null && status.endsWith("dmg")) status = "ahead " + status;
             return;
         }
