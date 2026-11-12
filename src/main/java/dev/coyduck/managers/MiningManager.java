@@ -97,6 +97,9 @@ public final class MiningManager {
         boolean allowStop(BlockPos pos);
     }
 
+    public interface RebreaksOwn {
+    }
+
     private MiningManager() {}
 
     public static MiningManager get() {
@@ -289,6 +292,10 @@ public final class MiningManager {
         lastStopTick = ticks;
     }
 
+    private boolean guardsOwn(BlockPos cell) {
+        return !(owner instanceof RebreaksOwn) && ownBlock(cell);
+    }
+
     private boolean ownBlock(BlockPos cell) {
         InteractionManager interaction = InteractionManager.get();
         return interaction.isPending(cell) || interaction.placedByUs(cell, OWN_BLOCK_TIME);
@@ -396,7 +403,7 @@ public final class MiningManager {
             restart();
             return;
         }
-        if (autoStop && (brokenSinceStop || waited) && !(broken && ownBlock(pos))) stop(owner);
+        if (autoStop && (brokenSinceStop || waited) && !(broken && guardsOwn(pos))) stop(owner);
         if (autoStop && broken && pos != null && lastStopTick != ticks && mc.world.getBlockState(pos).isReplaceable()) blindStop();
         if (pos != null && !broken && lastStopTick != ticks && !mc.world.getBlockState(pos).isReplaceable()) {
             InteractionManager.get().swing(swing == InteractionManager.SwingMode.None ? InteractionManager.SwingMode.Packet : swing);
@@ -561,7 +568,7 @@ public final class MiningManager {
             broken = true;
             brokenSinceStop = true;
             stops = 0;
-        } else if (autoStop && brokenSinceStop && !ownBlock(pos)) {
+        } else if (autoStop && brokenSinceStop && !guardsOwn(pos)) {
             if (Trace.on()) Trace.log("mine replaced {} with {}", pos, Registries.BLOCK.getId(state.getBlock()).getPath());
             stop(owner, state);
         }
