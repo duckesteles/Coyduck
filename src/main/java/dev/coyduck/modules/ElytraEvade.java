@@ -52,6 +52,7 @@ public class ElytraEvade extends Module {
     private static final double SEGMENT = 2;
     private static final int RESCAN_TICKS = 4;
     private static final int RESCAN_TICKS_RISKY = 2;
+    private static final int FULL_CHECKS = 8;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -219,7 +220,16 @@ public class ElytraEvade extends Module {
             double bestScore = Double.MAX_VALUE;
             List<Vec3d> spots = spots(DIRECTIONS, new double[] {0.5, 1}, false);
             if (spots.isEmpty()) spots = spots(FALLBACK_DIRECTIONS, new double[] {0.5, 1.5}, true);
-            for (Vec3d at : spots) {
+            int count = spots.size();
+            double[] cheap = new double[count];
+            Integer[] order = new Integer[count];
+            for (int i = 0; i < count; i++) {
+                cheap[i] = cheapRisk(spots.get(i));
+                order[i] = i;
+            }
+            java.util.Arrays.sort(order, (a, b) -> Double.compare(cheap[a], cheap[b]));
+            for (int k = 0; k < Math.min(count, FULL_CHECKS); k++) {
+                Vec3d at = spots.get(order[k]);
                 double score = risk(at);
                 if (score < bestScore) {
                     best = at;
@@ -465,6 +475,12 @@ public class ElytraEvade extends Module {
             }
         }
         return best;
+    }
+
+    private double cheapRisk(Vec3d at) {
+        double total = 0;
+        for (PlayerEntity player : near) total += glider(player, at, 0);
+        return total + webRisk(at) + leashPenalty(at);
     }
 
     private double risk(Vec3d at) {
