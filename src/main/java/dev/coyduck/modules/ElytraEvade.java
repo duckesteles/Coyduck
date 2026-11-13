@@ -25,7 +25,7 @@ import java.util.List;
 
 public class ElytraEvade extends Module {
     private static final double GROUND_CLEARANCE = 3;
-    private static final double LIFT_STEP = 1;
+    private static final double LIFT_STEP = 2;
     private static final double MAX_LIFT = 12;
     private static final double ARRIVED = 0.6;
     private static final double SWITCH_GAIN = 2;
@@ -49,6 +49,9 @@ public class ElytraEvade extends Module {
     private static final double COVER_FACTOR = 0.5;
     private static final double COVER_HEIGHT = 4;
     private static final int FALLBACK_DIRECTIONS = 16;
+    private static final double SEGMENT = 2;
+    private static final int RESCAN_TICKS = 4;
+    private static final int RESCAN_TICKS_RISKY = 2;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -136,6 +139,9 @@ public class ElytraEvade extends Module {
     private double lastGoalDistance = Double.MAX_VALUE;
     private double phase;
     private final java.util.Random random = new java.util.Random();
+    private final List<PlayerEntity> near = new ArrayList<>();
+    private int ticks;
+    private int nextScan;
 
     public ElytraEvade() {
         super(Coyduck.CATEGORY, "elytra-evade", "While you fly with elytra-fly+, keeps hopping between spots around you that are safest from players who could crystal you, web you or glide in for a dive. Spots and the way there stay clear of webs and out of web reach where it can, and a spot it cannot get to is dropped for a moment so you never sit still under threat. Gliders are judged by where they are heading, whether they are above you and where they look, and the whole way to a spot is checked, not just the spot. Stays near where trouble started, stays out of mace-strike's way while it hunts and does nothing while nobody is a danger, so you can leave it on.");
@@ -167,7 +173,9 @@ public class ElytraEvade extends Module {
     @EventHandler(priority = EventPriority.HIGH)
     private void onTick(TickEvent.Pre event) {
         if (mc.player == null || mc.world == null) return;
+        ticks++;
         trackMotion();
+        collectNear();
         if (!Modules.get().isActive(ElytraFly.class)) {
             if (threat != null) calm("elytra-fly+ is off");
             return;
@@ -201,31 +209,35 @@ public class ElytraEvade extends Module {
         threat = danger;
         if (anchor == null) anchor = mc.player.getEntityPos();
 
-        Vec3d best = null;
-        double bestScore = Double.MAX_VALUE;
-        List<Vec3d> spots = spots(DIRECTIONS, new double[] {0.5, 1}, false);
-        if (spots.isEmpty()) spots = spots(FALLBACK_DIRECTIONS, new double[] {0.25, 0.75, 1.5}, true);
-        for (Vec3d at : spots) {
-            double score = risk(at);
-            if (score < bestScore) {
-                best = at;
-                bestScore = score;
-            }
-        }
-        if (best == null) {
-            best = away(danger);
-            bestScore = risk(best);
-            if (goal == null || goal.distanceTo(best) > BAN_RADIUS) Trace.log("evade is boxed in, flees away from {}", danger.getName().getString());
-        }
-
         boolean arrived = goal != null && goal.distanceTo(mc.player.getEntityPos()) < speed.get() + ARRIVED;
-        double current = goal == null || arrived || isBanned(goal) || !stillFree(goal) || !clearPath(goal) ? Double.MAX_VALUE : risk(goal);
-        if (current == Double.MAX_VALUE || current > bestScore + SWITCH_GAIN || current >= minDamage.get() && bestScore < current) {
-            Trace.log("evade goes to {} (risk {}{})", best, bestScore, arrived ? ", arrived at the last spot" : "");
-            goal = best;
-            stuckTicks = 0;
-            lastGoalDistance = Double.MAX_VALUE;
-            phase = random.nextDouble() * Math.PI * 2 / DIRECTIONS;
+        boolean valid = goal != null && !arrived && !isBanned(goal) && stillFree(goal) && (ticks < nextScan || clearPath(goal));
+        double current = valid ? risk(goal) : Double.MAX_VALUE;
+        boolean risky = current >= minDamage.get();
+        if (!valid || ticks >= nextScan || risky && ticks >= nextScan - (RESCAN_TICKS - RESCAN_TICKS_RISKY)) {
+            nextScan = ticks + RESCAN_TICKS;
+            Vec3d best = null;
+            double bestScore = Double.MAX_VALUE;
+            List<Vec3d> spots = spots(DIRECTIONS, new double[] {0.5, 1}, false);
+            if (spots.isEmpty()) spots = spots(FALLBACK_DIRECTIONS, new double[] {0.5, 1.5}, true);
+            for (Vec3d at : spots) {
+                double score = risk(at);
+                if (score < bestScore) {
+                    best = at;
+                    bestScore = score;
+                }
+            }
+            if (best == null) {
+                best = away(danger);
+                bestScore = risk(best);
+                if (goal == null || goal.distanceTo(best) > BAN_RADIUS) Trace.log("evade is boxed in, flees away from {}", danger.getName().getString());
+            }
+            if (!valid || current > bestScore + SWITCH_GAIN || risky && bestScore < current) {
+                Trace.log("evade goes to {} (risk {}{})", best, bestScore, arrived ? ", arrived at the last spot" : "");
+                goal = best;
+                stuckTicks = 0;
+                lastGoalDistance = Double.MAX_VALUE;
+                phase = random.nextDouble() * Math.PI * 2 / DIRECTIONS;
+            }
         }
 
         Vec3d wanted = toward(goal);
@@ -242,6 +254,15 @@ public class ElytraEvade extends Module {
             lastGoalDistance = Double.MAX_VALUE;
         }
         ElytraFly.pilot(step);
+    }
+
+    private void collectNear() {
+        near.clear();
+        double range = Math.max(Math.max(maceRange.get(), reach.get() + CRYSTAL_RADIUS) + margin.get(), WEB_REACH) + radius.get() * 1.5 + height.get() * 2;
+        double limit = range * range;
+        for (PlayerEntity player : mc.world.getPlayers()) {
+            if (enemy(player) && player.squaredDistanceTo(mc.player) <= limit) near.add(player);
+        }
     }
 
     private void ban(Vec3d at) {
@@ -281,7 +302,7 @@ public class ElytraEvade extends Module {
 
     private boolean stillFree(Vec3d at) {
         Box body = mc.player.getBoundingBox().offset(at.subtract(mc.player.getEntityPos()));
-        return mc.world.isSpaceEmpty(mc.player, body) && !webbed(body);
+        return mc.world.isSpaceEmpty(mc.player, body) && !hazard(body);
     }
 
     private void calm(String why) {
@@ -334,7 +355,7 @@ public class ElytraEvade extends Module {
         for (double lift = 0; lift <= MAX_LIFT; lift += LIFT_STEP) {
             Vec3d up = at.add(0, lift, 0);
             Box body = mc.player.getBoundingBox().offset(up.subtract(mc.player.getEntityPos()));
-            if (!mc.world.isSpaceEmpty(mc.player, body) || webbed(body.expand(WEB_CLEARANCE)) || mc.world.containsFluid(body.expand(0.5))) continue;
+            if (!mc.world.isSpaceEmpty(mc.player, body) || hazard(body.expand(WEB_CLEARANCE))) continue;
             if (!mc.world.isSpaceEmpty(mc.player, body.stretch(0, -GROUND_CLEARANCE, 0))) continue;
             if (!clearPath(up)) continue;
             return up;
@@ -345,10 +366,14 @@ public class ElytraEvade extends Module {
     private boolean clearPath(Vec3d to) {
         Vec3d from = mc.player.getEntityPos();
         Box body = mc.player.getBoundingBox();
-        int samples = Math.max(PATH_SAMPLES, (int) Math.ceil(from.distanceTo(to) / 0.5));
-        for (int i = 1; i <= samples; i++) {
-            Box at = body.offset(from.lerp(to, i / (double) samples).subtract(from));
-            if (!mc.world.isSpaceEmpty(mc.player, at) || webbed(at.expand(PATH_WEB_CLEARANCE)) || mc.world.containsFluid(at)) return false;
+        Vec3d path = to.subtract(from);
+        int segments = Math.max(1, (int) Math.ceil(path.length() / SEGMENT));
+        Vec3d last = Vec3d.ZERO;
+        for (int i = 1; i <= segments; i++) {
+            Vec3d next = path.multiply(i / (double) segments);
+            Box sweep = body.offset(last).stretch(next.subtract(last));
+            if (!mc.world.isSpaceEmpty(mc.player, sweep) || hazard(sweep.expand(PATH_WEB_CLEARANCE))) return false;
+            last = next;
         }
         return true;
     }
@@ -358,8 +383,7 @@ public class ElytraEvade extends Module {
         double half = mc.player.getHeight() / 2;
         double travel = travelTicks(at);
         double total = 0;
-        for (PlayerEntity player : mc.world.getPlayers()) {
-            if (!enemy(player)) continue;
+        for (PlayerEntity player : near) {
             double eyeHeight = player.getEyeY() - player.getY();
             if (predicted(player, travel).add(0, eyeHeight, 0).distanceTo(at.add(0, half, 0)) <= WEB_REACH) total += minDamage.get();
             int inside = 0;
@@ -401,9 +425,10 @@ public class ElytraEvade extends Module {
         return excess <= 0 ? 0 : excess / leash.get() * GLIDER_DANGER;
     }
 
-    private boolean webbed(Box box) {
+    private boolean hazard(Box box) {
         for (BlockPos pos : BlockPos.iterate(BlockPos.ofFloored(box.minX, box.minY, box.minZ), BlockPos.ofFloored(box.maxX, box.maxY, box.maxZ))) {
-            if (mc.world.getBlockState(pos).isOf(Blocks.COBWEB)) return true;
+            net.minecraft.block.BlockState state = mc.world.getBlockState(pos);
+            if (state.isOf(Blocks.COBWEB) || !state.getFluidState().isEmpty()) return true;
         }
         return false;
     }
@@ -432,8 +457,7 @@ public class ElytraEvade extends Module {
     private PlayerEntity dangerous(Vec3d at, double extra) {
         PlayerEntity best = null;
         double bestScore = 0;
-        for (PlayerEntity player : mc.world.getPlayers()) {
-            if (!enemy(player)) continue;
+        for (PlayerEntity player : near) {
             double score = Math.max(glider(player, at, extra), potential(player, at, extra));
             if (score >= minDamage.get() && score > bestScore) {
                 best = player;
@@ -445,8 +469,7 @@ public class ElytraEvade extends Module {
 
     private double risk(Vec3d at) {
         double total = 0;
-        for (PlayerEntity player : mc.world.getPlayers()) {
-            if (!enemy(player)) continue;
+        for (PlayerEntity player : near) {
             total += Math.max(glider(player, at, 0), Math.min(potential(player, at, 0), GLIDER_DANGER * 2));
         }
         return total + webRisk(at) + leashPenalty(at);
