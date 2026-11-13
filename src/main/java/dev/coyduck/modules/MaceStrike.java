@@ -434,7 +434,7 @@ public class MaceStrike extends Module {
             Box column = new Box(x - half, feetY + 2, z - half, x + half, feetY + h + tall, z + half);
             if (mc.world.isSpaceEmpty(mc.player, column)) return h;
         }
-        return floor;
+        return wanted;
     }
 
     private void steer(Vec3d goal) {
