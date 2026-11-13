@@ -658,12 +658,16 @@ public class AutoTotem extends Module {
         boolean critical = mainhand.get() == Mainhand.Smart && dangerHold > 0 && !inventory.isEating()
             && manualTicks >= CRITICAL_GRACE && !mc.options.useKey.isPressed()
             && mc.player.getHealth() + mc.player.getAbsorptionAmount() <= health.get();
-        if ((!popped && !critical && (resumeTicks > 0 || foodTicks > 0)) || (!gapple && !isTotem(mc.player.getOffHandStack()))) return;
+        if ((!popped && !critical && (resumeTicks > 0 || foodTicks > 0)) || (!gapple && !isTotem(mc.player.getOffHandStack())) || pending) return;
 
         int hotbar = inventory.find(AutoTotem::isTotem, 0, InventoryManager.HOTBAR_END);
         if (hotbar == NONE) {
-            int source = inventory.find(AutoTotem::isTotem, InventoryManager.HOTBAR_END, InventoryManager.MAIN_END);
+            int source = NONE;
+            for (int i = InventoryManager.HOTBAR_END; i < InventoryManager.MAIN_END && source == NONE; i++) {
+                if (isTotem(inventory.stack(i)) && !recentSource(i)) source = i;
+            }
             if (source == NONE) return;
+            sourceUsedAt[source] = Util.getMeasuringTimeMs();
 
             hotbar = reserveHotbar();
             if (hotbar == NONE || !inventory.swapWithHotbar(source, hotbar)) return;
