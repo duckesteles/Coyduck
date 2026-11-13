@@ -186,6 +186,7 @@ public class AutoTotem extends Module {
     private boolean confirmed;
 
     private int reserveSlot = NONE;
+    private int gappleHome = NONE;
     private long emptyEatAt;
     private int previousSlot = NONE;
     private int expectedSlot = NONE;
@@ -529,6 +530,7 @@ public class AutoTotem extends Module {
         if (swap == InventoryManager.Swap.CLICK) inventory.resync();
         sourceUsedAt[source] = Util.getMeasuringTimeMs();
         gappleAt = Util.getMeasuringTimeMs();
+        gappleHome = source;
         gapple = true;
         mainMissing = 0;
     }
@@ -571,6 +573,10 @@ public class AutoTotem extends Module {
     }
 
     private int offhandSource() {
+        int home = gappleHome;
+        gappleHome = NONE;
+        if (home != NONE && !isTotem(mc.player.getOffHandStack()) && isTotem(InventoryManager.get().stack(home))
+            && InventoryManager.get().handlerSlot(mc.player.currentScreenHandler, home) != -1) return home;
         int source = offhandSource(true);
         return source != NONE ? source : offhandSource(false);
     }
@@ -582,7 +588,7 @@ public class AutoTotem extends Module {
             int server = inventory.serverSlot();
             for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
                 if (avoidRecent && recentSource(i)) continue;
-                if (i != server && i != reserveSlot && (skipMask & (1 << i)) == 0 && isTotem(inventory.stack(i))) return i;
+                if (i != server && i != reserveSlot && i != slot.get() - 1 && (skipMask & (1 << i)) == 0 && isTotem(inventory.stack(i))) return i;
             }
         }
 
