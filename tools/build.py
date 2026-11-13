@@ -7,6 +7,7 @@ import sys
 import zipfile
 from pathlib import Path
 
+from fetch import fetch
 from generate import generate
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -27,6 +28,7 @@ def check():
 
 
 def build():
+    fetch()
     subprocess.run([sys.executable, str(ROOT / "art" / "textures.py")], check=True)
     subprocess.run([sys.executable, str(ROOT / "art" / "logo.py")], check=True)
     generate(GENERATED)
