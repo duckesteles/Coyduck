@@ -1,9 +1,13 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Trace;
+import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import meteordevelopment.meteorclient.events.game.GameJoinedEvent;
@@ -24,6 +28,8 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
+import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
+import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
@@ -33,9 +39,7 @@ import net.minecraft.world.RaycastContext;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 
 public class ElytraEvade extends Module {
@@ -47,6 +51,12 @@ public class ElytraEvade extends Module {
     private static final double SWITCH_SHARE = 0.15;
     private static final double GLIDER_DANGER = 20;
     private static final double CRYSTAL_CAP = GLIDER_DANGER * 2;
+    private static final double SPOT_WEB = GLIDER_DANGER;
+    private static final double PATH_WEB = GLIDER_DANGER / 2;
+    private static final double UNKNOWN_WEB_SHARE = 0.25;
+    private static final long WEBBER_MS = 60_000;
+    private static final long OWN_WEB_MS = 2_000;
+    private static final double WEB_TRACE_RANGE = 6;
     private static final long ANCHOR_TIMEOUT = 30_000;
     private static final int PATH_SAMPLES = 8;
     private static final int DIRECTIONS = 8;
@@ -79,7 +89,9 @@ public class ElytraEvade extends Module {
     private static final int RESCAN_TICKS_RISKY = 2;
     private static final int FULL_CHECKS = 8;
     private static final int PATH_CHECKS = 24;
-    private static final int PROBE_BUDGET = 160;
+    private static final int SPOT_PROBES = 96;
+    private static final int FALLBACK_PROBES = 128;
+    private static final int AWAY_PROBES = 96;
     private static final int GLIDE_RETRY_TICKS = 5;
     private static final int MANUAL_TICKS = 20;
 
@@ -87,7 +99,7 @@ public class ElytraEvade extends Module {
 
     private final Setting<Double> minDamage = sgGeneral.add(new DoubleSetting.Builder()
         .name("min-damage")
-        .description("Evades only from players who could hurt you this much with one crystal, placed at the closest point they can reach, walls and blocks between counted.")
+        .description("Evades from players who could hurt you this much with one crystal from the closest point they can reach, walls and blocks between counted. Anyone close enough to put a crystal right next to you always counts.")
         .defaultValue(4)
         .range(0.5, 20)
         .sliderRange(0.5, 20)
@@ -166,8 +178,11 @@ public class ElytraEvade extends Module {
 
     private record Ban(Vec3d way, int level, long until) {}
 
-    private final Map<Integer, Vec3d> lastSeen = new HashMap<>();
-    private final Map<Integer, Vec3d> motion = new HashMap<>();
+    private record Pick(Vec3d at, double risk) {}
+
+    private final Int2ObjectOpenHashMap<Vec3d> lastSeen = new Int2ObjectOpenHashMap<>();
+    private final Int2ObjectOpenHashMap<Vec3d> motion = new Int2ObjectOpenHashMap<>();
+    private final Int2LongOpenHashMap webbers = new Int2LongOpenHashMap();
     private final IntOpenHashSet present = new IntOpenHashSet();
     private final IntOpenHashSet divers = new IntOpenHashSet();
     private final List<PlayerEntity> near = new ArrayList<>();
@@ -177,6 +192,7 @@ public class ElytraEvade extends Module {
     private final Random random = new Random();
     private Vec3d anchor;
     private long calmSince;
+    private long now;
     private Vec3d goal;
     private PlayerEntity threat;
     private double phase;
@@ -184,6 +200,7 @@ public class ElytraEvade extends Module {
     private int ticks;
     private int nextScan;
     private int probes;
+    private int probeLimit;
     private int lastGlideTry = -GLIDE_RETRY_TICKS;
     private int lastManual = -MANUAL_TICKS;
     private boolean webbed;
@@ -213,18 +230,49 @@ public class ElytraEvade extends Module {
         reset();
     }
 
+    @EventHandler
+    private void onPacket(PacketApplyEvent.Post event) {
+        if (mc.player == null || mc.world == null) return;
+        switch (event.packet) {
+            case BlockUpdateS2CPacket packet when packet.getState().isOf(Blocks.COBWEB) -> traceWeb(packet.getPos());
+            case ChunkDeltaUpdateS2CPacket packet -> packet.visitUpdates((pos, state) -> {
+                if (state.isOf(Blocks.COBWEB)) traceWeb(pos);
+            });
+            default -> {}
+        }
+    }
+
+    private void traceWeb(BlockPos pos) {
+        if (InteractionManager.get().placedByUs(pos, OWN_WEB_MS)) return;
+        Vec3d center = Vec3d.ofCenter(pos);
+        PlayerEntity placer = null;
+        double best = WEB_TRACE_RANGE * WEB_TRACE_RANGE;
+        for (PlayerEntity player : mc.world.getPlayers()) {
+            if (!enemy(player)) continue;
+            double distance = player.getEyePos().squaredDistanceTo(center);
+            if (distance <= best) {
+                best = distance;
+                placer = player;
+            }
+        }
+        if (placer != null) webbers.put(placer.getId(), System.currentTimeMillis() + WEBBER_MS);
+    }
+
     private void reset() {
         anchor = null;
         goal = null;
         threat = null;
         lastSeen.clear();
         motion.clear();
+        webbers.clear();
         present.clear();
         divers.clear();
         near.clear();
         bans.clear();
         trail.clear();
         startHazards.clear();
+        calmSince = 0;
+        phase = 0;
         nextScan = ticks;
         lastManual = ticks - MANUAL_TICKS;
         lastGlideTry = ticks - GLIDE_RETRY_TICKS;
@@ -240,10 +288,8 @@ public class ElytraEvade extends Module {
             world = mc.world;
         }
         ticks++;
-        probes = 0;
-        lead = LatencyManager.get().rtt() / 2.0 / 50.0 + INTERPOLATION_TICKS;
+        now = System.currentTimeMillis();
         trackMotion();
-        collectNear();
         trail.addLast(mc.player.getEntityPos());
         while (trail.size() > STUCK_TICKS + 1) trail.pollFirst();
 
@@ -262,9 +308,10 @@ public class ElytraEvade extends Module {
             return;
         }
 
+        lead = LatencyManager.get().rtt() / 2.0 / 50.0 + INTERPOLATION_TICKS;
+        collectNear();
         boolean evading = threat != null;
         PlayerEntity danger = dangerous(mc.player.getEntityPos(), evading ? margin.get() : 0);
-        long now = System.currentTimeMillis();
         if (danger == null) {
             if (evading) calm("nobody can hurt you");
             if (anchor != null && now - calmSince > ANCHOR_TIMEOUT) anchor = null;
@@ -292,6 +339,7 @@ public class ElytraEvade extends Module {
         if (threat != danger) Trace.log("evade from {} at {} blocks{}", danger.getName().getString(), danger.distanceTo(mc.player), danger.isGliding() ? ", gliding" : "");
         threat = danger;
 
+        bans.removeIf(ban -> ban.until() < now);
         noteStartHazards();
         webbed = cobwebIn(mc.player.getBoundingBox());
 
@@ -301,17 +349,16 @@ public class ElytraEvade extends Module {
         boolean risky = current >= minDamage.get();
         if (!valid || ticks >= nextScan || risky && ticks >= nextScan - (RESCAN_TICKS - RESCAN_TICKS_RISKY)) {
             nextScan = ticks + RESCAN_TICKS;
-            double[] score = new double[1];
-            Vec3d best = choose(spots(DIRECTIONS, new double[] {0.5, 1}, false), score);
-            if (best == null) best = choose(spots(FALLBACK_DIRECTIONS, new double[] {0.5, 1.5}, true), score);
-            if (best == null) {
-                best = away();
-                score[0] = risk(best);
-                if (goal == null || goal.distanceTo(best) > 1) Trace.log("evade is boxed in, flees to {}", best);
+            Pick pick = choose(spots(DIRECTIONS, new double[] {0.5, 1}, false, SPOT_PROBES));
+            if (pick == null) pick = choose(spots(FALLBACK_DIRECTIONS, new double[] {0.5, 1.5}, true, FALLBACK_PROBES));
+            if (pick == null) {
+                Vec3d out = away();
+                pick = new Pick(out, risk(out));
+                if (goal == null || goal.distanceTo(out) > 1) Trace.log("evade is boxed in, flees to {}", out);
             }
-            if (!valid || score[0] < current - Math.max(SWITCH_GAIN, current * SWITCH_SHARE)) {
-                Trace.log("evade goes to {} (risk {}{})", best, score[0], arrived ? ", arrived at the last spot" : "");
-                goal = best;
+            if (!valid || pick.risk() < current - Math.max(SWITCH_GAIN, current * SWITCH_SHARE)) {
+                Trace.log("evade goes to {} (risk {}{})", pick.at(), pick.risk(), arrived ? ", arrived at the last spot" : "");
+                goal = pick.at();
                 phase = random.nextDouble() * Math.PI * 2 / DIRECTIONS;
             }
         }
@@ -327,14 +374,14 @@ public class ElytraEvade extends Module {
         ElytraFly.pilot(goal == null ? Vec3d.ZERO : safeStep(toward(goal)));
     }
 
-    private Vec3d choose(List<Vec3d> spots, double[] score) {
+    private Pick choose(List<Vec3d> spots) {
         int count = spots.size();
         if (count == 0) return null;
         double[] cheap = new double[count];
         for (int i = 0; i < count; i++) cheap[i] = cheapRisk(spots.get(i));
 
         Vec3d best = null;
-        double bestScore = Double.MAX_VALUE;
+        double bestRisk = Double.MAX_VALUE;
         int full = 0;
         int paths = 0;
         while (full < FULL_CHECKS && paths < PATH_CHECKS) {
@@ -349,13 +396,12 @@ public class ElytraEvade extends Module {
             if (!clearPath(at)) continue;
             full++;
             double value = risk(at);
-            if (value < bestScore) {
+            if (value < bestRisk) {
                 best = at;
-                bestScore = value;
+                bestRisk = value;
             }
         }
-        score[0] = bestScore;
-        return best;
+        return best == null ? null : new Pick(best, bestRisk);
     }
 
     private boolean steering() {
@@ -391,31 +437,31 @@ public class ElytraEvade extends Module {
             if (player == mc.player) continue;
             int id = player.getId();
             present.add(id);
-            Vec3d now = player.getEntityPos();
-            Vec3d before = lastSeen.put(id, now);
-            Vec3d step = before == null ? Vec3d.ZERO : now.subtract(before);
+            Vec3d at = player.getEntityPos();
+            Vec3d before = lastSeen.put(id, at);
+            Vec3d step = before == null ? Vec3d.ZERO : at.subtract(before);
             if (step.lengthSquared() > 100) step = Vec3d.ZERO;
             Vec3d old = motion.get(id);
             motion.put(id, old == null ? step : old.multiply(0.3).add(step.multiply(0.7)));
+            if (player.getMainHandStack().isOf(Items.COBWEB) || player.getOffHandStack().isOf(Items.COBWEB)) webbers.put(id, now + WEBBER_MS);
         }
-        lastSeen.keySet().removeIf(id -> !present.contains((int) id));
-        motion.keySet().removeIf(id -> !present.contains((int) id));
+        lastSeen.keySet().removeIf((java.util.function.IntPredicate) id -> !present.contains(id));
+        motion.keySet().removeIf((java.util.function.IntPredicate) id -> !present.contains(id));
+        webbers.int2LongEntrySet().removeIf(entry -> entry.getLongValue() < now);
     }
 
     private void ban(Vec3d at) {
         if (at == null) return;
         Vec3d way = way(at);
-        if (way != null) bans.add(new Ban(way, level(at), System.currentTimeMillis() + BAN_MS));
+        if (way != null) bans.add(new Ban(way, level(at), now + BAN_MS));
     }
 
     private boolean isBanned(Vec3d at) {
-        long now = System.currentTimeMillis();
-        bans.removeIf(ban -> ban.until() < now);
         Vec3d way = way(at);
         if (way == null) return false;
         int level = level(at);
         for (Ban ban : bans) {
-            if (ban.level() == level && ban.way().dotProduct(way) > BAN_COS) return true;
+            if (ban.level() == level && ban.until() >= now && ban.way().dotProduct(way) > BAN_COS) return true;
         }
         return false;
     }
@@ -437,17 +483,24 @@ public class ElytraEvade extends Module {
         return Math.sqrt(dx * dx + dz * dz);
     }
 
-    private List<Vec3d> spots(int directions, double[] scales, boolean wide) {
+    private static int spread(int index, int count) {
+        int bits = Integer.numberOfTrailingZeros(count);
+        return Integer.reverse(index) >>> (32 - bits);
+    }
+
+    private List<Vec3d> spots(int directions, double[] scales, boolean wide, int budget) {
+        probes = 0;
+        probeLimit = budget;
         Vec3d me = mc.player.getEntityPos();
         double r = radius.get();
         double h = height.get();
         double limit = leash.get() * 2;
         double[] heights = webbed && !wide ? new double[] {0} : wide ? new double[] {-h, 0, h, h * 2} : new double[] {-h, 0, h};
         List<Vec3d> out = new ArrayList<>();
-        for (double scale : scales) {
-            double distance = r * scale;
-            for (int i = 0; i < directions; i++) {
-                double angle = phase + Math.PI * 2 * i / directions;
+        for (int i = 0; i < directions; i++) {
+            double angle = phase + Math.PI * 2 * spread(i, directions) / directions;
+            for (int s = 0; s < scales.length; s++) {
+                double distance = r * scales[(s + i) % scales.length];
                 for (double dy : heights) {
                     Vec3d raw = me.add(Math.cos(angle) * distance, dy, Math.sin(angle) * distance);
                     if (!wide && anchor != null && flat(raw, anchor) > limit) continue;
@@ -460,6 +513,8 @@ public class ElytraEvade extends Module {
     }
 
     private Vec3d away() {
+        probes = 0;
+        probeLimit = AWAY_PROBES;
         Vec3d me = mc.player.getEntityPos();
         Vec3d center = Vec3d.ZERO;
         for (PlayerEntity player : near) center = center.add(player.getEntityPos());
@@ -481,7 +536,9 @@ public class ElytraEvade extends Module {
             for (double dy : heights) {
                 Vec3d at = open(me.add(way.multiply(r)).add(0, dy, 0));
                 if (at != null && !isBanned(at) && clearPath(at)) return at;
+                if (probes > probeLimit) break;
             }
+            if (probes > probeLimit) break;
         }
 
         Vec3d best = null;
@@ -500,7 +557,7 @@ public class ElytraEvade extends Module {
 
     private Vec3d open(Vec3d at) {
         for (double lift = 0; lift <= MAX_LIFT; lift += LIFT_STEP) {
-            if (++probes > PROBE_BUDGET) return null;
+            if (++probes > probeLimit) return null;
             Vec3d up = at.add(0, lift, 0);
             Box body = mc.player.getBoundingBox().offset(up.subtract(mc.player.getEntityPos()));
             if (!mc.world.isSpaceEmpty(mc.player, body) || hazard(body.expand(WEB_CLEARANCE))) continue;
@@ -595,22 +652,21 @@ public class ElytraEvade extends Module {
 
     private double cheapRisk(Vec3d at) {
         double total = 0;
-        for (PlayerEntity player : near) total += Math.max(diver(player, at, 0, false), reachRisk(player, at));
-        return total + webRisk(at) + leashPenalty(at);
+        for (PlayerEntity player : near) total += Math.max(diver(player, at, 0, false), reachRisk(player, at)) + webRisk(player, at);
+        return total + leashPenalty(at);
     }
 
     private double risk(Vec3d at) {
         double total = 0;
-        for (PlayerEntity player : near) total += Math.max(diver(player, at, 0, true), Math.min(potential(player, at, 0), CRYSTAL_CAP));
-        return total + webRisk(at) + leashPenalty(at);
+        for (PlayerEntity player : near) total += Math.max(diver(player, at, 0, true), Math.min(potential(player, at, 0), CRYSTAL_CAP)) + webRisk(player, at);
+        return total + leashPenalty(at);
     }
 
     private boolean diving(PlayerEntity player) {
         if (player.isOnGround() || player.isTouchingWater() || player.isClimbing()) return false;
         boolean armed = armed(player);
-        if (player.hasVehicle()) return armed;
         Vec3d velocity = motion.getOrDefault(player.getId(), Vec3d.ZERO);
-        if (!player.isGliding()) return armed && player.getY() > mc.player.getY() + 1 && velocity.y < -DIVE_SPEED;
+        if (!player.isGliding() || player.hasVehicle()) return armed && player.getY() > mc.player.getY() + 1 && velocity.y < -DIVE_SPEED;
         if (armed) return true;
         if (player.getY() - mc.player.getY() > OVERHEAD_HEIGHT && flat(player.getEntityPos(), mc.player.getEntityPos()) < OVERHEAD_RANGE) return true;
         Vec3d to = mc.player.getEntityPos().subtract(player.getEntityPos());
@@ -663,23 +719,22 @@ public class ElytraEvade extends Module {
         return Math.sqrt(dx * dx + dz * dz + vertical * vertical);
     }
 
-    private double webRisk(Vec3d at) {
+    private double webRisk(PlayerEntity player, Vec3d at) {
+        double share = webbers.containsKey(player.getId()) ? 1 : UNKNOWN_WEB_SHARE;
         Vec3d from = mc.player.getEntityPos();
         double half = mc.player.getHeight() / 2;
         double travel = travelTicks(at);
+        double eyeHeight = player.getEyeY() - player.getY();
         double total = 0;
-        for (PlayerEntity player : near) {
-            double eyeHeight = player.getEyeY() - player.getY();
-            if (predicted(player, travel).add(0, eyeHeight, 0).distanceTo(at.add(0, half, 0)) <= WEB_REACH) total += CRYSTAL_CAP;
-            int inside = 0;
-            for (int i = 1; i <= PATH_SAMPLES; i++) {
-                double share = i / (double) PATH_SAMPLES;
-                Vec3d eye = predicted(player, travel * share).add(0, eyeHeight, 0);
-                if (eye.distanceTo(from.lerp(at, share).add(0, half, 0)) <= WEB_REACH) inside++;
-            }
-            total += GLIDER_DANGER * inside / PATH_SAMPLES;
+        if (predicted(player, travel).add(0, eyeHeight, 0).distanceTo(at.add(0, half, 0)) <= WEB_REACH) total += SPOT_WEB;
+        int inside = 0;
+        for (int i = 1; i <= PATH_SAMPLES; i++) {
+            double part = i / (double) PATH_SAMPLES;
+            Vec3d eye = predicted(player, travel * part).add(0, eyeHeight, 0);
+            if (eye.distanceTo(from.lerp(at, part).add(0, half, 0)) <= WEB_REACH) inside++;
         }
-        return total;
+        total += PATH_WEB * inside / PATH_SAMPLES;
+        return total * share;
     }
 
     private double travelTicks(Vec3d at) {
