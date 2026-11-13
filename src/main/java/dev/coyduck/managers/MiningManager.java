@@ -19,6 +19,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.component.DataComponentTypes;
+import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityPose;
@@ -68,6 +69,7 @@ public final class MiningManager {
     private int holdTicks;
     private int holdSource = -1;
     private int holdHotbar = -1;
+    private int holdPrevious = -1;
     private int holdAttempts;
     private long nextHold;
     private long blockedSince;
@@ -77,7 +79,7 @@ public final class MiningManager {
     private Object owner;
     private int priority;
     private boolean autoStop;
-    private InventoryManager.SwitchMode switchMode = InventoryManager.SwitchMode.InvSwap;
+    private InventoryManager.SwitchMode switchMode = InventoryManager.SwitchMode.Silent;
     private InteractionManager.SwingMode swing = InteractionManager.SwingMode.Packet;
 
     private int ticks;
@@ -491,7 +493,7 @@ public final class MiningManager {
     }
 
     private void keepTool() {
-        if (holdTicks > 0 && holdSource != -1 && !canHold()) {
+        if (holdTicks > 0 && holdHotbar != -1 && !canHold()) {
             holdTicks = 0;
             unhold();
             return;
@@ -511,7 +513,7 @@ public final class MiningManager {
 
     private boolean canHold() {
         if (InventoryManager.get().wantsToEat() || InventoryManager.get().isEating()) return false;
-        ItemStack displaced = holdSource != -1 ? InventoryManager.get().stack(holdSource) : mc.player.getMainHandStack();
+        ItemStack displaced = holdPrevious != -1 ? InventoryManager.get().stack(holdPrevious) : mc.player.getMainHandStack();
         if (!displaced.contains(DataComponentTypes.DEATH_PROTECTION)) return true;
 
         float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
@@ -534,10 +536,22 @@ public final class MiningManager {
     private void hold(BlockState state, BlockPos at) {
         int tool = bestTool(state, at);
         if (tool != -1) {
-            int hotbar = InventoryManager.get().selectedSlot();
-            if (!InventoryManager.get().swapWithHotbar(tool, hotbar)) return;
-            holdSource = tool;
+            InventoryManager inventory = InventoryManager.get();
+            int previous = inventory.selectedSlot();
+            int hotbar = tool;
+            int source = -1;
+            if (!PlayerInventory.isValidHotbarIndex(tool)) {
+                hotbar = inventory.spareHotbar(previous);
+                if (hotbar == -1 || !inventory.swapWithHotbar(tool, hotbar)) return;
+                source = tool;
+            }
+            if (hotbar != previous && !inventory.select(hotbar)) {
+                if (source != -1) inventory.swapWithHotbar(source, hotbar);
+                return;
+            }
+            holdSource = source;
             holdHotbar = hotbar;
+            holdPrevious = previous;
         }
 
         holdTicks = HOLD_TICKS;
@@ -549,9 +563,14 @@ public final class MiningManager {
             holdTicks = 1;
             return;
         }
-        if (holdSource != -1) InventoryManager.get().swapWithHotbar(holdSource, holdHotbar);
+        if (holdHotbar != -1 && mc.player != null) {
+            InventoryManager inventory = InventoryManager.get();
+            if (holdPrevious != -1 && holdPrevious != holdHotbar && inventory.selectedSlot() == holdHotbar) inventory.select(holdPrevious);
+            if (holdSource != -1) inventory.swapWithHotbar(holdSource, holdHotbar);
+        }
         holdSource = -1;
         holdHotbar = -1;
+        holdPrevious = -1;
         holdTicks = 0;
     }
 

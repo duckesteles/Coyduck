@@ -195,6 +195,17 @@ public final class InventoryManager {
         return Swap.HANDS;
     }
 
+    public int spareHotbar(int avoid) {
+        int reserved = AutoTotem.totemSlot();
+        for (int i = 0; i < HOTBAR_END; i++) {
+            if (i != avoid && i != reserved && stack(i).isEmpty()) return i;
+        }
+        for (int i = 0; i < HOTBAR_END; i++) {
+            if (i != avoid && i != reserved && !stack(i).contains(DataComponentTypes.DEATH_PROTECTION)) return i;
+        }
+        return -1;
+    }
+
     public boolean swapWithHotbar(int index, int hotbar) {
         ScreenHandler handler = mc.player.currentScreenHandler;
         int id = handlerSlot(handler, index);
@@ -296,6 +307,14 @@ public final class InventoryManager {
                 selectNow(hotbar);
                 action.run();
                 selectNow(selected);
+                return true;
+            }
+            int spare = selected == AutoTotem.totemSlot() ? spareHotbar(selected) : -1;
+            if (spare != -1 && swapWithHotbar(index, spare)) {
+                selectNow(spare);
+                action.run();
+                selectNow(selected);
+                swapWithHotbar(index, spare);
                 return true;
             }
         }
