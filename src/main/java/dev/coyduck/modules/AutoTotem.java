@@ -58,6 +58,7 @@ public class AutoTotem extends Module {
     private static final int NONE = -1;
     private static final int MAX_ATTEMPTS = 3;
     private static final int DANGER_HOLD = 40;
+    private static final long HURT_WINDOW = 3_000;
     private static final long VERIFY_INTERVAL = 1_000;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -71,7 +72,7 @@ public class AutoTotem extends Module {
 
     private final Setting<Double> combatRange = sgGeneral.add(new DoubleSetting.Builder()
         .name("combat-range")
-        .description("Smart holds the main hand totem while an enemy is this close.")
+        .description("Smart holds the main hand totem while an enemy this close has hurt you in the last few seconds or your health is low. An enemy that only walks by does not count.")
         .defaultValue(12)
         .range(0, 32)
         .sliderRange(0, 32)
@@ -81,7 +82,7 @@ public class AutoTotem extends Module {
 
     private final Setting<Double> health = sgGeneral.add(new DoubleSetting.Builder()
         .name("health")
-        .description("Smart also holds the main hand totem at or below this health, or while a crystal near you is lethal.")
+        .description("Smart holds the main hand totem at or below this health while an enemy is in combat range. A lethal crystal near you always counts, enemy or not.")
         .defaultValue(12)
         .range(0, 40)
         .sliderRange(0, 40)
@@ -187,6 +188,8 @@ public class AutoTotem extends Module {
 
     private int reserveSlot = NONE;
     private int gappleHome = NONE;
+    private float lastHp = -1;
+    private long lastHurtAt;
     private long emptyEatAt;
     private int previousSlot = NONE;
     private int expectedSlot = NONE;
@@ -718,19 +721,21 @@ public class AutoTotem extends Module {
 
     private boolean danger() {
         float hp = mc.player.getHealth() + mc.player.getAbsorptionAmount();
-        if (hp <= health.get()) return true;
-
-        double enemyRange = combatRange.get() * combatRange.get();
-        for (PlayerEntity player : mc.world.getPlayers()) {
-            if (player != mc.player && player.isAlive() && !Friends.get().isFriend(player) && !ExplosionDamage.isInvulnerable(player)
-                && player.squaredDistanceTo(mc.player) <= enemyRange) return true;
-        }
+        long now = Util.getMeasuringTimeMs();
+        if (lastHp >= 0 && hp < lastHp - 0.5f) lastHurtAt = now;
+        lastHp = hp;
 
         double range = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
         for (Entity entity : mc.world.getEntities()) {
             if (entity instanceof EndCrystalEntity crystal && crystal.squaredDistanceTo(mc.player) <= range && ExplosionDamage.crystal(mc.player, crystal.getEntityPos()) >= hp) return true;
         }
 
+        if (hp > health.get() && now - lastHurtAt >= HURT_WINDOW) return false;
+        double enemyRange = combatRange.get() * combatRange.get();
+        for (PlayerEntity player : mc.world.getPlayers()) {
+            if (player != mc.player && player.isAlive() && !Friends.get().isFriend(player) && !ExplosionDamage.isInvulnerable(player)
+                && player.squaredDistanceTo(mc.player) <= enemyRange) return true;
+        }
         return false;
     }
 
