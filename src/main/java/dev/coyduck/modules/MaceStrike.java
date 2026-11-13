@@ -67,6 +67,7 @@ public class MaceStrike extends Module {
     private static final long HURT_MS = 500;
     private static final double CHASE_LEAD = 4;
     private static final double CHASE_ALIGN = 1.2;
+    private static final double CHASE_SPEED = 0.4;
     private static final double CHASE_OVER = 2.0;
     private static final float MIN_LEARN = 2.0f;
     private static final long SETBACK_PAUSE = 1000;
@@ -228,7 +229,7 @@ public class MaceStrike extends Module {
 
     private final Setting<Double> chaseHover = sgAir.add(new DoubleSetting.Builder()
         .name("chase-hover")
-        .description("Height kept above a target that flies with an elytra. A flying target gets chased and cut off ahead of its path, and hit with short drops from just above, while a target on the ground or in a hole gets the steady hover from high up.")
+        .description("Height kept above a target that flies with an elytra. One that hangs in place gets the full hover and a long dive instead. A moving flyer gets chased and cut off ahead of its path, and hit with short drops from just above, while a target on the ground or in a hole gets the steady hover from high up.")
         .defaultValue(4)
         .range(2.5, 12)
         .sliderRange(2.5, 12)
@@ -363,11 +364,11 @@ public class MaceStrike extends Module {
         lastTargetPos = now;
         lastTarget = target;
 
-        boolean chase = target.isGliding();
+        double speed = Math.sqrt(motion.x * motion.x + motion.z * motion.z);
+        boolean chase = target.isGliding() && motion.length() > (Boolean.TRUE.equals(chasing) ? CHASE_SPEED / 2 : CHASE_SPEED);
         if (chasing == null || chasing != chase) Trace.log("mace {} {}", chase ? "chases flying" : "hovers over", target.getName().getString());
         chasing = chase;
         double wanted = chase ? chaseHover.get() : hover.get();
-        double speed = Math.sqrt(motion.x * motion.x + motion.z * motion.z);
         double leadTicks = chase ? CHASE_LEAD : Math.ceil(wanted / step.get()) + 1;
         double goalX = speed < STILL_SPEED ? Math.floor(now.x) + 0.5 : now.x + motion.x * leadTicks;
         double goalZ = speed < STILL_SPEED ? Math.floor(now.z) + 0.5 : now.z + motion.z * leadTicks;
