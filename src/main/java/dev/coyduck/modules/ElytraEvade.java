@@ -170,6 +170,7 @@ public class ElytraEvade extends Module {
     private final List<Long> bannedUntil = new ArrayList<>();
     private final ArrayDeque<Vec3d> trail = new ArrayDeque<>();
     private final Set<Long> startHazards = new HashSet<>();
+    private final Set<Integer> present = new HashSet<>();
     private final Random random = new Random();
     private Vec3d anchor;
     private long calmSince;
@@ -359,7 +360,7 @@ public class ElytraEvade extends Module {
     }
 
     private void trackMotion() {
-        Set<Integer> present = new HashSet<>();
+        present.clear();
         for (PlayerEntity player : mc.world.getPlayers()) {
             if (player == mc.player) continue;
             int id = player.getId();
