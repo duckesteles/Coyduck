@@ -1003,6 +1003,10 @@ public class AutoCrystal extends Module {
         return false;
     }
 
+    public double minHealth() {
+        return minHealth.get();
+    }
+
     private boolean leavesLow(float self, float health) {
         return self > 0 && health - self < minHealth.get();
     }

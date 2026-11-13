@@ -181,7 +181,10 @@ public final class Targets {
 
     public static boolean safe(Vec3d crystal, BlockView view, double maxSelfDamage) {
         float self = ExplosionDamage.crystal(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), crystal, view);
-        if (self >= mc.player.getHealth() + mc.player.getAbsorptionAmount() || self > maxSelfDamage) return false;
+        float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
+        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
+        double keep = autoCrystal != null ? autoCrystal.minHealth() : 0;
+        if (self >= health || self > maxSelfDamage || (self > 0 && health - self < keep)) return false;
 
         double range = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
         for (PlayerEntity player : mc.world.getPlayers()) {
