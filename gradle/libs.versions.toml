@@ -1,5 +1,5 @@
 [versions]
-mod-version = "0.8.3"
+mod-version = "0.8.4"
 jdk = "21"
 
 minecraft = "1.21.11"
