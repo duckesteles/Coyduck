@@ -102,6 +102,10 @@ public final class ExplosionDamage {
     }
 
     public static float upperBound(LivingEntity target, Vec3d position, Vec3d center, float power) {
+        return mitigate(target, rawBound(target, position, center, power));
+    }
+
+    public static float rawBound(LivingEntity target, Vec3d position, Vec3d center, float power) {
         if (isInvulnerable(target)) return 0;
 
         double range = power * 2.0;
@@ -111,7 +115,7 @@ public final class ExplosionDamage {
         double impact = 1.0 - distance;
         float damage = (float) ((impact * impact + impact) / 2.0 * 7.0 * range + 1.0);
         if (target instanceof PlayerEntity) damage = scale(damage, target.getEntityWorld().getDifficulty());
-        return mitigate(target, shield(target, position, center, damage));
+        return shield(target, position, center, damage);
     }
 
     public static float mitigate(LivingEntity target, float damage) {

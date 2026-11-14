@@ -280,16 +280,23 @@ public final class HurtTracker {
 
         for (Int2ObjectMap.Entry<Hurt> entry : hurts.int2ObjectEntrySet()) {
             Hurt hurt = entry.getValue();
-            if (mc.player != null && entry.getIntKey() == mc.player.getId()) continue;
+            boolean self = mc.player != null && entry.getIntKey() == mc.player.getId();
             if (happened < hurt.start || happened >= hurt.start + window() + MARGIN) continue;
             if (!(mc.world.getEntityById(entry.getIntKey()) instanceof LivingEntity living)) continue;
 
-            float raw = ExplosionDamage.raw(living, position(living), box(living), packet.center(), packet.radius(), mc.world);
+            float raw = self ? selfExplosion(packet, now) : ExplosionDamage.raw(living, position(living), box(living), packet.center(), packet.radius(), mc.world);
             if (raw <= 0) continue;
 
             if (!Float.isNaN(hurt.raw)) hurt.raw = Math.max(hurt.raw, raw);
             else if (hurt.explosion && now - hurt.received <= LATE_EXPLOSION) hurt.raw = raw;
         }
+    }
+
+    private float selfExplosion(ExplosionS2CPacket packet, long time) {
+        float raw = ExplosionDamage.rawUnshielded(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), packet.center(), packet.radius(), mc.world);
+        MotionTracker.Sample past = MotionTracker.get().selfAt(time - LatencyManager.get().rtt());
+        if (past == null) return raw;
+        return Math.min(raw, ExplosionDamage.rawUnshielded(mc.player, past.position(), past.box(), packet.center(), packet.radius(), mc.world));
     }
 
     private float crystalSource(EntityDamageS2CPacket packet, long time) {
