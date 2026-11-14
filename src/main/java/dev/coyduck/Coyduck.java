@@ -2,7 +2,6 @@ package dev.coyduck;
 
 import dev.coyduck.commands.PilotCommand;
 import dev.coyduck.gui.CoyduckTheme;
-import dev.coyduck.hud.ArmorHud;
 import dev.coyduck.hud.ClockHud;
 import dev.coyduck.hud.InfoHud;
 import dev.coyduck.hud.InventoryHud;
@@ -92,7 +91,6 @@ public class Coyduck extends MeteorAddon {
         Hud.get().register(PlayersHud.INFO);
         Hud.get().register(InventoryHud.INFO);
         Hud.get().register(ItemsHud.INFO);
-        Hud.get().register(ArmorHud.INFO);
 
         MeteorClient.EVENT_BUS.subscribe(ConfigSaver.get());
         MeteorClient.EVENT_BUS.subscribe(LatencyManager.get());
