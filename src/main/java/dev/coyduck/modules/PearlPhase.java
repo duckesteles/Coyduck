@@ -47,6 +47,7 @@ public class PearlPhase extends Module {
     private static final double CRAWLING = 0.6;
     private static final double CRAWL_EYE = 0.4;
     private static final float CRAWL_LOWEST = -30;
+    private static final float BLIND_PITCH = -10;
     private static final int MAX_TICKS = 8;
     private static final int AIM_TICKS = 10;
     private static final int ROBUST_CANDIDATES = 60;
@@ -114,6 +115,7 @@ public class PearlPhase extends Module {
     private enum State { Idle, Cell, Decoration, Wall, Aim, Verify }
 
     private State state = State.Idle;
+    private boolean blind;
     private float targetYaw;
     private float targetPitch;
     private int slot;
@@ -190,6 +192,7 @@ public class PearlPhase extends Module {
         }
         aimTicks = 0;
         clearTicks = 0;
+        blind = false;
         prepare(clearCell.get());
     }
 
@@ -216,7 +219,30 @@ public class PearlPhase extends Module {
             state = State.Wall;
             return;
         }
+        if (enclosed()) {
+            blindThrow();
+            return;
+        }
+        Trace.log("phase found no throw: crawling {} pose {} height {} walls {}", mc.player.isCrawling(), mc.player.getPose(), mc.player.getBoundingBox().getLengthY(), walls());
         fail(reason());
+    }
+
+    private boolean enclosed() {
+        return walls() == 4 && mc.player.getBoundingBox().getLengthY() < 1.5;
+    }
+
+    private void blindThrow() {
+        Vec3d pos = mc.player.getEntityPos();
+        double dx = pos.x - (Math.floor(pos.x) + 0.5);
+        double dz = pos.z - (Math.floor(pos.z) + 0.5);
+        double sx = Math.abs(dx) < 1.0E-3 ? 1 : Math.signum(dx);
+        double sz = Math.abs(dz) < 1.0E-3 ? 1 : Math.signum(dz);
+        targetYaw = (float) Math.toDegrees(Math.atan2(-sx, sz));
+        targetPitch = BLIND_PITCH;
+        planned = pos;
+        blind = true;
+        state = State.Aim;
+        Trace.log("phase found no landing in a closed cell, throws blind yaw {} pitch {} pose {} height {}", targetYaw, targetPitch, mc.player.getPose(), mc.player.getBoundingBox().getLengthY());
     }
 
     private void fail(String message) {
@@ -314,7 +340,7 @@ public class PearlPhase extends Module {
             fail("Could not turn to the throw angle in time, so no pearl was thrown.");
             return;
         }
-        if (mc.player.getEntityPos().squaredDistanceTo(planned) > 0.05 * 0.05 && !plan()) {
+        if (!blind && mc.player.getEntityPos().squaredDistanceTo(planned) > 0.05 * 0.05 && !plan()) {
             fail("You moved and there is no wall to phase into now.");
             return;
         }
