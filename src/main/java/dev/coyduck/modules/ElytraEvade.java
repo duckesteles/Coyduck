@@ -33,6 +33,7 @@ import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
@@ -227,6 +228,7 @@ public class ElytraEvade extends Module {
 
     @EventHandler
     private void onJoin(GameJoinedEvent event) {
+        if (threat != null) ElytraFly.pilot(null);
         reset();
     }
 
@@ -413,10 +415,10 @@ public class ElytraEvade extends Module {
         if (threat != null) {
             Trace.log("evade stops, {}", why);
             ElytraFly.pilot(null);
+            calmSince = System.currentTimeMillis();
         }
         threat = null;
         goal = null;
-        calmSince = System.currentTimeMillis();
     }
 
     private void collectNear() {
@@ -628,13 +630,13 @@ public class ElytraEvade extends Module {
         double up = fly == null ? 0 : Math.max(0, fly.upSpeed());
         double down = fly == null ? 0 : Math.max(0, fly.downSpeed());
         Vec3d delta = target.subtract(mc.player.getEntityPos());
-        if (delta.y > 0 && up <= 0 || delta.y < 0 && down <= 0) delta = new Vec3d(delta.x, 0, delta.z);
-        double length = delta.length();
-        if (length < ARRIVED) return Vec3d.ZERO;
-        double scale = Math.min(1, speed.get() / length);
-        if (delta.y * scale > up) scale = up / delta.y;
-        if (delta.y * scale < -down) scale = -down / delta.y;
-        return delta.multiply(scale);
+        double flat = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+        double y = MathHelper.clamp(delta.y, -down, up);
+        if (flat < ARRIVED && Math.abs(y) < ARRIVED) return Vec3d.ZERO;
+        double move = Math.min(flat, speed.get());
+        double x = flat < 1.0E-4 ? 0 : delta.x / flat * move;
+        double z = flat < 1.0E-4 ? 0 : delta.z / flat * move;
+        return new Vec3d(x, y, z);
     }
 
     private PlayerEntity dangerous(Vec3d at, double extra) {

@@ -114,6 +114,8 @@ public class AutoAnchor extends Module {
 
     private record Danger(BlockPos pos, Vec3d center, BlockOverlay view, float raw, float full) {}
 
+    private record Saved(Danger threat, Choice now) {}
+
     private record Spot(BlockPos pos, boolean charged, float potential, float timedPotential, long reachable, long timedReachable) {}
 
     private static final class Raws {
@@ -319,6 +321,7 @@ public class AutoAnchor extends Module {
     private final Long2LongOpenHashMap awaiting = new Long2LongOpenHashMap();
     private final Long2ObjectOpenHashMap<Raws> raws = new Long2ObjectOpenHashMap<>();
     private final Long2ObjectOpenHashMap<BlockHitResult> faces = new Long2ObjectOpenHashMap<>();
+    private final List<Saved> saved = new ArrayList<>();
     private final DuckRender.Slide slide = new DuckRender.Slide();
     private List<BlockPos> targetBlocks = List.of();
     private List<Vec3d> ownCrystals;
@@ -529,6 +532,7 @@ public class AutoAnchor extends Module {
         rejectedFriend = false;
 
         List<BlockPos> charged = chargedAnchors();
+        saved.clear();
         if (defend.get() && defend(targets, health, charged, arrival, timing)) return;
         rejectedSelf = false;
         rejectedFriend = false;
@@ -548,6 +552,16 @@ public class AutoAnchor extends Module {
         }
 
         Choice best = pick(spots, targets, health, timing, arrival);
+        if (!saved.isEmpty() && (best == null || best.damage < best.target.health)) {
+            Choice threat = null;
+            for (Saved keep : saved) {
+                if (keep.now != null && keep.now.beats(threat)) threat = keep.now;
+            }
+            if (threat != null) {
+                if (Trace.on() && (best == null || !best.pos.equals(threat.pos))) Trace.log("anchor uses the threat at {} for offense instead of {}", threat.pos, best == null ? null : best.pos);
+                best = threat;
+            }
+        }
         Choice held = null;
         if (best == null && timing != 0) held = pick(spots, targets, health, 0, arrival);
 
@@ -638,7 +652,11 @@ public class AutoAnchor extends Module {
             if (threat.full + FIRE_MARGIN >= health && hurt.effectiveOnSelf(threat.raw + LETHAL_DEFENSE_RAW_MARGIN, arrival + LETHAL_DEFENSE_TIME_MARGIN) > DEFENSE_FREE) continue;
             if (hurtsFriend(threat.center, threat.view, arrival) || destroysOwnCrystals(threat.center)) continue;
             if (launches(threat.center, threat.view)) continue;
-            if (savedForOffense(targets, threat, health, timing, arrival)) continue;
+            Saved keep = savedForOffense(targets, threat, health, timing, arrival);
+            if (keep != null) {
+                saved.add(keep);
+                continue;
+            }
             if (detonator() == NONE) {
                 status = "no free slot";
                 return false;
@@ -659,16 +677,19 @@ public class AutoAnchor extends Module {
         return false;
     }
 
-    private boolean savedForOffense(List<Target> targets, Danger threat, float health, long timing, long arrival) {
+    private Saved savedForOffense(List<Target> targets, Danger threat, float health, long timing, long arrival) {
         Spot offense = spot(targets, threat.pos, true, timing);
-        if (offense == null) return false;
-        if (offense.timedReachable != 0 && evaluate(targets, threat.pos, health, timing, arrival, true, offense.timedReachable) != null) return true;
-        if (timing == 0) return false;
+        if (offense == null) return null;
+        if (offense.timedReachable != 0) {
+            Choice now = evaluate(targets, threat.pos, health, timing, arrival, true, offense.timedReachable);
+            if (now != null) return new Saved(threat, now);
+        }
+        if (timing == 0) return null;
 
         Choice later = evaluate(targets, threat.pos, health, 0, arrival, true, offense.reachable);
-        if (later == null) return false;
+        if (later == null) return null;
         long fires = Math.max(HurtTracker.get().releaseTime(later.target.player), Util.getMeasuringTimeMs()) + LatencyManager.get().rtt() / 2;
-        return HurtTracker.get().effectiveOnSelf(threat.raw, fires) <= DEFENSE_FREE;
+        return HurtTracker.get().effectiveOnSelf(threat.raw, fires) <= DEFENSE_FREE ? new Saved(threat, null) : null;
     }
 
     private boolean launches(Vec3d center, BlockOverlay view) {

@@ -395,7 +395,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         Choice now = find(choices, current);
         boolean solid = current != null && mining.owns(this) && mining.isMining(current) && !mining.wasBroken() && Targets.isMinable(current);
         if (now == null && solid && lostSince == 0) {
-            float kept = gapValue(current, box);
+            float kept = openValue(current, box);
             if (kept >= minDamage.get()) now = new Choice(current, kept, currentSupport);
         }
         if (now != null) currentScore = now.score;
@@ -511,7 +511,8 @@ public class AutoCity extends Module implements MiningManager.StopGate {
 
     private boolean cheapWindow(BlockPos pos, long now) {
         Box box = Targets.box(target);
-        float raw = ExplosionDamage.rawBound(target, Targets.feet(box), Targets.crystalCenter(pos.down()), ExplosionDamage.CRYSTAL_POWER);
+        BlockPos base = roof(pos, box) ? pos : pos.down();
+        float raw = ExplosionDamage.rawBound(target, Targets.feet(box), Targets.crystalCenter(base), ExplosionDamage.CRYSTAL_POWER);
         if (raw <= 0) return true;
         long arrival = now + LatencyManager.get().rtt() / 2;
         return HurtTracker.get().effective(target, raw, arrival) >= ExplosionDamage.mitigate(target, raw) - HOLD_TOLERANCE;
@@ -520,7 +521,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
     private boolean worthOpening(BlockPos pos) {
         if (!mc.world.getBlockState(pos).isReplaceable() && MiningManager.get().wasBroken()) return true;
         Box box = Targets.box(target);
-        boolean roof = cev.get() && Targets.columns(box).contains(pos.down(2).asLong());
+        boolean roof = roof(pos, box);
         if (roof && !roofCrystal(pos)) {
             if (Trace.on() && stopHeldSince == 0) Trace.log("city waits on {}, no crystal on the roof yet", pos);
             return false;
@@ -529,6 +530,14 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         if (damage >= minDamage.get() || damage >= target.getHealth() + target.getAbsorptionAmount()) return true;
         if (Trace.on() && stopHeldSince == 0) Trace.log("city waits on {}, the gap would only allow {} damage now", pos, damage);
         return false;
+    }
+
+    private boolean roof(BlockPos pos, Box box) {
+        return cev.get() && Targets.columns(box).contains(pos.down(2).asLong());
+    }
+
+    private float openValue(BlockPos pos, Box box) {
+        return roof(pos, box) ? cevDamage(pos, box, Targets.feet(box)) : gapValue(pos, box);
     }
 
     private float gapValue(BlockPos pos, Box box) {
@@ -546,7 +555,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         if (onCurrent && mining.wasBroken()) {
             if (currentScore >= BURROW_SCORE) return best.score > SWITCH_GAIN ? "burrow open" : null;
             boolean unused = stuckOpen();
-            if (best.score >= BURROW_SCORE) return unused || gapValue(current, Targets.box(target)) < minDamage.get() ? "burrow" : null;
+            if (best.score >= BURROW_SCORE) return unused || openValue(current, Targets.box(target)) < minDamage.get() ? "burrow" : null;
             return unused && best.score > SWITCH_GAIN ? "open gap unused" : null;
         }
 
@@ -611,9 +620,9 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         return Targets.ring(Targets.columns(mc.player.getBoundingBox()), 1);
     }
 
-    private boolean candidate(BlockPos pos, List<BlockPos> own, BlockPos background, MiningManager mining) {
+    private boolean candidate(BlockPos pos, List<BlockPos> own, List<BlockPos> face, BlockPos background, MiningManager mining) {
         return !pos.equals(background) && !banned.containsKey(pos.asLong()) && Targets.isMinable(pos) && !webbed(pos)
-            && !own.contains(pos) && !mine(pos) && mining.inRange(pos);
+            && !own.contains(pos) && !face.contains(pos) && !mine(pos) && mining.inRange(pos);
     }
 
     private float bestDelta(BlockState state, BlockPos pos) {
@@ -631,10 +640,11 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         BlockPos background = mining.background();
 
         List<BlockPos> own = Targets.ownRing();
+        List<BlockPos> face = ownFace();
         if (burrow.get()) {
             for (long key : columns) {
                 BlockPos pos = BlockPos.fromLong(key);
-                if (!candidate(pos, own, background, mining) || !Targets.isBurrowedIn(box, pos)) continue;
+                if (!candidate(pos, own, face, background, mining) || !Targets.isBurrowedIn(box, pos)) continue;
                 BlockState state = mc.world.getBlockState(pos);
                 if (state.isOf(Blocks.BEDROCK)) continue;
 
@@ -644,7 +654,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
 
         Vec3d feet = Targets.feet(box);
         for (BlockPos pos : Targets.ring(columns, 0)) {
-            if (!candidate(pos, own, background, mining)) continue;
+            if (!candidate(pos, own, face, background, mining)) continue;
 
             BlockPos support = null;
             float damage = gapDamage(pos, box, feet, null);
@@ -658,9 +668,8 @@ public class AutoCity extends Module implements MiningManager.StopGate {
             choices.add(new Choice(pos, damage, support));
         }
 
-        List<BlockPos> face = ownFace();
         for (BlockPos pos : Targets.ring(columns, 1)) {
-            if (!candidate(pos, own, background, mining) || face.contains(pos) || mc.world.getBlockState(pos).isOf(Blocks.BEDROCK)) continue;
+            if (!candidate(pos, own, face, background, mining) || mc.world.getBlockState(pos).isOf(Blocks.BEDROCK)) continue;
             float damage = gapDamage(pos, box, feet, null);
             if (damage < minDamage.get()) continue;
             choices.add(new Choice(pos, damage - FACE_PENALTY, null));
@@ -669,7 +678,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         if (cev.get()) {
             for (long key : columns) {
                 BlockPos pos = BlockPos.fromLong(key).up(2);
-                if (!candidate(pos, own, background, mining) || face.contains(pos)) continue;
+                if (!candidate(pos, own, face, background, mining)) continue;
                 if (!mc.world.getBlockState(pos).isOf(Blocks.OBSIDIAN) || !mc.world.getBlockState(pos.up()).isAir() || roofBlocked(pos)) continue;
                 float damage = cevDamage(pos, box, feet);
                 if (damage < minDamage.get()) continue;

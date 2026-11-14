@@ -293,10 +293,10 @@ public final class HurtTracker {
     }
 
     private float selfExplosion(ExplosionS2CPacket packet, long time) {
-        float raw = ExplosionDamage.rawUnshielded(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), packet.center(), packet.radius(), mc.world);
+        float raw = ExplosionDamage.raw(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), packet.center(), packet.radius(), mc.world);
         MotionTracker.Sample past = MotionTracker.get().selfAt(time - LatencyManager.get().rtt());
         if (past == null) return raw;
-        return Math.min(raw, ExplosionDamage.rawUnshielded(mc.player, past.position(), past.box(), packet.center(), packet.radius(), mc.world));
+        return Math.min(raw, ExplosionDamage.raw(mc.player, past.position(), past.box(), packet.center(), packet.radius(), mc.world));
     }
 
     private float crystalSource(EntityDamageS2CPacket packet, long time) {
