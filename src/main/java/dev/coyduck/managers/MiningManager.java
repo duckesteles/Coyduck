@@ -50,6 +50,7 @@ public final class MiningManager {
     private static final float SERVER_THRESHOLD = 1.0f;
     private static final float STOP_THRESHOLD = 1.1f;
     private static final double REACH_MARGIN = 0.05;
+    private static final double BREAK_REACH = 5.2 - REACH_MARGIN;
 
     private static final float BACKGROUND_THRESHOLD = 1.0f;
     private static final int HOLD_TICKS = 2;
@@ -261,7 +262,7 @@ public final class MiningManager {
     }
 
     private boolean stop(Object owner, BlockState state) {
-        if (!owns(owner) || !isReady(state) || state.isOf(Blocks.COBWEB) || lastStopTick == ticks || InventoryManager.get().isOffhandEating()) return false;
+        if (!owns(owner) || !isReady(state) || state.isOf(Blocks.COBWEB) || lastStopTick == ticks || InventoryManager.get().isOffhandEating() || !inBreakReach(pos)) return false;
         if (owner instanceof StopGate gate && !gate.allowStop(pos)) return false;
 
         int tool = bestTool(state);
@@ -296,7 +297,7 @@ public final class MiningManager {
     }
 
     private void blindStop() {
-        if (!enemyNear(pos) || ownBlock(pos) || bestTool(Blocks.OBSIDIAN.getDefaultState()) != -1) return;
+        if (!enemyNear(pos) || ownBlock(pos) || !inBreakReach(pos) || bestTool(Blocks.OBSIDIAN.getDefaultState()) != -1) return;
         Trace.log("mine blind-stop {}", pos);
         InteractionManager.get().swing(swing == InteractionManager.SwingMode.None ? InteractionManager.SwingMode.Packet : swing);
         send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
@@ -384,6 +385,10 @@ public final class MiningManager {
     }
 
     public boolean inRange(BlockPos target) {
+        return keepRange(target) && inBreakReach(target);
+    }
+
+    public boolean keepRange(BlockPos target) {
         double reach = mc.player.getBlockInteractionRange() + 1.0 - REACH_MARGIN;
         Box box = new Box(target);
         double distance = box.squaredMagnitude(mc.player.getEyePos());
@@ -391,6 +396,15 @@ public final class MiningManager {
             distance = Math.max(distance, box.squaredMagnitude(mc.player.getEntityPos().add(0, mc.player.getEyeHeight(EntityPose.STANDING), 0)));
         }
         return distance < reach * reach;
+    }
+
+    public boolean inBreakReach(BlockPos target) {
+        Vec3d center = Vec3d.ofCenter(target);
+        double distance = mc.player.getEyePos().squaredDistanceTo(center);
+        if (mc.player.isGliding()) {
+            distance = Math.max(distance, mc.player.getEntityPos().add(0, mc.player.getEyeHeight(EntityPose.STANDING), 0).squaredDistanceTo(center));
+        }
+        return distance <= BREAK_REACH * BREAK_REACH;
     }
 
     @EventHandler(priority = EventPriority.HIGH)
@@ -402,7 +416,7 @@ public final class MiningManager {
         tickBackground();
         if (pos == null) return;
 
-        if (!inRange(pos)) {
+        if (!keepRange(pos)) {
             Trace.log("mine drop {} out of range", pos);
             reset();
             return;

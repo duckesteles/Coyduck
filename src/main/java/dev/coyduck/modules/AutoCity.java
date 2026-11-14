@@ -598,7 +598,7 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
 
     private int validity(BlockPos pos, Box box, LongSet columns) {
         MiningManager mining = MiningManager.get();
-        if (!mining.inRange(pos) || Targets.ownRing().contains(pos) || ownFace().contains(pos) || mine(pos)) return BROKEN_OFF;
+        if (!mining.keepRange(pos) || Targets.ownRing().contains(pos) || ownFace().contains(pos) || mine(pos)) return BROKEN_OFF;
 
         boolean owned = mining.owns(this) && mining.isMining(pos);
         if (webbed(pos)) return rebreak.get() && owned && mining.wasBroken() ? VALID : BROKEN_OFF;
