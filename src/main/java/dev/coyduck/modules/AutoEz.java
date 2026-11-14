@@ -2,6 +2,7 @@ package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.managers.PopTracker;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -108,6 +109,21 @@ public class AutoEz extends Module {
         .build()
     );
 
+    private final Setting<Boolean> onPop = sgGeneral.add(new BoolSetting.Builder()
+        .name("on-pop")
+        .description("Also sends a message when a player you are fighting pops a totem.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<List<String>> popMessages = sgGeneral.add(new StringListSetting.Builder()
+        .name("pop-messages")
+        .description("Picked at random for every pop. {name} is the player, {pops} how many they popped.")
+        .defaultValue(List.of("{pops} down {name}", "pop {pops}"))
+        .visible(onPop::get)
+        .build()
+    );
+
     private final Setting<Integer> delay = sgGeneral.add(new IntSetting.Builder()
         .name("delay")
         .description("Ticks to wait after the kill before sending.")
@@ -122,7 +138,7 @@ public class AutoEz extends Module {
     private int last = -1;
     private long nextSendAt;
 
-    private record Pending(String name, long at) {}
+    private record Pending(String name, long at, int pops) {}
 
     public AutoEz() {
         super(Coyduck.CATEGORY, "auto-ez", "Sends a good game message for players you kill, as a whisper to them or in public chat with their name.");
@@ -156,12 +172,21 @@ public class AutoEz extends Module {
     @EventHandler
     private void onPacket(PacketApplyEvent.Pre event) {
         if (!(event.packet instanceof EntityStatusS2CPacket packet) || mc.world == null || mc.player == null) return;
-        if (packet.getStatus() != EntityStatuses.PLAY_DEATH_SOUND_OR_ADD_PROJECTILE_HIT_PARTICLES) return;
+        boolean pop = packet.getStatus() == EntityStatuses.USE_TOTEM_OF_UNDYING;
+        if (!pop && packet.getStatus() != EntityStatuses.PLAY_DEATH_SOUND_OR_ADD_PROJECTILE_HIT_PARTICLES) return;
         if (!(packet.getEntity(mc.world) instanceof PlayerEntity player) || player == mc.player || Friends.get().isFriend(player)) return;
 
+        if (pop) {
+            Long at = engaged.get(player.getUuid());
+            if (!onPop.get() || at == null || Util.getMeasuringTimeMs() - at > ENGAGED_MS || pending.size() >= MAX_PENDING) return;
+            pending.removeIf(entry -> entry.pops > 0 && entry.name.equals(player.getName().getString()));
+            pending.add(new Pending(player.getName().getString(), Util.getMeasuringTimeMs() + delay.get() * 50L, Math.max(1, PopTracker.get().pops(player))));
+            return;
+        }
         Long at = engaged.remove(player.getUuid());
+        pending.removeIf(entry -> entry.pops > 0 && entry.name.equals(player.getName().getString()));
         if (at == null || Util.getMeasuringTimeMs() - at > ENGAGED_MS || pending.size() >= MAX_PENDING) return;
-        pending.add(new Pending(player.getName().getString(), Util.getMeasuringTimeMs() + delay.get() * 50L));
+        pending.add(new Pending(player.getName().getString(), Util.getMeasuringTimeMs() + delay.get() * 50L, 0));
     }
 
     @EventHandler
@@ -173,7 +198,7 @@ public class AutoEz extends Module {
         Pending first = pending.getFirst();
         if (first.at > now) return;
         pending.removeFirst();
-        send(first.name);
+        send(first.name, first.pops);
         nextSendAt = now + CHAT_GAP;
     }
 
@@ -211,15 +236,15 @@ public class AutoEz extends Module {
         }
     }
 
-    private void send(String name) {
-        List<String> list = messages.get();
+    private void send(String name, int pops) {
+        List<String> list = pops > 0 ? popMessages.get() : messages.get();
         if (list.isEmpty()) return;
 
         int index = ThreadLocalRandom.current().nextInt(list.size());
         if (list.size() > 1 && index == last) index = (index + 1) % list.size();
         last = index;
 
-        String message = list.get(index);
+        String message = list.get(index).replace("{pops}", String.valueOf(pops));
         if (publicChat.get()) {
             String text = message.contains("{name}") ? message.replace("{name}", name) : message + " " + name;
             String line = text + tail(publicSuffix.get());
