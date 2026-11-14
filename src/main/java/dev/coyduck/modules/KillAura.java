@@ -39,8 +39,8 @@ import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.registry.tag.EntityTypeTags;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.util.Util;
@@ -56,6 +56,7 @@ import java.util.Comparator;
 import java.util.List;
 
 public class KillAura extends Module {
+    private static final double[] CRIT_OFFSETS = {1.1e-7, 1.1e-8};
     private static final int PRIORITY = 80;
     private static final float ROTATE_SPEED = 180.0f;
     private static final double AIM_INSET = 0.05;
@@ -109,6 +110,13 @@ public class KillAura extends Module {
         .name("crits")
         .description("While you are rising from a jump, holds the hit until you start falling so it lands as a critical. Never fakes a jump.")
         .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> packetCrits = sgGeneral.add(new BoolSetting.Builder()
+        .name("packet-crits")
+        .description("Turns hits made standing on the ground into crits with two tiny position packets, below what the anticheat counts as a jump.")
+        .defaultValue(false)
         .build()
     );
 
@@ -220,7 +228,8 @@ public class KillAura extends Module {
         }
 
         LivingEntity entity = choice.entity();
-        boolean crit = progress > CRIT_PROGRESS && critNow();
+        boolean fake = !critNow() && packetCrits.get() && packetCritReady();
+        boolean crit = progress > CRIT_PROGRESS && (critNow() || fake);
         Weapon weapon = weapon(entity, progress, crit);
         if (weapon == null) return;
 
@@ -237,6 +246,11 @@ public class KillAura extends Module {
         Runnable hit = () -> {
             boolean sprinting = crit && mc.player.isSprinting();
             if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
+            if (crit && fake) {
+                for (double offset : CRIT_OFFSETS) {
+                    mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.PositionAndOnGround(mc.player.getX(), mc.player.getY() + offset, mc.player.getZ(), false, mc.player.horizontalCollision));
+                }
+            }
             mc.interactionManager.attackEntity(mc.player, entity);
             InteractionManager.get().swing(swing);
             if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_SPRINTING));
@@ -468,6 +482,10 @@ public class KillAura extends Module {
 
     public boolean critting() {
         return isActive() && target != null && mc.player != null && critNow();
+    }
+
+    private boolean packetCritReady() {
+        return critCapable() && mc.player.isOnGround() && mc.player.verticalCollision;
     }
 
     private boolean critNow() {
