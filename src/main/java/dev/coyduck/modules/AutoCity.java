@@ -1,6 +1,7 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.managers.InteractionManager;
@@ -9,6 +10,7 @@ import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
+import dev.coyduck.managers.RotationManager;
 import dev.coyduck.utils.DuckRender;
 import dev.coyduck.utils.BlockOverlay;
 import dev.coyduck.utils.ExplosionDamage;
@@ -30,9 +32,12 @@ import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
+import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.AbstractFireBlock;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.StainedGlassBlock;
+import net.minecraft.item.BlockItem;
 import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.decoration.EndCrystalEntity;
@@ -44,6 +49,7 @@ import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
@@ -52,6 +58,9 @@ import java.util.List;
 
 public class AutoCity extends Module implements MiningManager.StopGate, MiningManager.HidesMining {
     public static final int PRIORITY = 50;
+    private static final long FILL_DELAY = 150;
+    private static final long FILL_GAP = 400;
+    private static final int FILL_MAX_TICKS = 12;
 
     private static final float BURROW_SCORE = 1000;
     private static final float SWITCH_GAIN = 4;
@@ -153,6 +162,13 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
         .build()
     );
 
+    private final Setting<Boolean> antiReplace = sgGeneral.add(new BoolSetting.Builder()
+        .name("anti-replace")
+        .description("When a surround gap breaks and no crystal goes into it, fills it at once with packed ice or glass from your inventory, so their surround can't put obsidian back. Re-mining obsidian takes the whole mine time again; ice breaks in one tick with a good pickaxe and is broken again when the crystal is ready.")
+        .defaultValue(true)
+        .build()
+    );
+
     private final Setting<Boolean> needCrystals = sgGeneral.add(new BoolSetting.Builder()
         .name("need-crystals")
         .description("Only mines while you have crystals to use the gap with, or anchors and glowstone while auto-anchor is on outside the nether.")
@@ -238,6 +254,8 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
     private int otherTick = -1;
     private boolean pending;
     private boolean supportWallBroken;
+    private long filledAt;
+    private long crystalSeenAt;
 
     public AutoCity() {
         super(Coyduck.CATEGORY, "auto-city+", "Mines the target's surround or burrow and breaks it again whenever it is replaced.");
@@ -452,6 +470,79 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
         }
 
         mining.mine(this, PRIORITY, current, true, switchMode.get(), swing.get());
+        fillOpenGap(time);
+    }
+
+    public static boolean isFiller(BlockState state) {
+        return state.isOf(Blocks.PACKED_ICE) || state.isOf(Blocks.BLUE_ICE) || state.isOf(Blocks.GLASS) || state.isOf(Blocks.TINTED_GLASS) || state.getBlock() instanceof StainedGlassBlock;
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST)
+    private void onMineStop(MineStopEvent event) {
+        if (!antiReplace.get() || current == null || target == null || !event.pos.equals(current) || mc.player == null || mc.world == null) return;
+        if (Util.getMeasuringTimeMs() - filledAt < FILL_GAP || !fillable(current)) return;
+        BlockPos base = current.down();
+        if (!InteractionManager.centerReach(base)) return;
+        int slot = fillerSlot(current);
+        if (slot == -1) return;
+        BlockPos gap = current;
+        BlockHitResult hit = new BlockHitResult(new Vec3d(base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5), Direction.UP, base, false);
+        if (!RotationManager.get().lookNow(hit.getPos(), InteractionManager.DEFENSE_PRIORITY)) return;
+        boolean placed = InventoryManager.get().withItem(slot, switchMode.get(), () -> InteractionManager.get().place(gap, hit, swing.get(), false, 0));
+        if (!placed) return;
+        filledAt = Util.getMeasuringTimeMs();
+        Trace.log("city fills {} with {} on stop", gap, InventoryManager.get().stack(slot).getItem());
+    }
+
+    private void fillOpenGap(long time) {
+        if (!antiReplace.get() || current == null || target == null) return;
+        MiningManager mining = MiningManager.get();
+        if (!mining.owns(this) || !mining.isMining(current) || !mining.wasBroken() || !mc.world.getBlockState(current).isAir()) return;
+        if (openSince == 0 || time - Math.max(openSince, crystalSeenAt) < FILL_DELAY || time - filledAt < FILL_GAP) return;
+        if (!fillable(current)) return;
+        InteractionManager interaction = InteractionManager.get();
+        if (!interaction.canPlace(current) || !interaction.obstructions(current).isEmpty()) return;
+        BlockHitResult hit = interaction.hit(current, false);
+        int slot = fillerSlot(current);
+        if (hit == null || slot == -1) return;
+        if (!interaction.aimed(hit.getPos(), new Box(hit.getBlockPos()), InteractionManager.TRAP_PRIORITY)) return;
+        BlockPos gap = current;
+        boolean placed = InventoryManager.get().withItem(slot, switchMode.get(), () -> interaction.place(gap, hit, swing.get(), false, 0));
+        if (!placed) return;
+        filledAt = time;
+        Trace.log("city fills open {} with {}", gap, InventoryManager.get().stack(slot).getItem());
+    }
+
+    private boolean fillable(BlockPos gap) {
+        if (currentScore >= BURROW_SCORE || gap.getY() != target.getBlockY()) return false;
+        if (Targets.columns(Targets.box(target)).contains(gap.asLong())) return false;
+        BlockState base = mc.world.getBlockState(gap.down());
+        if (!base.isOf(Blocks.OBSIDIAN) && !base.isOf(Blocks.BEDROCK)) return false;
+        boolean crystal = CrystalTracker.get().placingOverlaps(gap.down()) || !mc.world.getOtherEntities(null, new Box(gap), entity -> entity instanceof EndCrystalEntity && CrystalTracker.get().isAlive(entity)).isEmpty();
+        if (crystal) {
+            crystalSeenAt = Util.getMeasuringTimeMs();
+            return false;
+        }
+        return true;
+    }
+
+    private int fillerSlot(BlockPos gap) {
+        InventoryManager inventory = InventoryManager.get();
+        MiningManager mining = MiningManager.get();
+        int best = -1;
+        float fastest = 1.0f / FILL_MAX_TICKS;
+        for (int i = 0; i < InventoryManager.MAIN_END; i++) {
+            if (!(inventory.stack(i).getItem() instanceof BlockItem item)) continue;
+            BlockState state = item.getBlock().getDefaultState();
+            if (!isFiller(state)) continue;
+            int tool = mining.bestTool(state);
+            float delta = mining.delta(state, gap, tool == -1 ? inventory.stack(inventory.serverSlot()) : inventory.stack(tool));
+            if (delta > fastest) {
+                fastest = delta;
+                best = i;
+            }
+        }
+        return best;
     }
 
     private boolean graceful(long now) {

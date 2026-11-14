@@ -5,6 +5,7 @@ import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
 import dev.coyduck.modules.AirMine;
+import dev.coyduck.modules.AutoCity;
 import dev.coyduck.modules.AutoTotem;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.PacketBatch;
@@ -305,7 +306,7 @@ public final class MiningManager {
     }
 
     private boolean guardsOwn(BlockPos cell) {
-        return !(owner instanceof RebreaksOwn) && ownBlock(cell);
+        return !(owner instanceof RebreaksOwn) && ownBlock(cell) && !AutoCity.isFiller(mc.world.getBlockState(cell));
     }
 
     private boolean ownBlock(BlockPos cell) {
