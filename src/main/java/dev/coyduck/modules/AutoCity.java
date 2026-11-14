@@ -151,8 +151,8 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
 
     private final Setting<Boolean> hideMining = sgGeneral.add(new BoolSetting.Builder()
         .name("hide-mining")
-        .description("Cancels the mining right after starting it, so other players never see the block break or how far along it is. The server still remembers when it started, so the final break lands at the same time.")
-        .defaultValue(true)
+        .description("Hides the cracks from others. Breaks fail more often.")
+        .defaultValue(false)
         .build()
     );
 
@@ -171,9 +171,13 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
     );
 
     private final Setting<List<Block>> fillers = sgGeneral.add(new BlockListSetting.Builder()
-        .name("fillers")
-        .description("Blocks anti-replace may put in the gap. The one in your inventory that breaks fastest with your best tool is used. Packed ice and netherrack break in one tick with an Efficiency V pickaxe, glass takes about half a second since no tool speeds it up. Plain ice turns into water outside the Nether, which stops crystals.")
-        .defaultValue(Blocks.PACKED_ICE, Blocks.NETHERRACK, Blocks.GLASS)
+        .name("filler-blocks")
+        .description("Blocks anti-replace may use. The fastest to break is picked.")
+        .defaultValue(
+            Blocks.PACKED_ICE, Blocks.NETHERRACK, Blocks.CRIMSON_NYLIUM, Blocks.WARPED_NYLIUM, Blocks.END_STONE,
+            Blocks.QUARTZ_BLOCK, Blocks.SANDSTONE, Blocks.RED_SANDSTONE, Blocks.CALCITE, Blocks.PACKED_MUD,
+            Blocks.COBBLESTONE, Blocks.STONE, Blocks.BLACKSTONE, Blocks.BASALT, Blocks.TERRACOTTA, Blocks.GLASS
+        )
         .filter(block -> block.getHardness() >= 0 && block.asItem() != Items.AIR)
         .visible(antiReplace::get)
         .build()
