@@ -79,6 +79,7 @@ public class AntiPiston extends Module {
     private static final double SHRINK = 1.0E-3;
     private static final double PUSH_REACH = 1.5;
     private static final double PACKET_REACH = 3;
+    private static final float AIR_PENALTY = 5.0f;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgRender = settings.createGroup("Render");
@@ -797,10 +798,11 @@ public class AntiPiston extends Module {
 
         BlockState state = mc.world.getBlockState(pos);
         MiningManager mining = MiningManager.get();
-        float best = mining.delta(state, pos, mc.player.getMainHandStack());
+        float best = mining.groundDelta(state, pos, mc.player.getMainHandStack(), true);
         for (int i = 0; i < InventoryManager.MAIN_END; i++) {
-            best = Math.max(best, mining.delta(state, pos, InventoryManager.get().stack(i)));
+            best = Math.max(best, mining.groundDelta(state, pos, InventoryManager.get().stack(i), true));
         }
+        if (!mc.player.isOnGround() && !AirMine.spoofing()) best /= AIR_PENALTY;
         int needed = best <= 0 ? Integer.MAX_VALUE : best >= 1 ? 0 : MathHelper.ceil(1 / best);
         mineTicksCache.put(key, needed);
         return needed;

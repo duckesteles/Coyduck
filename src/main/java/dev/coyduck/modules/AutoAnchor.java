@@ -935,21 +935,24 @@ public class AutoAnchor extends Module {
         LongSet own = ownCells();
         List<BlockPos> candidates = new ArrayList<>();
 
+        BlockPos.Mutable pos = new BlockPos.Mutable();
         for (Target target : targets) {
+            BlockPos base = target.block;
             for (int dx = -SEARCH; dx <= SEARCH; dx++) {
                 for (int dz = -SEARCH; dz <= SEARCH; dz++) {
                     for (int dy = -1; dy <= SEARCH_UP; dy++) {
-                        BlockPos pos = target.block.add(dx, dy, dz);
-                        if (!seen.add(pos.asLong()) || own.contains(pos.asLong()) || used.containsKey(pos.asLong())) continue;
+                        long key = BlockPos.asLong(base.getX() + dx, base.getY() + dy, base.getZ() + dz);
+                        if (!seen.add(key) || own.contains(key) || used.containsKey(key)) continue;
 
+                        pos.set(key);
                         BlockState state = mc.world.getBlockState(pos);
                         if (state.isOf(Blocks.RESPAWN_ANCHOR)) {
-                            if (charges(state) == 0 && inRange(pos)) candidates.add(pos);
+                            if (charges(state) == 0 && inRange(pos)) candidates.add(pos.toImmutable());
                             continue;
                         }
-                        if (!place || !interaction.canPlace(pos) || !inRange(pos) || interaction.wasRejected(pos) || MiningManager.get().isMining(pos)) continue;
+                        if (!place || !state.isReplaceable() || !inRange(pos) || !interaction.canPlace(pos) || interaction.wasRejected(pos) || MiningManager.get().isMining(pos)) continue;
                         if (CrystalTracker.get().isPlacing(pos.down()) || blocksTarget(targets, pos) || !interaction.obstructions(pos).isEmpty()) continue;
-                        candidates.add(pos);
+                        candidates.add(pos.toImmutable());
                     }
                 }
             }
