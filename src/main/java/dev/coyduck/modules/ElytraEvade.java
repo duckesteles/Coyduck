@@ -7,6 +7,7 @@ import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Trace;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -31,6 +32,7 @@ import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
@@ -56,6 +58,12 @@ public class ElytraEvade extends Module {
     private static final double PATH_WEB = GLIDER_DANGER / 2;
     private static final double UNKNOWN_WEB_SHARE = 0.25;
     private static final long WEBBER_MS = 60_000;
+    private static final long ARMED_MS = 60_000;
+    private static final int FLOOR_SCAN = 96;
+    private static final byte FLOOR_SAFE = 1;
+    private static final byte FLOOR_BAD = 2;
+    private static final double PATH_CRYSTAL_SHARE = 0.5;
+    private static final int AWAY_PATHS = 24;
     private static final long OWN_WEB_MS = 2_000;
     private static final double WEB_TRACE_RANGE = 6;
     private static final long ANCHOR_TIMEOUT = 30_000;
@@ -184,6 +192,8 @@ public class ElytraEvade extends Module {
     private final Int2ObjectOpenHashMap<Vec3d> lastSeen = new Int2ObjectOpenHashMap<>();
     private final Int2ObjectOpenHashMap<Vec3d> motion = new Int2ObjectOpenHashMap<>();
     private final Int2LongOpenHashMap webbers = new Int2LongOpenHashMap();
+    private final Int2LongOpenHashMap armedUntil = new Int2LongOpenHashMap();
+    private final Long2ByteOpenHashMap floors = new Long2ByteOpenHashMap();
     private final IntOpenHashSet present = new IntOpenHashSet();
     private final IntOpenHashSet divers = new IntOpenHashSet();
     private final List<PlayerEntity> near = new ArrayList<>();
@@ -267,6 +277,8 @@ public class ElytraEvade extends Module {
         lastSeen.clear();
         motion.clear();
         webbers.clear();
+        armedUntil.clear();
+        floors.clear();
         present.clear();
         divers.clear();
         near.clear();
@@ -284,6 +296,10 @@ public class ElytraEvade extends Module {
     @EventHandler(priority = EventPriority.HIGH)
     private void onTick(TickEvent.Pre event) {
         if (mc.player == null || mc.world == null) return;
+        if (!mc.player.isAlive()) {
+            if (threat != null) calm("dead");
+            return;
+        }
         if (world != mc.world) {
             if (threat != null) ElytraFly.pilot(null);
             reset();
@@ -324,7 +340,7 @@ public class ElytraEvade extends Module {
             if (evading) ElytraFly.pilot(null);
             if (evading && (mc.player.isOnGround() || mc.player.isTouchingWater() || mc.player.isInLava() || mc.player.hasVehicle())) {
                 calm("not gliding");
-            } else if (evading && mc.player.getVelocity().y < 0 && ticks - lastGlideTry >= GLIDE_RETRY_TICKS && mc.player.checkGliding()) {
+            } else if (evading && mc.player.getVelocity().y < 0 && ticks - lastGlideTry >= GLIDE_RETRY_TICKS && !cobwebIn(mc.player.getBoundingBox()) && mc.player.checkGliding()) {
                 lastGlideTry = ticks;
                 mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
                 Trace.log("evade restarted the glide");
@@ -349,7 +365,7 @@ public class ElytraEvade extends Module {
         boolean valid = goal != null && !arrived && !isBanned(goal) && stillFree(goal) && (ticks < nextScan || clearPath(goal));
         double current = valid ? risk(goal) : Double.MAX_VALUE;
         boolean risky = current >= minDamage.get();
-        if (!valid || ticks >= nextScan || risky && ticks >= nextScan - (RESCAN_TICKS - RESCAN_TICKS_RISKY)) {
+        if (ticks >= nextScan || (!valid || risky) && ticks >= nextScan - (RESCAN_TICKS - RESCAN_TICKS_RISKY)) {
             nextScan = ticks + RESCAN_TICKS;
             Pick pick = choose(spots(DIRECTIONS, new double[] {0.5, 1}, false, SPOT_PROBES));
             if (pick == null) pick = choose(spots(FALLBACK_DIRECTIONS, new double[] {0.5, 1.5}, true, FALLBACK_PROBES));
@@ -446,10 +462,12 @@ public class ElytraEvade extends Module {
             Vec3d old = motion.get(id);
             motion.put(id, old == null ? step : old.multiply(0.3).add(step.multiply(0.7)));
             if (player.getMainHandStack().isOf(Items.COBWEB) || player.getOffHandStack().isOf(Items.COBWEB)) webbers.put(id, now + WEBBER_MS);
+            if (holdsDiveWeapon(player)) armedUntil.put(id, now + ARMED_MS);
         }
         lastSeen.keySet().removeIf((java.util.function.IntPredicate) id -> !present.contains(id));
         motion.keySet().removeIf((java.util.function.IntPredicate) id -> !present.contains(id));
         webbers.int2LongEntrySet().removeIf(entry -> entry.getLongValue() < now);
+        if (!armedUntil.isEmpty()) armedUntil.int2LongEntrySet().removeIf(entry -> entry.getLongValue() < now);
     }
 
     private void ban(Vec3d at) {
@@ -493,6 +511,7 @@ public class ElytraEvade extends Module {
     private List<Vec3d> spots(int directions, double[] scales, boolean wide, int budget) {
         probes = 0;
         probeLimit = budget;
+        floors.clear();
         Vec3d me = mc.player.getEntityPos();
         double r = radius.get();
         double h = height.get();
@@ -507,7 +526,7 @@ public class ElytraEvade extends Module {
                     Vec3d raw = me.add(Math.cos(angle) * distance, dy, Math.sin(angle) * distance);
                     if (!wide && anchor != null && flat(raw, anchor) > limit) continue;
                     Vec3d at = open(raw);
-                    if (at != null && !isBanned(at)) out.add(at);
+                    if (at != null && !isBanned(at) && safeFloor(at)) out.add(at);
                 }
             }
         }
@@ -534,13 +553,14 @@ public class ElytraEvade extends Module {
         double r = radius.get() * 0.75;
         double h = height.get();
         double[] heights = webbed ? new double[] {0, h, -h} : new double[] {0, h, -h, h * 2};
+        int paths = 0;
         for (Vec3d way : ways) {
             for (double dy : heights) {
                 Vec3d at = open(me.add(way.multiply(r)).add(0, dy, 0));
-                if (at != null && !isBanned(at) && clearPath(at)) return at;
-                if (probes > probeLimit) break;
+                if (at != null && !isBanned(at) && paths++ < AWAY_PATHS && clearPath(at)) return at;
+                if (probes > probeLimit || paths >= AWAY_PATHS) break;
             }
-            if (probes > probeLimit) break;
+            if (probes > probeLimit || paths >= AWAY_PATHS) break;
         }
 
         Vec3d best = null;
@@ -569,6 +589,31 @@ public class ElytraEvade extends Module {
         return null;
     }
 
+    private boolean safeFloor(Vec3d at) {
+        int x = MathHelper.floor(at.x);
+        int z = MathHelper.floor(at.z);
+        int top = MathHelper.floor(at.y);
+        long key = BlockPos.asLong(x, 0, z);
+        byte known = floors.get(key);
+        if (known != 0) return known == FLOOR_SAFE;
+
+        byte result = FLOOR_SAFE;
+        int bottom = mc.world.getBottomY();
+        BlockPos.Mutable pos = new BlockPos.Mutable();
+        int y = top;
+        for (; y >= Math.max(bottom, top - FLOOR_SCAN); y--) {
+            BlockState state = mc.world.getBlockState(pos.set(x, y, z));
+            if (state.getFluidState().isIn(FluidTags.LAVA)) {
+                result = FLOOR_BAD;
+                break;
+            }
+            if (!state.isAir()) break;
+        }
+        if (y < bottom) result = FLOOR_BAD;
+        floors.put(key, result);
+        return result == FLOOR_SAFE;
+    }
+
     private boolean stillFree(Vec3d at) {
         Box body = mc.player.getBoundingBox().offset(at.subtract(mc.player.getEntityPos()));
         return mc.world.isSpaceEmpty(mc.player, body) && !hazard(body);
@@ -591,7 +636,7 @@ public class ElytraEvade extends Module {
 
     private void noteStartHazards() {
         startHazards.clear();
-        Box box = mc.player.getBoundingBox().expand(PATH_WEB_CLEARANCE + 0.5);
+        Box box = mc.player.getBoundingBox();
         for (BlockPos pos : BlockPos.iterate(BlockPos.ofFloored(box.minX, box.minY, box.minZ), BlockPos.ofFloored(box.maxX, box.maxY, box.maxZ))) {
             if (hazardous(mc.world.getBlockState(pos))) startHazards.add(pos.asLong());
         }
@@ -633,7 +678,7 @@ public class ElytraEvade extends Module {
         double flat = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
         double y = MathHelper.clamp(delta.y, -down, up);
         if (flat < ARRIVED && Math.abs(y) < ARRIVED) return Vec3d.ZERO;
-        double move = Math.min(flat, speed.get());
+        double move = Math.min(flat, pace());
         double x = flat < 1.0E-4 ? 0 : delta.x / flat * move;
         double z = flat < 1.0E-4 ? 0 : delta.z / flat * move;
         return new Vec3d(x, y, z);
@@ -660,7 +705,13 @@ public class ElytraEvade extends Module {
 
     private double risk(Vec3d at) {
         double total = 0;
-        for (PlayerEntity player : near) total += Math.max(diver(player, at, 0, true), Math.min(potential(player, at, 0), CRYSTAL_CAP)) + webRisk(player, at);
+        Vec3d from = mc.player.getEntityPos();
+        Vec3d first = from.lerp(at, 1 / 3.0);
+        Vec3d second = from.lerp(at, 2 / 3.0);
+        for (PlayerEntity player : near) {
+            double passing = Math.max(reachRisk(player, first), reachRisk(player, second)) * PATH_CRYSTAL_SHARE;
+            total += Math.max(Math.max(diver(player, at, 0, true), Math.min(potential(player, at, 0), CRYSTAL_CAP)), passing) + webRisk(player, at);
+        }
         return total + leashPenalty(at);
     }
 
@@ -676,7 +727,11 @@ public class ElytraEvade extends Module {
         return length > 1.0E-3 && velocity.dotProduct(to.multiply(1 / length)) > CLOSING_SPEED;
     }
 
-    private static boolean armed(PlayerEntity player) {
+    private boolean armed(PlayerEntity player) {
+        return holdsDiveWeapon(player) || armedUntil.get(player.getId()) > now;
+    }
+
+    private static boolean holdsDiveWeapon(PlayerEntity player) {
         ItemStack main = player.getMainHandStack();
         return main.isOf(Items.MACE) || Registries.ITEM.getId(main.getItem()).getPath().endsWith("_spear");
     }
@@ -688,7 +743,7 @@ public class ElytraEvade extends Module {
         Vec3d velocity = motion.getOrDefault(player.getId(), Vec3d.ZERO);
         Vec3d path = at.subtract(me);
         double length = path.length();
-        double pace = Math.max(speed.get(), 0.1);
+        double pace = Math.max(pace(), 0.1);
 
         double closest = Double.MAX_VALUE;
         for (int tick = 1; tick <= HORIZON; tick++) {
@@ -740,7 +795,12 @@ public class ElytraEvade extends Module {
     }
 
     private double travelTicks(Vec3d at) {
-        return Math.min(HORIZON, mc.player.getEntityPos().distanceTo(at) / Math.max(speed.get(), 0.1));
+        return Math.min(HORIZON, mc.player.getEntityPos().distanceTo(at) / Math.max(pace(), 0.1));
+    }
+
+    private double pace() {
+        ElytraFly fly = Modules.get().get(ElytraFly.class);
+        return fly == null ? speed.get() : Math.min(speed.get(), fly.horizontalSpeed());
     }
 
     private Vec3d predicted(PlayerEntity player, double ticks) {
@@ -766,7 +826,8 @@ public class ElytraEvade extends Module {
     private double leashPenalty(Vec3d at) {
         if (anchor == null) return 0;
         double excess = flat(at, anchor) - leash.get();
-        return excess <= 0 ? 0 : excess / leash.get() * GLIDER_DANGER;
+        double rise = at.y - anchor.y - height.get() * 2;
+        return (excess <= 0 ? 0 : excess / leash.get() * GLIDER_DANGER) + (rise <= 0 ? 0 : rise / height.get() * GLIDER_DANGER);
     }
 
     private Vec3d crystalEye(PlayerEntity player, Vec3d at) {

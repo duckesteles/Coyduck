@@ -299,7 +299,7 @@ public class MaceStrike extends Module {
     }
 
     public boolean hunting() {
-        return isActive() && target != null;
+        return isActive() && target != null && Util.getMeasuringTimeMs() >= pausedUntil;
     }
 
     @Override
@@ -357,8 +357,15 @@ public class MaceStrike extends Module {
         }
 
         boolean low = mc.player.getHealth() + mc.player.getAbsorptionAmount() <= minHealth.get();
-        if (low) giveBack();
-        else takeMace();
+        if (low) {
+            if (chasing != null) Trace.log("mace stops hunting {}, health is low", target.getName().getString());
+            target = null;
+            chasing = null;
+            lastTargetPos = null;
+            giveBack();
+            return;
+        }
+        takeMace();
         Vec3d now = target.getEntityPos();
         Vec3d motion = lastTargetPos == null || lastTarget != target ? Vec3d.ZERO : now.subtract(lastTargetPos);
         lastTargetPos = now;
@@ -384,7 +391,6 @@ public class MaceStrike extends Module {
         double dz = goalZ - mc.player.getZ();
         double tx = now.x + strikeLead.x - mc.player.getX();
         double tz = now.z + strikeLead.z - mc.player.getZ();
-        if (low) return;
         if (dx * dx + dz * dz > align * align || tx * tx + tz * tz > over * over) return;
         if (mc.player.getY() - now.y < above - HOVER_SLACK) return;
 
