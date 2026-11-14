@@ -15,6 +15,9 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.entity.ExperienceOrbEntity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.projectile.thrown.ExperienceBottleEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.util.Hand;
@@ -22,6 +25,10 @@ import net.minecraft.util.math.Box;
 
 public class AutoXp extends Module {
     private static final int ROTATE_PRIORITY = 40;
+    private static final int ORB_BACKLOG = 4;
+    private static final int BOTTLE_VALUE = 7;
+    private static final double ORB_RANGE = 3;
+    private static final double REPAIR_PER_XP = 2;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -45,8 +52,8 @@ public class AutoXp extends Module {
 
     private final Setting<Integer> perTick = sgGeneral.add(new IntSetting.Builder()
         .name("bottles-per-tick")
-        .description("Bottles thrown each tick while mending.")
-        .defaultValue(2)
+        .description("Most bottles thrown in one tick while mending. Fewer go out while thrown experience still waits to be picked up.")
+        .defaultValue(1)
         .range(1, 5)
         .sliderRange(1, 5)
         .build()
@@ -88,7 +95,7 @@ public class AutoXp extends Module {
 
     @Override
     public String getInfoString() {
-        return mending ? lowest() + "%" : null;
+        return mending && mc.player != null ? lowest() + "%" : null;
     }
 
     @EventHandler
@@ -105,25 +112,80 @@ public class AutoXp extends Module {
         if (!mending) return;
 
         if (InventoryManager.get().isEating() || InventoryManager.get().isOffhandEating()) return;
-        if (pauseMining.get() && MiningManager.get().pos() != null) return;
+        MiningManager mining = MiningManager.get();
+        if (pauseMining.get() && mining.pos() != null && !mining.wasBroken()) return;
         if (onlyHoled.get() && !Targets.isHoled(Targets.columns(mc.player.getBoundingBox()))) return;
         if (enemyRange.get() > 0 && Targets.find(enemyRange.get()) != null) return;
+        if (shared()) return;
 
-        int slot = InventoryManager.get().find(stack -> stack.isOf(Items.EXPERIENCE_BOTTLE), 0, InventoryManager.MAIN_END);
+        int throwable = throwable();
+        if (throwable <= 0) return;
+
+        InventoryManager inventory = InventoryManager.get();
+        int slot = inventory.find(stack -> stack.isOf(Items.EXPERIENCE_BOTTLE), 0, InventoryManager.MAIN_END);
         if (slot == -1) return;
+        if (slot >= InventoryManager.HOTBAR_END && !emptyHotbar()) return;
 
         RotationManager rotations = RotationManager.get();
-        rotations.request(ROTATE_PRIORITY, mc.player.getYaw(), 90, 180, false);
+        float yaw = rotations.serverYaw();
+        rotations.request(ROTATE_PRIORITY, yaw, 90, 180, false);
         if (!rotations.isLookingAt(new Box(mc.player.getBlockPos().down()), 3)) return;
 
-        InventoryManager.get().withItem(slot, InventoryManager.SwitchMode.Silent, () -> {
+        inventory.withItem(slot, InventoryManager.SwitchMode.Silent, () -> {
             float pitch = mc.player.getPitch();
+            float cameraYaw = mc.player.getYaw();
             mc.player.setPitch(90);
-            for (int i = 0; i < perTick.get() && mc.player.getMainHandStack().isOf(Items.EXPERIENCE_BOTTLE); i++) {
+            mc.player.setYaw(yaw);
+            for (int i = 0; i < throwable && mc.player.getMainHandStack().isOf(Items.EXPERIENCE_BOTTLE); i++) {
                 mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND);
             }
             mc.player.setPitch(pitch);
+            mc.player.setYaw(cameraYaw);
         });
+    }
+
+    private int throwable() {
+        Box area = mc.player.getBoundingBox().expand(ORB_RANGE);
+        int orbs = 0;
+        int pending = 0;
+        for (ExperienceOrbEntity orb : mc.world.getEntitiesByClass(ExperienceOrbEntity.class, area, orb -> !orb.isRemoved())) {
+            orbs++;
+            pending += orb.getValue();
+        }
+        for (ExperienceBottleEntity bottle : mc.world.getEntitiesByClass(ExperienceBottleEntity.class, area.expand(ORB_RANGE), bottle -> bottle.getOwner() == mc.player)) {
+            orbs += 2;
+            pending += BOTTLE_VALUE;
+        }
+        if (orbs >= ORB_BACKLOG || pending * REPAIR_PER_XP >= needed()) return 0;
+        return perTick.get();
+    }
+
+    private double needed() {
+        double needed = 0;
+        double keep = 1 - stop.get() / 100.0;
+        for (EquipmentSlot slot : EquipmentSlot.VALUES) {
+            ItemStack stack = mc.player.getEquippedStack(slot);
+            if (stack.isEmpty() || !stack.isDamageable() || !stack.isDamaged() || !mends(stack)) continue;
+            double damage = stack.getDamage();
+            needed += slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR ? Math.max(0, damage - keep * stack.getMaxDamage()) : damage;
+        }
+        return needed;
+    }
+
+    private boolean shared() {
+        Box ours = mc.player.getBoundingBox().expand(0.5);
+        for (PlayerEntity player : mc.world.getPlayers()) {
+            if (player != mc.player && !player.isSpectator() && player.isAlive() && player.getBoundingBox().expand(1, 0.5, 1).intersects(ours)) return true;
+        }
+        return false;
+    }
+
+    private boolean emptyHotbar() {
+        int reserved = AutoTotem.totemSlot();
+        for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
+            if (i != reserved && InventoryManager.get().stack(i).isEmpty()) return true;
+        }
+        return false;
     }
 
     private int lowest() {
