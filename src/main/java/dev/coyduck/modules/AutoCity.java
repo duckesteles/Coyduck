@@ -491,7 +491,7 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
     @EventHandler(priority = EventPriority.LOWEST)
     private void onMineStop(MineStopEvent event) {
         if (!antiReplace.get() || current == null || target == null || !event.pos.equals(current) || mc.player == null || mc.world == null) return;
-        if (Util.getMeasuringTimeMs() - filledAt < FILL_GAP || !fillable(current)) return;
+        if (Util.getMeasuringTimeMs() - filledAt < FILL_GAP || InteractionManager.get().isPending(current) || !fillable(current)) return;
         BlockPos base = current.down();
         if (!InteractionManager.centerReach(base)) return;
         int slot = fillerSlot(current);

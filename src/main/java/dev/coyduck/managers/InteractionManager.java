@@ -8,6 +8,8 @@ import net.minecraft.block.Block;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientWorldAccessor;
+import net.minecraft.client.network.PendingUpdateManager;
+import net.minecraft.network.packet.c2s.play.PlayerInteractBlockC2SPacket;
 import dev.coyduck.utils.BlockRules;
 import dev.coyduck.utils.PacketBatch;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
@@ -233,6 +235,19 @@ public final class InteractionManager {
         pending.put(pos.asLong(), new Pending(sequence, Util.getMeasuringTimeMs() + LatencyManager.get().timeout()));
         placedAt.put(pos.asLong(), Util.getMeasuringTimeMs());
         return true;
+    }
+
+    public void interactBlind(BlockHitResult hit, SwingMode swing) {
+        PendingUpdateManager updates = ((ClientWorldAccessor) mc.world).coyduck$getPendingUpdateManager();
+        try (PendingUpdateManager open = updates.incrementSequence()) {
+            mc.getNetworkHandler().sendPacket(new PlayerInteractBlockC2SPacket(Hand.MAIN_HAND, hit, open.getSequence()));
+        }
+        swing(swing);
+    }
+
+    public void notePending(BlockPos pos) {
+        int sequence = ((ClientWorldAccessor) mc.world).coyduck$getPendingUpdateManager().getSequence();
+        pending.put(pos.asLong(), new Pending(sequence, Util.getMeasuringTimeMs() + LatencyManager.get().timeout()));
     }
 
     public boolean placedByUs(BlockPos pos, long within) {

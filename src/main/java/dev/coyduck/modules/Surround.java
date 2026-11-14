@@ -2,6 +2,7 @@ package dev.coyduck.modules;
 
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import net.minecraft.registry.Registries;
+import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
@@ -91,6 +92,7 @@ public class Surround extends Module {
     private static final double REBREAK_RANGE = 7;
     private static final float STRONG = 600;
     private static final long WEAK_OWN_TIME = 5_000;
+    private static final long ANCHOR_MEMORY = 5_000;
     private static final long FEET_RETRY = 250;
     private static final double EDGE = 1.0E-4;
     private static final double CENTER_SPEED = 0.2;
@@ -309,6 +311,7 @@ public class Surround extends Module {
 
     private final Long2LongOpenHashMap rendered = new Long2LongOpenHashMap();
     private final Long2ObjectOpenHashMap<String> cellStatus = new Long2ObjectOpenHashMap<>();
+    private final Int2LongOpenHashMap anchorSeen = new Int2LongOpenHashMap();
     private LongSet anchored = new LongOpenHashSet();
     private int anchorY;
     private int budget;
@@ -792,6 +795,7 @@ public class Surround extends Module {
     private List<BlockPos> faces() {
         List<BlockPos> faces = new ArrayList<>();
         if (!face.get() || Targets.find(FACE_ENEMY_RANGE) == null) return faces;
+        boolean anchorArmed = anchorArmed();
 
         float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
         for (long key : anchored) {
@@ -805,11 +809,29 @@ public class Surround extends Module {
                 if (faceThreat(cell, health) || mc.world.getBlockState(cell).isReplaceable() && crystalThreat(cell.offset(direction), health, mc.world)) faces.add(cell);
             }
 
+            BlockPos head = column.up(2);
+            if (anchorArmed && !anchored.contains(head.asLong()) && !faces.contains(head) && faceThreat(head, health)) faces.add(head);
+
             BlockPos top = column.up(3);
             if (!mc.world.getBlockState(column.up(2)).isReplaceable() && mc.world.getBlockState(top).isReplaceable()
                 && crystalThreat(top, health, new BlockOverlay(mc.world).set(column.up(2), Blocks.AIR.getDefaultState()))) faces.add(top);
         }
         return faces;
+    }
+
+    private boolean anchorArmed() {
+        if (mc.world.getRegistryKey() == World.NETHER || mc.world.getDimensionEntry().matchesKey(DimensionTypes.THE_NETHER)) return false;
+        long now = Util.getMeasuringTimeMs();
+        for (PlayerEntity player : mc.world.getPlayers()) {
+            if (player == mc.player || !player.isAlive() || Friends.get().isFriend(player) || player.squaredDistanceTo(mc.player) > FACE_ENEMY_RANGE * FACE_ENEMY_RANGE) continue;
+            if (holdsAnchorGear(player.getMainHandStack()) || holdsAnchorGear(player.getOffHandStack())) anchorSeen.put(player.getId(), now + ANCHOR_MEMORY);
+        }
+        if (!anchorSeen.isEmpty()) anchorSeen.int2LongEntrySet().removeIf(entry -> entry.getLongValue() <= now);
+        return !anchorSeen.isEmpty();
+    }
+
+    private static boolean holdsAnchorGear(ItemStack stack) {
+        return stack.isOf(Items.RESPAWN_ANCHOR) || stack.isOf(Items.GLOWSTONE);
     }
 
     private List<BlockPos> roof() {

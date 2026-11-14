@@ -1,6 +1,7 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.managers.CrystalTracker;
@@ -38,6 +39,7 @@ import meteordevelopment.meteorclient.systems.modules.combat.AnchorAura;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
+import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.RespawnAnchorBlock;
@@ -414,6 +416,92 @@ public class AutoAnchor extends Module {
             }
             default -> {}
         }
+    }
+
+    @EventHandler(priority = EventPriority.LOW)
+    private void onMineStop(MineStopEvent event) {
+        if (running || spent || !canAct() || anchorsWork() || Util.getMeasuringTimeMs() < pauseUntil) return;
+        if (mc.player.isSneaking() || mc.player.getOffHandStack().isOf(Items.GLOWSTONE)) return;
+        if ((pauseEating.get() && mc.player.isUsingItem()) || InventoryManager.get().isOffhandEating()) return;
+
+        BlockPos gap = event.pos.toImmutable();
+        InteractionManager interaction = InteractionManager.get();
+        if (used.containsKey(gap.asLong()) || ownCells().contains(gap.asLong()) || !inRange(gap)) return;
+        if (CrystalTracker.get().placingOverlaps(gap.down()) || interaction.isPending(gap)) return;
+
+        int anchorSlot = slot(Items.RESPAWN_ANCHOR);
+        int glowSlot = slot(Items.GLOWSTONE);
+        if (anchorSlot == -1 || glowSlot == -1 || detonator() == NONE) return;
+
+        running = true;
+        try {
+            raws.clear();
+            faces.clear();
+            anchorOnStop(gap, anchorSlot, glowSlot);
+        } finally {
+            raws.clear();
+            faces.clear();
+            running = false;
+        }
+    }
+
+    private void anchorOnStop(BlockPos gap, int anchorSlot, int glowSlot) {
+        List<Target> targets = targets();
+        if (targets.isEmpty() || blocksTarget(targets, gap)) return;
+
+        float health = AutoTotem.popInFlight() ? 1.0f + FIRE_MARGIN : mc.player.getHealth() + mc.player.getAbsorptionAmount();
+        long arrival = Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2;
+        long timing = hurtSync.get() ? arrival : 0;
+        ownCrystals = ownCrystals();
+
+        Spot spot = spot(targets, gap, false, timing);
+        long reachable = spot == null ? 0 : timing != 0 ? spot.timedReachable : spot.reachable;
+        if (reachable == 0) return;
+        Choice choice = evaluate(targets, gap, health, timing, arrival, false, reachable);
+        if (choice == null) return;
+
+        InteractionManager interaction = InteractionManager.get();
+        BlockHitResult placeHit = interaction.hit(gap, airplace.get());
+        BlockHitResult anchorHit = blindFace(gap);
+        if (placeHit == null || anchorHit == null || !rotationReady(placeHit)) return;
+
+        boolean[] done = {false};
+        PacketBatch.run(() -> {
+            if (!withItem(anchorSlot, () -> interaction.interactBlind(placeHit, swing.get()))) return;
+            if (!withItem(glowSlot, () -> interaction.interactBlind(anchorHit, swing.get()))) return;
+            Runnable boom = () -> interaction.interactBlind(anchorHit, swing.get());
+            int slot = detonator();
+            if (slot == MAIN_HAND) {
+                boom.run();
+                done[0] = true;
+            } else {
+                done[0] = slot != NONE && withItem(slot, boom);
+            }
+        });
+        if (!done[0]) {
+            Trace.log("anchor on stop at {} could not switch items", gap);
+            return;
+        }
+
+        interaction.notePending(gap);
+        finish(gap, targets);
+        mark(choice);
+        Trace.log("anchor on stop {} for {} dmg", gap, choice.damage);
+    }
+
+    private BlockHitResult blindFace(BlockPos gap) {
+        Vec3d eye = mc.player.getEyePos();
+        double reach = mc.player.getBlockInteractionRange();
+        InteractionManager interaction = InteractionManager.get();
+        for (Direction direction : Direction.values()) {
+            Vec3d normal = Vec3d.of(direction.getVector());
+            if (eye.subtract(Vec3d.ofCenter(gap).add(normal.multiply(0.5))).dotProduct(normal) <= 0) continue;
+            BlockPos behind = gap.offset(direction);
+            if (mc.world.getBlockState(behind).isReplaceable() && interaction.obstructions(behind).isEmpty()) continue;
+            Vec3d point = interaction.visiblePoint(gap, direction, eye, reach * reach);
+            if (point != null) return new BlockHitResult(point, direction, gap, false);
+        }
+        return null;
     }
 
     @EventHandler
