@@ -2,6 +2,7 @@ package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
@@ -95,7 +96,7 @@ public class AutoTrap extends Module {
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("Silent selects the item's hotbar slot for a moment and sends no inventory clicks; an item in your inventory is first moved into an empty hotbar slot once. InvSwap swaps the item into your hand and back with inventory clicks, which some servers answer by resending the whole inventory. While you eat, InvSwap is always used. Your offhand totem is never touched.")
+        .description("Silent selects the item's hotbar slot for a moment and sends no inventory clicks; an item in your inventory is first moved into an empty hotbar slot once. InvSwap swaps the item into your hand and back with inventory clicks, which some servers answer by resending the whole inventory. Your offhand totem is never touched. Nothing is switched in while you eat from the main hand, so trapping waits.")
         .defaultValue(InventoryManager.SwitchMode.Silent)
         .build()
     );
@@ -165,6 +166,7 @@ public class AutoTrap extends Module {
     private PlayerEntity target;
     private int budget;
     private boolean running;
+    private boolean entityBlocked;
 
     public AutoTrap() {
         super(Coyduck.CATEGORY, "auto-trap+", "Traps the target from above and around the head without closing your own crystal spots.");
@@ -178,9 +180,24 @@ public class AutoTrap extends Module {
             info("Disabled %s, it places over the same blocks.", meteor.title);
         }
 
+        reset();
+        budget = blocksPerTick.get();
+    }
+
+    @Override
+    public void onDeactivate() {
+        reset();
+    }
+
+    @EventHandler
+    private void onWorldReset(WorldResetEvent event) {
+        reset();
+    }
+
+    private void reset() {
         rendered.clear();
         target = null;
-        budget = blocksPerTick.get();
+        entityBlocked = false;
     }
 
     @Override
@@ -201,7 +218,7 @@ public class AutoTrap extends Module {
         boolean relevant = switch (event.packet) {
             case BlockUpdateS2CPacket packet -> packet.getPos().isWithinDistance(target.getBlockPos(), 3);
             case ChunkDeltaUpdateS2CPacket packet -> Targets.touches(packet, target.getBlockPos(), 3);
-            case EntitiesDestroyS2CPacket ignored -> true;
+            case EntitiesDestroyS2CPacket ignored -> entityBlocked;
             default -> false;
         };
 
@@ -232,6 +249,7 @@ public class AutoTrap extends Module {
 
     private void run() {
         if (InventoryManager.get().isOffhandEating()) return;
+        if (target != null && target.getEntityWorld() != mc.world) target = null;
         AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
         PlayerEntity focus = autoCrystal == null ? null : autoCrystal.target();
         target = Targets.find(targetRange.get(), Targets.valid(focus, targetRange.get()) ? focus : target);
@@ -239,34 +257,47 @@ public class AutoTrap extends Module {
 
         Box box = Targets.box(target);
         LongSet columns = Targets.columns(box);
-        if (onlyStill.get() && !Targets.isHoled(columns) && !Targets.isStill(target, STILL_SPEED)) return;
+        if (onlyStill.get() && !holed(columns) && !Targets.isStill(target, STILL_SPEED)) return;
 
-        List<BlockPos> targets = positions(box, columns);
+        entityBlocked = false;
+        List<BlockPos> cells = positions(box, columns);
         InteractionManager interaction = InteractionManager.get();
-        if (targets.stream().noneMatch(pos -> interaction.hit(pos, airplace.get()) != null)) return;
+        List<BlockPos> ready = new ArrayList<>();
+        List<BlockHitResult> hits = new ArrayList<>();
+        for (int pass = 0; pass < 2; pass++) {
+            for (BlockPos pos : cells) {
+                if (interaction.wasRejected(pos) != (pass == 1)) continue;
+                BlockHitResult hit = interaction.hit(pos, airplace.get());
+                if (hit == null) continue;
+                ready.add(pos);
+                hits.add(hit);
+            }
+        }
+        if (ready.isEmpty()) return;
 
         int slot = blockSlot();
         if (slot == -1) return;
-        BlockPos first = targets.stream().filter(pos -> placeable(pos) && interaction.hit(pos, airplace.get()) != null).findFirst().orElse(null);
-        if (first != null && !interaction.ready(first, airplace.get(), rotate.get(), InteractionManager.TRAP_PRIORITY)) return;
+        if (!interaction.ready(ready.getFirst(), airplace.get(), rotate.get(), InteractionManager.TRAP_PRIORITY)) return;
 
         InventoryManager.get().withItem(slot, switchMode.get(), () -> {
-            for (int round = 0; round < 2 && budget > 0; round++) {
-                boolean placed = false;
-                for (BlockPos pos : targets) {
-                    if (budget <= 0 || !isBlock()) break;
-                    placed |= place(pos);
-                }
-                if (!placed || airplace.get()) break;
+            boolean placed = false;
+            for (int i = 0; i < ready.size(); i++) {
+                if (budget <= 0 || !isBlock()) break;
+                placed |= place(ready.get(i), placed ? null : hits.get(i));
+            }
+            if (!placed || airplace.get()) return;
+            for (BlockPos pos : cells) {
+                if (budget <= 0 || !isBlock()) break;
+                place(pos, null);
             }
         });
     }
 
-    private boolean place(BlockPos pos) {
+    private boolean place(BlockPos pos, BlockHitResult known) {
         InteractionManager interaction = InteractionManager.get();
         if (!placeable(pos)) return false;
 
-        BlockHitResult hit = interaction.hit(pos, airplace.get());
+        BlockHitResult hit = known != null ? known : interaction.hit(pos, airplace.get());
         if (hit == null) return false;
 
         if (!interaction.place(pos, hit, swing.get(), rotate.get(), InteractionManager.TRAP_PRIORITY)) {
@@ -281,13 +312,15 @@ public class AutoTrap extends Module {
     private List<BlockPos> positions(Box box, LongSet columns) {
         List<BlockPos> positions = new ArrayList<>();
         int height = Math.max(1, MathHelper.ceil(box.getLengthY() - 1.0E-3));
+        List<BlockPos> ownFace = Targets.ring(Targets.columns(mc.player.getBoundingBox()), 1);
 
         if (top.get()) {
             int level = BlockPos.fromLong(columns.iterator().nextLong()).getY();
             int topY = target.isOnGround() ? MathHelper.floor(box.maxY - 1.0E-4) + 1 : level + height;
             for (long key : columns) {
                 BlockPos column = BlockPos.fromLong(key);
-                add(positions, new BlockPos(column.getX(), topY, column.getZ()));
+                BlockPos cell = new BlockPos(column.getX(), topY, column.getZ());
+                if (!crystalOn(cell)) add(positions, cell, ownFace);
             }
         }
 
@@ -296,19 +329,34 @@ public class AutoTrap extends Module {
         List<BlockPos> ring = Targets.ring(columns, 0);
         int open = 0;
         for (BlockPos cell : ring) {
-            if (mc.world.getBlockState(cell).isReplaceable()) open++;
+            if (walkable(cell)) open++;
         }
 
         for (BlockPos cell : ring) {
             if (face.get() == Face.Smart && !escape(cell, open)) continue;
-            add(positions, cell.up());
+            add(positions, cell.up(), ownFace);
         }
 
         return positions;
     }
 
+    private boolean walkable(BlockPos cell) {
+        return mc.world.getBlockState(cell).getCollisionShape(mc.world, cell).isEmpty();
+    }
+
+    private boolean holed(LongSet columns) {
+        for (BlockPos cell : Targets.ring(columns, 0)) {
+            if (walkable(cell)) return false;
+        }
+        return true;
+    }
+
+    private boolean crystalOn(BlockPos cell) {
+        return !mc.world.getEntitiesByClass(EndCrystalEntity.class, new Box(cell.up()), CrystalTracker.get()::isAlive).isEmpty();
+    }
+
     private boolean escape(BlockPos cell, int open) {
-        if (!mc.world.getBlockState(cell).isReplaceable()) return false;
+        if (!walkable(cell)) return false;
         if (MiningManager.get().isMining(cell) || cell.equals(MiningManager.get().background())) return false;
         if (open > 1) return true;
 
@@ -322,7 +370,9 @@ public class AutoTrap extends Module {
         return autoCrystal == null || target == null || !autoCrystal.wouldFillGap(cell, target);
     }
 
-    private void add(List<BlockPos> positions, BlockPos pos) {
+    private void add(List<BlockPos> positions, BlockPos pos, List<BlockPos> ownFace) {
+        MiningManager mining = MiningManager.get();
+        if (ownFace.contains(pos) || mining.isMining(pos) || pos.equals(mining.background())) return;
         if (placeable(pos) && !positions.contains(pos)) positions.add(pos);
     }
 
@@ -335,7 +385,9 @@ public class AutoTrap extends Module {
 
         List<Entity> entities = interaction.obstructions(pos);
         entities.removeIf(entity -> entity instanceof EndCrystalEntity && tracker.isDead(entity));
-        return entities.isEmpty();
+        if (entities.isEmpty()) return true;
+        entityBlocked = true;
+        return false;
     }
 
     private int blockSlot() {
