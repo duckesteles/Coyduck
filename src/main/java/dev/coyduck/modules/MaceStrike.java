@@ -92,6 +92,8 @@ public class MaceStrike extends Module {
     private static final float HURT_SHARE = 0.8f;
     private static final long SHIELD_STUCK_MS = 6000;
     private static final long HUNT_MS = 8000;
+    private static final double MOTION_KEEP = 0.3;
+    private static final int OPEN_CACHE_TICKS = 5;
 
     private record Rise(long time, float amount) {}
 
@@ -290,6 +292,8 @@ public class MaceStrike extends Module {
     private int heldSlot = -1;
     private long huntSince;
     private int maceAge = -1;
+    private Vec3d smoothMotion = Vec3d.ZERO;
+    private final Int2LongOpenHashMap openCache = new Int2LongOpenHashMap();
     private int maceCached = -1;
     private long noStrikeSince;
     private long stuckLimit = STUCK_MS;
@@ -330,7 +334,12 @@ public class MaceStrike extends Module {
         noStrikeSince = 0;
         stuckLimit = STUCK_MS;
         learnVictim = -1;
+        huntSince = 0;
+        lastStrike = 0;
+        smoothMotion = Vec3d.ZERO;
+        openCache.clear();
         giveBack();
+        heldSlot = -1;
     }
 
     public boolean hunting() {
@@ -435,8 +444,11 @@ public class MaceStrike extends Module {
         }
         takeMace();
         Vec3d now = target.getEntityPos();
-        Vec3d motion = lastTargetPos == null || lastTarget != target ? Vec3d.ZERO : now.subtract(lastTargetPos);
-        if (motion.length() > TELEPORT_MOTION) motion = Vec3d.ZERO;
+        boolean fresh = lastTargetPos == null || lastTarget != target;
+        Vec3d moved = fresh ? Vec3d.ZERO : now.subtract(lastTargetPos);
+        if (moved.length() > TELEPORT_MOTION) moved = Vec3d.ZERO;
+        smoothMotion = fresh ? moved : smoothMotion.multiply(MOTION_KEEP).add(moved.multiply(1 - MOTION_KEEP));
+        Vec3d motion = smoothMotion;
         lastTargetPos = now;
         lastTarget = target;
 
@@ -655,6 +667,8 @@ public class MaceStrike extends Module {
         roofTraced = false;
         heals.clear();
         skipped.clear();
+        openCache.clear();
+        smoothMotion = Vec3d.ZERO;
     }
 
     private boolean stuck(String why) {
@@ -788,7 +802,7 @@ public class MaceStrike extends Module {
         PlayerEntity victim = target;
         int slot = maceSlot(InventoryManager.MAIN_END);
         if (slot == -1 || victim == null) return;
-        if (victim != null && mc.player.getMainHandStack().isOf(Items.MACE)) {
+        if (mc.player.getMainHandStack().isOf(Items.MACE)) {
             learnVictim = victim.getId();
             learnHealth = victim.getHealth() + victim.getAbsorptionAmount();
             learnAbsorption = victim.getAbsorptionAmount();
@@ -1035,6 +1049,16 @@ public class MaceStrike extends Module {
     }
 
     private boolean open(PlayerEntity player) {
+        int age = mc.player.age;
+        long cached = openCache.getOrDefault(player.getId(), Long.MIN_VALUE);
+        if (cached != Long.MIN_VALUE && age - (cached >> 1) < OPEN_CACHE_TICKS && age >= (cached >> 1)) return (cached & 1) == 1;
+        if (openCache.size() > 64) openCache.clear();
+        boolean open = computeOpen(player);
+        openCache.put(player.getId(), ((long) age << 1) | (open ? 1 : 0));
+        return open;
+    }
+
+    private boolean computeOpen(PlayerEntity player) {
         Box body = Targets.box(player);
         if (!mc.world.isSpaceEmpty(player, body.contract(BODY_INSET))) return false;
         Box own = mc.player.getBoundingBox();
