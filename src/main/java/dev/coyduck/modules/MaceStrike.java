@@ -180,6 +180,14 @@ public class MaceStrike extends Module {
         .build()
     );
 
+    private final Setting<Boolean> stopFirst = sgGeneral.add(new BoolSetting.Builder()
+        .name("stop-first")
+        .description("Experimental. Stops the glide before the dive instead of right before the hit, so the 6b6t anticheat counts the drop as a fall. It may pull you back instead, test it.")
+        .defaultValue(false)
+        .visible(smash::get)
+        .build()
+    );
+
     private final Setting<Boolean> holdMace = sgGeneral.add(new BoolSetting.Builder()
         .name("hold-mace")
         .description("Keeps a hotbar mace in hand while you follow a target so it charges. Each dive waits until the charged hit would pop the target, or until the mace is charged enough for a critical hit. Auto Totem+ still gets the main hand when it wants a totem there. Your slot comes back when there is no target.")
@@ -276,6 +284,7 @@ public class MaceStrike extends Module {
     private PlayerEntity lastTarget;
     private int heldFrom = -1;
     private long noStrikeSince;
+    private boolean preStopped;
     private final Int2LongOpenHashMap skipped = new Int2LongOpenHashMap();
     private int owed;
     private double learnedFall = Double.NaN;
@@ -660,8 +669,12 @@ public class MaceStrike extends Module {
                     move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, false, collision));
                     return;
                 }
+                preStopped = smash.get() && stopFirst.get() && mc.player.isGliding();
+                if (preStopped) glideCommand();
                 path(x, y, strikeY, z, collision);
                 strike();
+                if (preStopped) glideCommand();
+                preStopped = false;
                 path(x, strikeY, y, z, collision);
                 if (stopGlide.get() && mc.player.isGliding()) {
                     mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
@@ -716,7 +729,7 @@ public class MaceStrike extends Module {
             learnMixed = false;
         }
         Runnable hit = () -> {
-            boolean toggle = smash.get() && mc.player.isGliding();
+            boolean toggle = smash.get() && mc.player.isGliding() && !preStopped;
             boolean sprinting = mc.player.isSprinting();
             if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
             if (toggle) glideCommand();
