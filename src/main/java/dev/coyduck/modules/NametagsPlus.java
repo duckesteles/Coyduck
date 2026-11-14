@@ -25,6 +25,7 @@ import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.client.option.Perspective;
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
@@ -40,6 +41,7 @@ public class NametagsPlus extends Module {
     private static final double ITEM_SPACING = 2;
     private static final double PAD = 3;
     private static final double ROW_GAP = 4;
+    private static final double EAT_BAR = 2;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -70,6 +72,13 @@ public class NametagsPlus extends Module {
     private final Setting<Boolean> ping = sgGeneral.add(new BoolSetting.Builder()
         .name("ping")
         .description("Their ping.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> eating = sgGeneral.add(new BoolSetting.Builder()
+        .name("eating")
+        .description("A bar inside the tag filling up while they eat, so you see a gapple coming.")
         .defaultValue(true)
         .build()
     );
@@ -131,7 +140,7 @@ public class NametagsPlus extends Module {
     private final ItemStack[] shown = new ItemStack[ITEMS.length];
 
     public NametagsPlus() {
-        super(Coyduck.CATEGORY, "nametags+", "Clean player tags: name, health and ping, their armor and held items with durability bars, and the Coyduck mascot for other Coyduck users.");
+        super(Coyduck.CATEGORY, "nametags+", "Clean player tags: name, health and ping, a bar while they eat, their armor and held items with durability bars, and the Coyduck mascot for other Coyduck users.");
     }
 
     public static boolean announces() {
@@ -207,17 +216,25 @@ public class NametagsPlus extends Module {
         boolean duck = mascot.get() && usesCoyduck(player);
         double icon = duck ? height + PAD : 0;
         double width = icon + textWidth;
+        double progress = eating.get() ? eatProgress(player) : -1;
+        double bar = progress >= 0 ? EAT_BAR + 1 : 0;
         double left = -width / 2;
-        double top = -height;
+        double top = -height - bar;
 
         Renderer2D.COLOR.begin();
-        Renderer2D.COLOR.quad(left - PAD, top - PAD, width + PAD * 2, height + PAD * 2, fill.get());
+        Renderer2D.COLOR.quad(left - PAD, top - PAD, width + PAD * 2, height + bar + PAD * 2, fill.get());
+        if (progress >= 0) {
+            double barY = top + height + 1;
+            barColor.set(CoyHud.color(CoyHud.health(1 - progress)));
+            Renderer2D.COLOR.quad(left, barY, width, EAT_BAR, BAR_BACKGROUND);
+            Renderer2D.COLOR.quad(left, barY, width * progress, EAT_BAR, barColor);
+        }
         if (outline.get()) {
             line.set(CoyHud.color(CoyHud.accent()));
             double x0 = left - PAD;
             double y0 = top - PAD;
             double w = width + PAD * 2;
-            double h = height + PAD * 2;
+            double h = height + bar + PAD * 2;
             Renderer2D.COLOR.quad(x0, y0, w, 1, line);
             Renderer2D.COLOR.quad(x0, y0 + h - 1, w, 1, line);
             Renderer2D.COLOR.quad(x0, y0, 1, h, line);
@@ -239,6 +256,15 @@ public class NametagsPlus extends Module {
 
         if (items.get()) drawItems(event, player, top - PAD - ROW_GAP);
         NametagUtils.end(event.drawContext);
+    }
+
+    private static double eatProgress(PlayerEntity player) {
+        if (!player.isUsingItem()) return -1;
+        ItemStack stack = player.getActiveItem();
+        if (!stack.contains(DataComponentTypes.FOOD)) return -1;
+        int total = stack.getMaxUseTime(player);
+        if (total <= 0) return -1;
+        return Math.min(1, player.getItemUseTime() / (double) total);
     }
 
     private void drawItems(Render2DEvent event, PlayerEntity player, double bottom) {
