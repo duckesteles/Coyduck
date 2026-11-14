@@ -21,10 +21,8 @@ import net.minecraft.block.Blocks;
 import net.minecraft.entity.MovementType;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.registry.tag.BlockTags;
-import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
@@ -35,9 +33,6 @@ public class SpeedPlus extends Module {
 
     private static final double BASE = 0.2873;
     private static final double PROBE = 0.35;
-
-    private static final double BLAST_BOOST = 1.2;
-    private static final long BLAST_BOOST_MS = 1_000;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgPause = settings.createGroup("Pause");
@@ -76,13 +71,6 @@ public class SpeedPlus extends Module {
         .build()
     );
 
-    private final Setting<Boolean> blastBoost = sgGeneral.add(new BoolSetting.Builder()
-        .name("blast-boost")
-        .description("Moves 20% faster for a second after an explosion knocks you, since the server expects the extra speed then.")
-        .defaultValue(false)
-        .build()
-    );
-
     private final Setting<Integer> liquidGrace = sgPause.add(new IntSetting.Builder()
         .name("liquid-grace")
         .description("Ticks to wait after leaving water or lava, so climbing out of the water is not pulled back.")
@@ -117,7 +105,6 @@ public class SpeedPlus extends Module {
 
     private int stage;
     private double speed;
-    private volatile long boostUntil;
     private double distance;
     private int liquidTicks;
     private int pauseTicks;
@@ -157,10 +144,6 @@ public class SpeedPlus extends Module {
 
     @EventHandler
     private void onReceive(PacketEvent.Receive event) {
-        if (event.packet instanceof ExplosionS2CPacket packet && packet.playerKnockback().isPresent() && packet.playerKnockback().get().horizontalLengthSquared() > 1.0E-4) {
-            boostUntil = Util.getMeasuringTimeMs() + BLAST_BOOST_MS;
-            return;
-        }
         if (!(event.packet instanceof PlayerPositionLookS2CPacket)) return;
         mc.execute(() -> {
             reset();
@@ -185,7 +168,7 @@ public class SpeedPlus extends Module {
         }
 
         if (mode.get() == Mode.Vanilla) {
-            double flat = vanillaSpeed.get() / 20.0 * effectScale() * boost();
+            double flat = vanillaSpeed.get() / 20.0 * effectScale();
             setHorizontal(event, flat, input);
             return;
         }
@@ -213,7 +196,7 @@ public class SpeedPlus extends Module {
         }
 
         speed = Math.max(speed, base());
-        setHorizontal(event, speed * boost(), input);
+        setHorizontal(event, speed, input);
     }
 
     private String pauseReason() {
@@ -286,10 +269,6 @@ public class SpeedPlus extends Module {
         StatusEffectInstance boost = mc.player.getStatusEffect(StatusEffects.JUMP_BOOST);
         if (boost != null) height += (boost.getAmplifier() + 1) * 0.1f;
         return height;
-    }
-
-    private double boost() {
-        return blastBoost.get() && Util.getMeasuringTimeMs() < boostUntil ? BLAST_BOOST : 1;
     }
 
     private void reset() {
