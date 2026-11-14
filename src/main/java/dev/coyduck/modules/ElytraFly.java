@@ -169,6 +169,13 @@ public class ElytraFly extends Module {
         .build()
     );
 
+    private final Setting<Boolean> overdrive = sgSpeed.add(new BoolSetting.Builder()
+        .name("overdrive")
+        .description("Runs extra flight ticks while you speed up, each with its own small step, so you reach max speed far sooner. Never moves you further per tick than max speed.")
+        .defaultValue(true)
+        .build()
+    );
+
     private final Setting<Boolean> rubberbandCap = sgSpeed.add(new BoolSetting.Builder()
         .name("rubberband-cap")
         .description("Every pull back winds the speed back a little. After 3 pull backs within 3 seconds at or above the cap speed, holds you at the cap speed for 10 seconds.")
@@ -382,6 +389,14 @@ public class ElytraFly extends Module {
         .build()
     );
 
+    private final Setting<Keybind> overdriveKey = sgKeybinds.add(new KeybindSetting.Builder()
+        .name("overdrive-key")
+        .description("Toggles overdrive.")
+        .defaultValue(Keybind.none())
+        .action(() -> flip(overdrive, "Overdrive"))
+        .build()
+    );
+
     private final Setting<Keybind> autopilotKey = sgKeybinds.add(new KeybindSetting.Builder()
         .name("autopilot-key")
         .description("Toggles autopilot.")
@@ -404,6 +419,8 @@ public class ElytraFly extends Module {
     private static final int CAP_TICKS = 200;
     private static final int BUILDING_EASE = 5;
     private static final long REPLENISH_EVERY = 500;
+    private static final int OVERDRIVE_TICKS = 49;
+    private static final double OVERDRIVE_TOP = 0.995;
 
     private static Vec3d pilot;
     private long replacedAt;
@@ -421,6 +438,10 @@ public class ElytraFly extends Module {
     private int capTicks;
     private double capLimit;
     private final ArrayDeque<Long> pullBacks = new ArrayDeque<>();
+    private boolean keyed;
+    private boolean vanillaFlight;
+    private boolean extraTick;
+    private boolean overdriveSpent;
 
     private boolean buildingEngaged;
     private int buildingTicks;
@@ -454,6 +475,9 @@ public class ElytraFly extends Module {
         resetRamp();
         lastSpeed = 0;
         capTicks = 0;
+        overdriveSpent = false;
+        keyed = false;
+        vanillaFlight = false;
         pullBacks.clear();
         buildingEngaged = false;
         waitingChunks = false;
@@ -504,7 +528,52 @@ public class ElytraFly extends Module {
 
     @EventHandler
     private void onTickPost(TickEvent.Post event) {
+        if (overdrive.get()) overdrive();
+        else overdriveSpent = false;
         pilot = null;
+    }
+
+    private void overdrive() {
+        if (mc.player == null || mc.getNetworkHandler() == null || mc.isPaused()) return;
+        if (!mc.player.isGliding()) {
+            overdriveSpent = false;
+            return;
+        }
+        double now = vanillaFlight ? lastSpeed : ramp;
+        if (now <= minSpeed.get()) overdriveSpent = false;
+
+        double budget = speedCap();
+        double moved = lastSpeed;
+        for (int i = 0; i < OVERDRIVE_TICKS; i++) {
+            if (stalled()) break;
+            double current = vanillaFlight ? lastSpeed : ramp;
+            if (moved + Math.min(current + gain(current), budget) > budget) break;
+
+            double fall = mc.player.getVelocity().y;
+            extraTick = true;
+            try {
+                mc.player.age++;
+                mc.player.tick();
+            } finally {
+                extraTick = false;
+            }
+            Vec3d after = mc.player.getVelocity();
+            mc.player.setVelocity(after.x, fall, after.z);
+            moved += lastSpeed;
+        }
+    }
+
+    private boolean stalled() {
+        if (pilot != null || !mc.player.isAlive() || !mc.player.isGliding() || mc.player.isUsingItem() || inFluid()) return true;
+        if (waitingChunks || buildingEngaged || capTicks > 0 || overdriveSpent) return true;
+        double top = speedCap() * OVERDRIVE_TOP;
+        if (vanillaFlight) {
+            if (lastSpeed > 1.0E-4 && lastSpeed < top) return false;
+        } else if (keyed && rampDelay >= RAMP_DELAY && ramp < top) {
+            return false;
+        }
+        if ((vanillaFlight ? lastSpeed : ramp) >= maxSpeed.get() * OVERDRIVE_TOP) overdriveSpent = true;
+        return true;
     }
 
     @EventHandler
@@ -604,6 +673,8 @@ public class ElytraFly extends Module {
 
         boolean piloted = pilot != null;
         boolean vanilla = !piloted && !fluid && (bypass.get() || inCobweb());
+        vanillaFlight = vanilla;
+        keyed = !piloted && !vanilla && (forward != 0 || strafe != 0);
 
         double x = 0;
         double z = 0;
@@ -641,7 +712,7 @@ public class ElytraFly extends Module {
             resetRamp();
         }
 
-        y = MathHelper.clamp(y, -MAX_VERTICAL, MAX_VERTICAL);
+        y = extraTick ? 0 : MathHelper.clamp(y, -MAX_VERTICAL, MAX_VERTICAL);
         if (!piloted && antiSlam.get() && y < -slamSpeed.get()) y = -landing(-y);
         if (!piloted && building.get()) {
             double[] eased = building(x, y, z);
@@ -700,6 +771,8 @@ public class ElytraFly extends Module {
     }
 
     private void idle() {
+        keyed = false;
+        vanillaFlight = false;
         resetRamp();
         lastSpeed = 0;
         buildingEngaged = false;
