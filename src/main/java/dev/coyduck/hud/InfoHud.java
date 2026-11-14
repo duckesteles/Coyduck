@@ -2,6 +2,7 @@ package dev.coyduck.hud;
 
 import dev.coyduck.managers.LatencyManager;
 import meteordevelopment.meteorclient.settings.BoolSetting;
+import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.hud.HudElement;
@@ -10,6 +11,7 @@ import meteordevelopment.meteorclient.systems.hud.HudRenderer;
 import meteordevelopment.meteorclient.utils.Utils;
 import meteordevelopment.meteorclient.utils.world.TickRate;
 import net.minecraft.client.network.ServerInfo;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
 
@@ -30,7 +32,16 @@ public class InfoHud extends HudElement {
     private final Setting<Boolean> tps = add("tps", "Server ticks per second.");
     private final Setting<Boolean> speed = add("speed", "Your speed in blocks per second.");
     private final Setting<Boolean> coords = add("coords", "Your coordinates, with the other dimension's next to them.");
-    private final Setting<Boolean> facing = add("facing", "The direction you are looking at.", false);
+    private final Setting<Integer> hideBeyond = sgGeneral.add(new IntSetting.Builder()
+        .name("hide-coords-beyond")
+        .description("Hides your coordinates while you are further than this from 0 0, so screenshots and streams don't give away a base. 0 never hides them.")
+        .defaultValue(0)
+        .range(0, 30_000_000)
+        .sliderRange(0, 100_000)
+        .visible(coords::get)
+        .build()
+    );
+    private final Setting<Boolean> facing = add("facing", "The direction you are looking at, with the axis it runs along.", false);
     private final Setting<Boolean> biome = add("biome", "The biome you are in.", false);
     private final Setting<Boolean> dimension = add("dimension", "The dimension you are in.", false);
     private final Setting<Boolean> day = add("day", "The in-game day and time.", false);
@@ -75,12 +86,19 @@ public class InfoHud extends HudElement {
             double scale = nether ? 8 : 1 / 8.0;
             String main = String.format(Locale.ROOT, "%.0f %.0f %.0f", px, mc.player.getY(), pz);
             String other = String.format(Locale.ROOT, "%.0f %.0f", px * scale, pz * scale);
-            lines.add(new Line("XYZ", main, CoyHud.TEXT));
-            if (mc.world.getRegistryKey() != World.END) lines.add(new Line(nether ? "Overworld" : "Nether", other, CoyHud.SUBTLE));
+            int limit = hideBeyond.get();
+            if (limit > 0 && Math.max(Math.abs(px), Math.abs(pz)) > limit) {
+                lines.add(new Line("XYZ", "hidden", CoyHud.MUTED));
+            } else {
+                lines.add(new Line("XYZ", main, CoyHud.TEXT));
+                if (mc.world.getRegistryKey() != World.END) lines.add(new Line(nether ? "Overworld" : "Nether", other, CoyHud.SUBTLE));
+            }
         }
         if (facing.get() && mc.player != null) {
             float yaw = MathHelper.wrapDegrees(mc.player.getYaw());
-            lines.add(new Line("Facing", capitalize(mc.player.getHorizontalFacing().asString()) + String.format(Locale.ROOT, " %.0f°", yaw), CoyHud.TEXT));
+            Direction direction = mc.player.getHorizontalFacing();
+            String axis = (direction.getDirection() == Direction.AxisDirection.POSITIVE ? "+" : "-") + direction.getAxis().asString().toUpperCase(Locale.ROOT);
+            lines.add(new Line("Facing", capitalize(direction.asString()) + " " + axis + String.format(Locale.ROOT, " %.0f°", yaw), CoyHud.TEXT));
         }
         if (biome.get() && mc.player != null && mc.world != null) {
             String name = mc.world.getBiome(mc.player.getBlockPos()).getKey().map(key -> key.getValue().getPath()).orElse("unknown");

@@ -1,7 +1,14 @@
 package dev.coyduck.hud;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.modules.AutoLogin;
+import dev.coyduck.modules.ClickGui;
+import dev.coyduck.modules.UpdateChecker;
 import meteordevelopment.meteorclient.settings.BoolSetting;
+import meteordevelopment.meteorclient.settings.DoubleSetting;
+import meteordevelopment.meteorclient.settings.EnumSetting;
+import meteordevelopment.meteorclient.settings.IntSetting;
+import meteordevelopment.meteorclient.settings.ModuleListSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.config.Config;
@@ -19,14 +26,27 @@ import java.util.List;
 import java.util.Map;
 
 public class ModuleList extends HudElement {
-    public static final HudElementInfo<ModuleList> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-modules", "Enabled modules, sliding in and out.", ModuleList::new);
+    public static final HudElementInfo<ModuleList> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-modules", "Enabled modules in a compact list.", ModuleList::new);
+
+    public enum Sort {
+        Length,
+        Alphabetical
+    }
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
+    private final SettingGroup sgLayout = settings.createGroup("Layout");
 
     private final Setting<Boolean> onlyCoyduck = sgGeneral.add(new BoolSetting.Builder()
         .name("only-coyduck")
         .description("Lists only Coyduck modules.")
         .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<List<Module>> hidden = sgGeneral.add(new ModuleListSetting.Builder()
+        .name("hidden")
+        .description("Modules never listed, for ones that are always on like the menu or the update checker.")
+        .defaultValue(ClickGui.class, UpdateChecker.class, AutoLogin.class)
         .build()
     );
 
@@ -37,9 +57,60 @@ public class ModuleList extends HudElement {
         .build()
     );
 
+    private final Setting<Integer> infoLength = sgGeneral.add(new IntSetting.Builder()
+        .name("info-length")
+        .description("Longest info text in characters before it gets cut short.")
+        .defaultValue(12)
+        .range(1, 64)
+        .sliderRange(4, 32)
+        .visible(info::get)
+        .build()
+    );
+
+    private final Setting<Sort> sort = sgLayout.add(new EnumSetting.Builder<Sort>()
+        .name("sort")
+        .description("Longest first, or by name.")
+        .defaultValue(Sort.Length)
+        .build()
+    );
+
+    private final Setting<Double> scale = sgLayout.add(new DoubleSetting.Builder()
+        .name("scale")
+        .description("Text size.")
+        .defaultValue(1)
+        .range(0.5, 2)
+        .sliderRange(0.5, 1.5)
+        .build()
+    );
+
+    private final Setting<Boolean> compact = sgLayout.add(new BoolSetting.Builder()
+        .name("compact")
+        .description("Packs the rows tighter.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Integer> maxRows = sgLayout.add(new IntSetting.Builder()
+        .name("max-rows")
+        .description("Most modules listed. The rest are shown as a count.")
+        .defaultValue(14)
+        .range(1, 100)
+        .sliderRange(4, 40)
+        .build()
+    );
+
+    private final Setting<Boolean> slide = sgLayout.add(new BoolSetting.Builder()
+        .name("slide")
+        .description("Slides modules in and out instead of showing them at once.")
+        .defaultValue(true)
+        .build()
+    );
+
     private final CoyHud.Background background = new CoyHud.Background(settings);
 
     private final Map<Module, Double> shown = new HashMap<>();
+    private final Map<Module, String> extras = new HashMap<>();
+    private final Map<Module, Double> widths = new HashMap<>();
     private long last;
     private double shownWidth = -1;
 
@@ -52,76 +123,97 @@ public class ModuleList extends HudElement {
         long now = Util.getMeasuringTimeMs();
         double delta = last == 0 ? 0 : Math.min((now - last) / 1000.0, 0.1);
         last = now;
+        double s = scale.get();
+        List<Module> hide = hidden.get();
 
         for (Module module : Modules.get().getAll()) {
-            boolean wanted = module.isActive() && !Config.get().hiddenModules.get().contains(module)
+            boolean wanted = module.isActive() && !hide.contains(module) && !Config.get().hiddenModules.get().contains(module)
                 && (!onlyCoyduck.get() || module.category == Coyduck.CATEGORY);
             double value = shown.getOrDefault(module, 0.0);
-            value = CoyHud.approach(value, wanted ? 1 : 0, delta, 12);
+            value = slide.get() ? CoyHud.approach(value, wanted ? 1 : 0, delta, 12) : wanted ? 1 : 0;
             if (!wanted && value < 0.01) shown.remove(module);
             else shown.put(module, value);
         }
 
         List<Module> list = new ArrayList<>(shown.keySet());
-        Map<Module, Double> widths = new HashMap<>();
-        for (Module module : list) widths.put(module, rowWidth(r, module));
-        list.sort((a, b) -> Double.compare(widths.get(b), widths.get(a)));
+        extras.clear();
+        widths.clear();
+        for (Module module : list) {
+            String extra = info.get() ? cut(module.getInfoString()) : null;
+            extras.put(module, extra);
+            widths.put(module, rowWidth(r, module, extra, s));
+        }
+        if (sort.get() == Sort.Length) list.sort((a, b) -> Double.compare(widths.get(b), widths.get(a)));
+        else list.sort((a, b) -> a.title.compareToIgnoreCase(b.title));
 
-        double rowHeight = r.textHeight() + 5;
-        double widest = 0;
-        double total = 0;
+        int overflow = Math.max(0, list.size() - maxRows.get());
+        if (overflow > 0) list = list.subList(0, maxRows.get());
+        String more = overflow > 0 ? "+" + overflow + " more" : null;
+
+        double textHeight = r.textHeight(false, s);
+        double rowHeight = textHeight + (compact.get() ? 2 : 5) * s;
+        double widest = more == null ? 0 : r.textWidth(more, false, s) + 12 * s;
+        double total = more == null ? 0 : rowHeight;
         for (Module module : list) {
             widest = Math.max(widest, widths.get(module));
             total += rowHeight * shown.get(module);
         }
         if (list.isEmpty() && isInEditor()) {
-            widest = r.textWidth("Modules") + 14;
+            widest = r.textWidth("Modules", false, s) + 14 * s;
             total = rowHeight;
         }
-        double target = Math.max(widest, 40);
-        shownWidth = shownWidth < 0 ? target : CoyHud.approach(shownWidth, target, delta, 14);
+        double target = Math.max(widest, 30 * s);
+        shownWidth = shownWidth < 0 || !slide.get() ? target : CoyHud.approach(shownWidth, target, delta, 14);
         if (Math.abs(shownWidth - target) < 0.5) shownWidth = target;
         setSize(Math.max(shownWidth, target), Math.max(total, rowHeight));
         int x = box.getRenderX();
         int y = box.getRenderY();
 
         boolean right = getX() + getWidth() / 2.0 > Utils.getWindowWidth() / 2.0;
-        double rowY = y;
+        double alpha = background.alpha();
         if (list.isEmpty() && isInEditor()) {
-            CoyHud.panel(r, x, y, getWidth(), rowHeight, background.alpha());
-            r.text("Modules", x + 7, y + 3, CoyHud.color(CoyHud.SUBTLE), false);
+            CoyHud.panel(r, x, y, getWidth(), rowHeight, alpha);
+            r.text("Modules", x + 7 * s, y + (rowHeight - textHeight) / 2, CoyHud.color(CoyHud.SUBTLE), false, s);
             return;
         }
 
+        double rowY = y;
         for (Module module : list) {
             double t = shown.get(module);
-            double w = rowWidth(r, module);
+            double w = widths.get(module);
             double h = rowHeight * t;
-            double slide = (1 - t) * (w * 0.6);
-            double rowX = right ? x + getWidth() - w + slide : x - slide;
+            double offset = (1 - t) * (w * 0.6);
+            double rowX = right ? x + getWidth() - w + offset : x - offset;
 
-            double alpha = background.alpha();
             if (alpha > 0) r.quad(rowX, rowY, w, h, CoyHud.color(CoyHud.BACKGROUND | 0xFF000000, t * alpha));
-            double barX = right ? rowX + w - 2 : rowX;
-            r.quad(barX, rowY, 2, h, CoyHud.color(CoyHud.accent(), t));
+            r.quad(right ? rowX + w - 2 : rowX, rowY, 2, h, CoyHud.color(CoyHud.accent(), t));
 
             if (t > 0.5) {
-                double tx = rowX + (right ? 5 : 7);
-                double ty = rowY + (h - r.textHeight()) / 2;
-                r.text(module.title, tx, ty, CoyHud.color(CoyHud.TEXT, t), false);
-                String extra = info.get() ? module.getInfoString() : null;
-                if (extra != null && !extra.isEmpty()) {
-                    r.text(extra, tx + r.textWidth(module.title) + 4, ty, CoyHud.color(CoyHud.SUBTLE, t), false);
-                }
+                double tx = rowX + (right ? 5 : 6) * s;
+                double ty = rowY + (h - textHeight) / 2;
+                r.text(module.title, tx, ty, CoyHud.color(CoyHud.TEXT, t), false, s);
+                String extra = extras.get(module);
+                if (extra != null) r.text(extra, tx + r.textWidth(module.title, false, s) + 4 * s, ty, CoyHud.color(CoyHud.SUBTLE, t), false, s);
             }
             rowY += h;
         }
+        if (more != null) {
+            double w = r.textWidth(more, false, s) + 12 * s;
+            double rowX = right ? x + getWidth() - w : x;
+            if (alpha > 0) r.quad(rowX, rowY, w, rowHeight, CoyHud.color(CoyHud.BACKGROUND | 0xFF000000, alpha));
+            r.text(more, rowX + 6 * s, rowY + (rowHeight - textHeight) / 2, CoyHud.color(CoyHud.MUTED), false, s);
+        }
     }
 
-    private double rowWidth(HudRenderer r, Module module) {
-        double w = r.textWidth(module.title) + 12;
-        String extra = info.get() ? module.getInfoString() : null;
-        if (extra != null && !extra.isEmpty()) w += r.textWidth(extra) + 4;
+    private String cut(String extra) {
+        if (extra == null || extra.isBlank()) return null;
+        int max = infoLength.get();
+        return extra.length() <= max ? extra : extra.substring(0, Math.max(1, max - 1)).stripTrailing() + "..";
+    }
+
+    private double rowWidth(HudRenderer r, Module module, String extra, double s) {
+        double w = r.textWidth(module.title, false, s) + 11 * s;
+        if (extra != null) w += r.textWidth(extra, false, s) + 4 * s;
         return w;
     }
 }

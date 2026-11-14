@@ -1,5 +1,6 @@
 package dev.coyduck.hud;
 
+import dev.coyduck.managers.PopTracker;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;
@@ -13,8 +14,10 @@ import meteordevelopment.meteorclient.systems.hud.HudRenderer;
 import meteordevelopment.meteorclient.utils.Utils;
 import net.minecraft.client.gui.PlayerSkinDrawer;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.SkinTextures;
+import net.minecraft.item.Items;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -63,6 +66,34 @@ public class PlayersHud extends HudElement {
         .build()
     );
 
+    private final Setting<Boolean> pops = sgGeneral.add(new BoolSetting.Builder()
+        .name("pops")
+        .description("Shows how many totems each player popped.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> elytra = sgGeneral.add(new BoolSetting.Builder()
+        .name("elytra")
+        .description("Marks players wearing an elytra.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> bots = sgGeneral.add(new BoolSetting.Builder()
+        .name("hide-bots")
+        .description("Leaves out players missing from the tab list, which are usually fake.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> nakeds = sgGeneral.add(new BoolSetting.Builder()
+        .name("hide-nakeds")
+        .description("Leaves out players wearing no armor.")
+        .defaultValue(false)
+        .build()
+    );
+
     private final Setting<Double> range = sgGeneral.add(new DoubleSetting.Builder()
         .name("range")
         .description("Only players closer than this.")
@@ -81,7 +112,9 @@ public class PlayersHud extends HudElement {
         .build()
     );
 
-    private record Row(PlayerEntity player, String name, String distance, String health, int healthColor, boolean friend) {}
+    private record Part(String text, int color) {}
+
+    private record Row(PlayerEntity player, String name, List<Part> parts, boolean friend) {}
 
     public PlayersHud() {
         super(INFO);
@@ -100,10 +133,7 @@ public class PlayersHud extends HudElement {
         double sideWidth = 0;
         for (Row row : rows) {
             nameWidth = Math.max(nameWidth, r.textWidth(row.name));
-            double side = 0;
-            if (row.health != null) side += r.textWidth(row.health);
-            if (row.distance != null) side += (side > 0 ? 6 : 0) + r.textWidth(row.distance);
-            sideWidth = Math.max(sideWidth, side);
+            sideWidth = Math.max(sideWidth, partsWidth(r, row.parts));
         }
         if (rows.isEmpty()) nameWidth = r.textWidth("No players");
 
@@ -135,26 +165,21 @@ public class PlayersHud extends HudElement {
             r.text(row.name, nameX, rowY, CoyHud.color(row.friend ? CoyHud.GOOD : CoyHud.TEXT), false);
 
             double sideX = right ? x + w - pad : x + pad + head + headGap + nameWidth + gap;
-            List<String> parts = new ArrayList<>();
-            List<Integer> colors = new ArrayList<>();
-            if (row.health != null) {
-                parts.add(row.health);
-                colors.add(row.healthColor);
-            }
-            if (row.distance != null) {
-                parts.add(row.distance);
-                colors.add(CoyHud.SUBTLE);
-            }
-            double total = 0;
-            for (int i = 0; i < parts.size(); i++) total += (i > 0 ? 6 : 0) + r.textWidth(parts.get(i));
-            double px = right ? sideX - total : sideX;
-            for (int i = 0; i < parts.size(); i++) {
+            double px = right ? sideX - partsWidth(r, row.parts) : sideX;
+            for (int i = 0; i < row.parts.size(); i++) {
+                Part part = row.parts.get(i);
                 if (i > 0) px += 6;
-                r.text(parts.get(i), px, rowY, CoyHud.color(colors.get(i)), false);
-                px += r.textWidth(parts.get(i));
+                r.text(part.text, px, rowY, CoyHud.color(part.color), false);
+                px += r.textWidth(part.text);
             }
             rowY += line;
         }
+    }
+
+    private static double partsWidth(HudRenderer r, List<Part> parts) {
+        double total = 0;
+        for (int i = 0; i < parts.size(); i++) total += (i > 0 ? 6 : 0) + r.textWidth(parts.get(i).text);
+        return total;
     }
 
     private static void drawHead(HudRenderer r, SkinTextures skin, int x, int y, int size) {
@@ -178,22 +203,32 @@ public class PlayersHud extends HudElement {
             boolean friend = Friends.get().isFriend(player);
             if (show.get() == Show.Friends && !friend) continue;
             if (show.get() == Show.Others && friend) continue;
+            if (bots.get() && mc.getNetworkHandler() != null && mc.getNetworkHandler().getPlayerListEntry(player.getUuid()) == null) continue;
+            if (nakeds.get() && naked(player)) continue;
             players.add(player);
         }
         players.sort(Comparator.comparingDouble(player -> player.squaredDistanceTo(mc.player)));
 
         for (PlayerEntity player : players) {
             if (rows.size() >= limit.get()) break;
-            String dist = distance.get() ? String.format(Locale.ROOT, "%.0fm", Math.sqrt(player.squaredDistanceTo(mc.player))) : null;
-            String hp = null;
-            int hpColor = CoyHud.TEXT;
+            List<Part> parts = new ArrayList<>();
+            if (elytra.get() && player.getEquippedStack(EquipmentSlot.CHEST).isOf(Items.ELYTRA)) parts.add(new Part("elytra", CoyHud.SUBTLE));
+            int popped = pops.get() ? PopTracker.get().pops(player) : 0;
+            if (popped > 0) parts.add(new Part(popped + (popped == 1 ? " pop" : " pops"), CoyHud.WARN));
             if (health.get()) {
                 float total = player.getHealth() + player.getAbsorptionAmount();
-                hp = String.format(Locale.ROOT, "%.0f", total);
-                hpColor = CoyHud.health(Math.min(1, player.getHealth() / Math.max(1, player.getMaxHealth())));
+                parts.add(new Part(String.format(Locale.ROOT, "%.0f", total), CoyHud.health(Math.min(1, player.getHealth() / Math.max(1, player.getMaxHealth())))));
             }
-            rows.add(new Row(player, player.getName().getString(), dist, hp, hpColor, Friends.get().isFriend(player)));
+            if (distance.get()) parts.add(new Part(String.format(Locale.ROOT, "%.0fm", Math.sqrt(player.squaredDistanceTo(mc.player))), CoyHud.SUBTLE));
+            rows.add(new Row(player, player.getName().getString(), parts, Friends.get().isFriend(player)));
         }
         return rows;
+    }
+
+    private static boolean naked(PlayerEntity player) {
+        for (EquipmentSlot slot : new EquipmentSlot[] {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
+            if (!player.getEquippedStack(slot).isEmpty()) return false;
+        }
+        return true;
     }
 }
