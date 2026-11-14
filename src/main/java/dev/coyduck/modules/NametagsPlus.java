@@ -48,7 +48,6 @@ import org.joml.Vector3d;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 public class NametagsPlus extends Module {
@@ -165,7 +164,7 @@ public class NametagsPlus extends Module {
 
     private final Setting<Boolean> durability = sgInfo.add(new BoolSetting.Builder()
         .name("durability")
-        .description("Durability left in percent over each item.")
+        .description("A durability bar under each item.")
         .defaultValue(true)
         .visible(items::get)
         .build()
@@ -334,13 +333,7 @@ public class NametagsPlus extends Module {
         double x = -total / 2;
         double y = bottom - size - barGap;
 
-        text.begin(0.75, false, true);
-        double small = text.getHeight(shadow);
-        text.end();
         double top = y;
-        boolean anyDurability = false;
-        for (ItemStack stack : shown) anyDurability |= durability.get() && stack.isDamageable();
-        if (anyDurability) top -= small + 1;
 
         for (ItemStack stack : shown) {
             RenderUtils.drawItem(event.drawContext, stack, (int) x, (int) y, 2, false, null, false);
@@ -352,10 +345,6 @@ public class NametagsPlus extends Module {
                 Renderer2D.COLOR.quad(x + 2, y + size + 1, size - 4, 3, BAR_BACKGROUND);
                 Renderer2D.COLOR.quad(x + 2, y + size + 1, (size - 4) * left, 2, color);
                 Renderer2D.COLOR.render();
-                String label = String.format(Locale.ROOT, "%d%%", Math.round(left * 100));
-                text.begin(0.75, false, true);
-                text.render(label, x + (size - text.getWidth(label, shadow)) / 2, y - small - 1, color, shadow);
-                text.end();
             }
 
             text.begin(0.5, false, true);
