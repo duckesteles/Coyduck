@@ -73,7 +73,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> wallGuard = sgGeneral.add(new BoolSetting.Builder()
         .name("wall-guard")
-        .description("Slows you down near walls and shortens a move that would slam into one, so you never take elytra crash damage. Also stops at chunks that are not loaded yet.")
+        .description("Shortens a move that would slam into a wall and stops at chunks that are not loaded yet. In ultra it also slows you down near walls, so you never take elytra crash damage.")
         .defaultValue(true)
         .build()
     );
@@ -225,8 +225,9 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> antiSlam = sgLanding.add(new BoolSetting.Builder()
         .name("anti-slam")
-        .description("Slows the descent near the ground so landing never hurts.")
+        .description("Ultra only. Slows the descent near the ground so landing never hurts.")
         .defaultValue(true)
+        .visible(this::ultra)
         .build()
     );
 
@@ -236,7 +237,7 @@ public class ElytraFly extends Module {
         .defaultValue(10)
         .range(1, 30)
         .sliderRange(1, 30)
-        .visible(antiSlam::get)
+        .visible(() -> ultra() && antiSlam.get())
         .build()
     );
 
@@ -246,7 +247,7 @@ public class ElytraFly extends Module {
         .defaultValue(0.5)
         .range(0, 10)
         .sliderRange(0, 5)
-        .visible(antiSlam::get)
+        .visible(() -> ultra() && antiSlam.get())
         .build()
     );
 
@@ -256,7 +257,7 @@ public class ElytraFly extends Module {
         .defaultValue(0.45)
         .range(0.05, MAX_VERTICAL)
         .sliderRange(0.05, 1)
-        .visible(antiSlam::get)
+        .visible(() -> ultra() && antiSlam.get())
         .build()
     );
 
@@ -755,7 +756,7 @@ public class ElytraFly extends Module {
         }
 
         y = extraTick ? 0 : MathHelper.clamp(y, -MAX_VERTICAL, MAX_VERTICAL);
-        if (!piloted && antiSlam.get() && y < -slamSpeed.get()) y = -landing(-y);
+        if (!piloted && ultra() && antiSlam.get() && y < -slamSpeed.get()) y = -landing(-y);
         if (!piloted && building.get()) {
             double[] eased = building(x, y, z);
             x = eased[0];
@@ -783,7 +784,7 @@ public class ElytraFly extends Module {
                 held = true;
             } else {
                 double free = freeScale(x / intended * reach, z / intended * reach, y) * reach;
-                if (free < reach) {
+                if (free < reach && ultra()) {
                     double cap = Math.sqrt(WALL_SLOW * free);
                     if (cap < intended) {
                         x *= cap / intended;
