@@ -20,6 +20,8 @@ import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.managers.MotionTracker;
 import dev.coyduck.managers.PopTracker;
 import dev.coyduck.managers.RotationManager;
+import dev.coyduck.modules.LogoutSpots;
+import dev.coyduck.modules.PhaseEsp;
 import dev.coyduck.modules.AirMine;
 import dev.coyduck.modules.AntiPearl;
 import dev.coyduck.modules.AutoAnchor;
@@ -147,6 +149,8 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new AntiPearl());
         Modules.get().add(new PacketMinePlus());
         Modules.get().add(new NametagsPlus());
+        Modules.get().add(new PhaseEsp());
+        Modules.get().add(new LogoutSpots());
 
         Commands.add(new PilotCommand());
     }
