@@ -24,12 +24,18 @@ public final class MiningTracker {
     private static final long LIFETIME = 5_000;
     private static final long SUPERSEDED = 1_000;
     private static final int PRIMED = 10;
+    private static final long HIDDEN_WINDOW = 400;
+    private static final long HIDDEN_LIFETIME = 15_000;
+    private static final double BEST_SPEED = 35;
     private static final int MAX_STAGE = 9;
     private static final int ABORTED = 255;
 
     public record Mining(int breaker, int stage, long time, long first, int raw) {}
 
+    private record Hidden(int breaker, long start, long needed) {}
+
     private final Long2ObjectOpenHashMap<Mining> mining = new Long2ObjectOpenHashMap<>();
+    private final Long2ObjectOpenHashMap<Hidden> hidden = new Long2ObjectOpenHashMap<>();
     private final Long2LongOpenHashMap broken = new Long2LongOpenHashMap();
 
     private MiningTracker() {}
@@ -39,16 +45,35 @@ public final class MiningTracker {
     }
 
     public Mining mining(BlockPos pos) {
-        return mining.get(pos.asLong());
+        long key = pos.asLong();
+        Mining entry = mining.get(key);
+        return entry != null ? entry : estimate(hidden.get(key));
     }
 
     public void forEach(java.util.function.BiConsumer<BlockPos, Mining> action) {
         mining.long2ObjectEntrySet().forEach(entry -> action.accept(BlockPos.fromLong(entry.getLongKey()), entry.getValue()));
+        hidden.long2ObjectEntrySet().forEach(entry -> {
+            if (!mining.containsKey(entry.getLongKey())) action.accept(BlockPos.fromLong(entry.getLongKey()), estimate(entry.getValue()));
+        });
     }
 
     public int stage(BlockPos pos) {
-        Mining entry = mining.get(pos.asLong());
+        Mining entry = mining(pos);
         return entry == null ? -1 : entry.stage;
+    }
+
+    private static Mining estimate(Hidden entry) {
+        if (entry == null) return null;
+        long now = Util.getMeasuringTimeMs();
+        int stage = (int) Math.min(MAX_STAGE, 10 * (now - entry.start) / Math.max(1, entry.needed));
+        return new Mining(entry.breaker, stage, now, entry.start, -1);
+    }
+
+    private long needed(BlockPos pos) {
+        BlockState state = mc.world.getBlockState(pos);
+        float hardness = state.getHardness(mc.world, pos);
+        if (hardness <= 0) return 0;
+        return (long) Math.ceil(hardness * 30 / BEST_SPEED) * 50;
     }
 
     public boolean wasBroken(BlockPos pos, long within) {
@@ -77,12 +102,17 @@ public final class MiningTracker {
         long now = Util.getMeasuringTimeMs();
         Mining previous = mining.get(key);
         boolean same = previous != null && previous.breaker == breaker;
+        if (!hidden.isEmpty() && stage >= 0 && stage < ABORTED) hidden.long2ObjectEntrySet().removeIf(entry -> entry.getValue().breaker == breaker);
 
         if (same && previous.raw >= PRIMED && (stage == ((previous.raw + 1) & 0xFF) || stage < previous.raw && stage != ABORTED)) {
             mining.put(key, new Mining(breaker, MAX_STAGE, now, previous.first, stage));
             return;
         }
         if (stage < 0 || stage >= ABORTED) {
+            if (same && previous.raw <= 1 && now - previous.first <= HIDDEN_WINDOW && mc.world != null) {
+                long needed = needed(packet.getPos());
+                if (needed > 0) hidden.put(key, new Hidden(breaker, previous.first, needed));
+            }
             if (previous == null || same) mining.remove(key);
             return;
         }
@@ -93,6 +123,7 @@ public final class MiningTracker {
     private void onTick(TickEvent.Pre event) {
         long now = Util.getMeasuringTimeMs();
         if (!broken.isEmpty()) broken.long2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > LIFETIME);
+        if (!hidden.isEmpty()) hidden.values().removeIf(entry -> now - entry.start > HIDDEN_LIFETIME || mc.world != null && mc.world.getEntityById(entry.breaker) == null);
         if (mining.isEmpty()) return;
         mining.values().removeIf(entry -> now - entry.time > LIFETIME || mc.world != null && mc.world.getEntityById(entry.breaker) == null);
 
@@ -113,12 +144,16 @@ public final class MiningTracker {
 
     private void reset() {
         mining.clear();
+        hidden.clear();
         broken.clear();
     }
 
     private void track(BlockPos pos, BlockState state) {
         long key = pos.asLong();
-        if (mining.containsKey(key) && state.getBlock() != mc.world.getBlockState(pos).getBlock()) mining.remove(key);
+        if (state.getBlock() != mc.world.getBlockState(pos).getBlock()) {
+            mining.remove(key);
+            hidden.remove(key);
+        }
         if (!state.isReplaceable() || InteractionManager.get().isPending(pos)) return;
         if (mc.world.getBlockState(pos).isReplaceable()) return;
 
