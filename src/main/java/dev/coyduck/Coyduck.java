@@ -21,6 +21,7 @@ import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.managers.MotionTracker;
 import dev.coyduck.managers.PopTracker;
 import dev.coyduck.managers.RotationManager;
+import dev.coyduck.modules.PortalGodMode;
 import dev.coyduck.modules.Regear;
 import dev.coyduck.modules.AntiRegear;
 import dev.coyduck.modules.LogoutSpots;
@@ -156,6 +157,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new LogoutSpots());
         Modules.get().add(new AntiRegear());
         Modules.get().add(new Regear());
+        Modules.get().add(new PortalGodMode());
 
         Commands.add(new PilotCommand());
         Commands.add(new KitCommand());
