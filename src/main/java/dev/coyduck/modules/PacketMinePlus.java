@@ -50,6 +50,13 @@ public class PacketMinePlus extends Module implements MiningManager.HidesMining,
         .build()
     );
 
+    private final Setting<Boolean> doubleMine = sgGeneral.add(new BoolSetting.Builder()
+        .name("double-mine")
+        .description("Clicking a second block while the first is still mining keeps the first going in the background, so both break in about the time of one. The 6b6t anticheat may cancel the background block, test it.")
+        .defaultValue(false)
+        .build()
+    );
+
     private final Setting<Boolean> hideMining = sgGeneral.add(new BoolSetting.Builder()
         .name("hide-mining")
         .description("Cancels the mining right after starting it, so others see no cracks. The server still breaks the block on time.")
@@ -142,6 +149,12 @@ public class PacketMinePlus extends Module implements MiningManager.HidesMining,
         MiningManager mining = MiningManager.get();
         if (pos.equals(target) && mining.owns(this) && mining.isMining(pos)) return;
         if (!mining.inRange(pos)) return;
+        boolean paired = doubleMine.get() && target != null && mining.owns(this) && mining.isMining(target) && !mining.wasBroken() && mining.background() == null;
+        if (paired && mining.mineTwo(this, PRIORITY, pos, target, true, switchMode.get(), swing.get())) {
+            target = pos;
+            brokenAt = 0;
+            return;
+        }
         if (mining.mine(this, PRIORITY, pos, true, switchMode.get(), swing.get())) {
             target = pos;
             brokenAt = 0;
