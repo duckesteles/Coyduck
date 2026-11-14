@@ -90,8 +90,8 @@ public class BoatFly extends Module {
 
     private final Setting<Double> speed = sgGeneral.add(new DoubleSetting.Builder()
         .name("speed")
-        .description("Highest horizontal blocks per tick. 6b6t takes you off the boat at 1 or more, so 0.99 is the fastest it allows. With learn on the boat starts here and only slows down when the server rejects a speed it has not accepted before.")
-        .defaultValue(0.99)
+        .description("Highest horizontal blocks per tick. 6b6t takes you off the boat at 1 or more, so 0.999 (about 19.98 blocks a second) is the fastest it allows. With learn on the boat starts here and only slows down when the server rejects a speed it has not accepted before.")
+        .defaultValue(0.999)
         .range(0.05, 5)
         .sliderRange(0.05, 5)
         .build()
