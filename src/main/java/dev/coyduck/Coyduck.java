@@ -2,8 +2,11 @@ package dev.coyduck;
 
 import dev.coyduck.commands.PilotCommand;
 import dev.coyduck.gui.CoyduckTheme;
+import dev.coyduck.hud.ArmorHud;
 import dev.coyduck.hud.ClockHud;
 import dev.coyduck.hud.InfoHud;
+import dev.coyduck.hud.InventoryHud;
+import dev.coyduck.hud.ItemsHud;
 import dev.coyduck.hud.ModuleList;
 import dev.coyduck.hud.PlayersHud;
 import dev.coyduck.hud.Watermark;
@@ -16,9 +19,10 @@ import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.managers.MotionTracker;
+import dev.coyduck.managers.PopTracker;
 import dev.coyduck.managers.RotationManager;
-import dev.coyduck.modules.AddonModules;
 import dev.coyduck.modules.AirMine;
+import dev.coyduck.modules.AntiPearl;
 import dev.coyduck.modules.AutoAnchor;
 import dev.coyduck.modules.CrystalChams;
 import dev.coyduck.modules.AutoCity;
@@ -49,6 +53,8 @@ import dev.coyduck.modules.KillEffects;
 import dev.coyduck.modules.NoExplosion;
 import dev.coyduck.modules.NoClimb;
 import dev.coyduck.modules.NoRotate;
+import dev.coyduck.modules.PacketMinePlus;
+import dev.coyduck.modules.Pusher;
 import dev.coyduck.modules.SpeedPlus;
 import dev.coyduck.modules.LadderTrap;
 import dev.coyduck.modules.PearlPhase;
@@ -83,6 +89,9 @@ public class Coyduck extends MeteorAddon {
         Hud.get().register(InfoHud.INFO);
         Hud.get().register(ClockHud.INFO);
         Hud.get().register(PlayersHud.INFO);
+        Hud.get().register(InventoryHud.INFO);
+        Hud.get().register(ItemsHud.INFO);
+        Hud.get().register(ArmorHud.INFO);
 
         MeteorClient.EVENT_BUS.subscribe(ConfigSaver.get());
         MeteorClient.EVENT_BUS.subscribe(LatencyManager.get());
@@ -94,6 +103,7 @@ public class Coyduck extends MeteorAddon {
         MeteorClient.EVENT_BUS.subscribe(HurtTracker.get());
         MeteorClient.EVENT_BUS.subscribe(RotationManager.get());
         MeteorClient.EVENT_BUS.subscribe(MiningManager.get());
+        MeteorClient.EVENT_BUS.subscribe(PopTracker.get());
 
         Modules.get().add(new AutoTotem());
         Modules.get().add(new Surround());
@@ -134,7 +144,9 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new BreakEsp());
         Modules.get().add(new Shaders());
         Modules.get().add(new UpdateChecker());
-        AddonModules.register(Modules.get());
+        Modules.get().add(new Pusher());
+        Modules.get().add(new AntiPearl());
+        Modules.get().add(new PacketMinePlus());
 
         Commands.add(new PilotCommand());
     }
