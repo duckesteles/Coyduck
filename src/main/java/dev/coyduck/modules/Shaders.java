@@ -19,7 +19,7 @@ import net.minecraft.entity.EntityType;
 import net.minecraft.client.render.entity.state.EntityRenderState;
 import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
 
-public class Shaders extends Module {
+public class Shaders extends Module implements ShaderGlow.Source {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgAtmosphere = settings.createGroup("Atmosphere");
 
@@ -187,25 +187,35 @@ public class Shaders extends Module {
         return hands.get();
     }
 
+    @Override
+    public boolean glowing() {
+        return isActive();
+    }
+
+    @Override
     public boolean shows(EntityRenderState state) {
         if (state instanceof PlayerEntityRenderState player) return players.get() && (mc.player == null || player.id != mc.player.getId());
         if (state.entityType == EntityType.ENDER_PEARL) return pearls.get();
         return state instanceof EndCrystalEntityRenderState && crystals.get();
     }
 
+    @Override
     public Color maskColor() {
         Color global = color.get();
         return new Color(global.r, global.g, global.b, 255);
     }
 
+    @Override
     public int glowWidth() {
         return width.get();
     }
 
+    @Override
     public float fillOpacity() {
         return fill.get().floatValue();
     }
 
+    @Override
     public float glowStrength() {
         return glow.get().floatValue();
     }

@@ -4,6 +4,7 @@ import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
 import com.mojang.blaze3d.systems.RenderSystem;
+import dev.coyduck.modules.Esp;
 import dev.coyduck.modules.Shaders;
 import meteordevelopment.meteorclient.mixininterface.IWorldRenderer;
 import meteordevelopment.meteorclient.renderer.ExtendedRenderPipelineBuilder;
@@ -14,6 +15,7 @@ import meteordevelopment.meteorclient.utils.OutlineRenderCommandQueue;
 import meteordevelopment.meteorclient.utils.render.NoopImmediateVertexConsumerProvider;
 import meteordevelopment.meteorclient.utils.render.NoopOutlineVertexConsumerProvider;
 import meteordevelopment.meteorclient.utils.render.WrapperImmediateVertexConsumerProvider;
+import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.postprocess.EntityShader;
 import meteordevelopment.meteorclient.utils.render.postprocess.OutlineUniforms;
 import net.minecraft.client.gl.UniformType;
@@ -25,6 +27,8 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
+
+import java.util.function.Supplier;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
@@ -43,13 +47,30 @@ public final class ShaderGlow extends EntityShader {
         .withCull(false)
         .build();
 
+    public interface Source {
+        boolean glowing();
+
+        boolean shows(EntityRenderState state);
+
+        Color maskColor();
+
+        int glowWidth();
+
+        float fillOpacity();
+
+        float glowStrength();
+    }
+
     private static ShaderGlow instance;
+    private static ShaderGlow espInstance;
 
     private final OutlineRenderCommandQueue queue = new OutlineRenderCommandQueue();
+    private final Supplier<Source> source;
     private RenderDispatcher dispatcher;
 
-    private ShaderGlow() {
+    private ShaderGlow(Supplier<Source> source) {
         super(pipeline());
+        this.source = source;
     }
 
     private static RenderPipeline pipeline() {
@@ -57,17 +78,28 @@ public final class ShaderGlow extends EntityShader {
     }
 
     public static ShaderGlow get() {
-        if (instance == null) instance = new ShaderGlow();
+        if (instance == null) instance = new ShaderGlow(Shaders::active);
         return instance;
+    }
+
+    public static ShaderGlow esp() {
+        if (espInstance == null) espInstance = new ShaderGlow(Esp::outlineSource);
+        return espInstance;
     }
 
     public static void resize(int width, int height) {
         if (instance != null) instance.onResized(width, height);
+        if (espInstance != null) espInstance.onResized(width, height);
+    }
+
+    public boolean glowing() {
+        Source current = source.get();
+        return current != null && current.glowing();
     }
 
     @Override
     protected boolean shouldDraw() {
-        return Shaders.active() != null;
+        return glowing();
     }
 
     @Override
@@ -77,11 +109,14 @@ public final class ShaderGlow extends EntityShader {
 
     @Override
     protected void setupPass(MeshRenderer renderer) {
-        Shaders module = Shaders.active();
+        Source module = source.get();
+        if (module == null) return;
         renderer.uniform("OutlineData", OutlineUniforms.write(module.glowWidth(), module.fillOpacity(), ShapeMode.Both.ordinal(), module.glowStrength()));
     }
 
-    public void drawEntities(WorldRenderState world, MatrixStack matrices, Shaders module) {
+    public void drawEntities(WorldRenderState world, MatrixStack matrices) {
+        Source module = source.get();
+        if (module == null || !module.glowing()) return;
         if (dispatcher == null) {
             dispatcher = new RenderDispatcher(queue, mc.getBlockRenderManager(), new WrapperImmediateVertexConsumerProvider(() -> vertexConsumerProvider), mc.getAtlasManager(),
                 NoopOutlineVertexConsumerProvider.INSTANCE, NoopImmediateVertexConsumerProvider.INSTANCE, mc.textRenderer);

@@ -16,17 +16,19 @@ public abstract class WorldRendererMixin {
     @Inject(method = "render", at = @At("HEAD"))
     private void coyduck$clearGlow(CallbackInfo info) {
         if (Shaders.active() != null) ShaderGlow.get().clearTexture();
+        if (ShaderGlow.esp().glowing()) ShaderGlow.esp().clearTexture();
     }
 
     @Inject(method = "pushEntityRenders", at = @At("TAIL"))
     private void coyduck$drawGlow(MatrixStack matrices, WorldRenderState world, OrderedRenderCommandQueue queue, CallbackInfo info) {
-        Shaders module = Shaders.active();
-        if (module != null) ShaderGlow.get().drawEntities(world, matrices, module);
+        if (Shaders.active() != null) ShaderGlow.get().drawEntities(world, matrices);
+        if (ShaderGlow.esp().glowing()) ShaderGlow.esp().drawEntities(world, matrices);
     }
 
     @Inject(method = "method_62214", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/OutlineVertexConsumerProvider;draw()V"))
     private void coyduck$submitGlow(CallbackInfo info) {
         if (Shaders.active() != null) ShaderGlow.get().submitVertices();
+        if (ShaderGlow.esp().glowing()) ShaderGlow.esp().submitVertices();
     }
 
     @Inject(method = "onResized", at = @At("HEAD"))
