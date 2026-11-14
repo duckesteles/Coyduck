@@ -140,6 +140,10 @@ public final class HurtTracker {
         }
     }
 
+    public void forgetExpected(long from, long to) {
+        expected.values().removeIf(pending -> pending.time >= from && pending.time <= to && Float.isNaN(pending.speculative));
+    }
+
     public void forgetSpeculative(LivingEntity entity) {
         int id = entity.getId();
 
