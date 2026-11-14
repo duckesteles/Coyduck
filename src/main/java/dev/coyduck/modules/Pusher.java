@@ -1,4 +1,4 @@
-package dev.coyduck.modules.combat;
+package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.WorldResetEvent;

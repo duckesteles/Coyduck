@@ -4,8 +4,6 @@ import dev.coyduck.hud.ArmorHud;
 import dev.coyduck.hud.InventoryHud;
 import dev.coyduck.hud.ItemsHud;
 import dev.coyduck.managers.PopTracker;
-import dev.coyduck.modules.combat.AntiPearl;
-import dev.coyduck.modules.combat.Pusher;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.systems.hud.Hud;
 import meteordevelopment.meteorclient.systems.modules.Modules;
