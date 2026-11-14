@@ -19,5 +19,6 @@ public final class AddonModules {
 
         modules.add(new Pusher());
         modules.add(new AntiPearl());
+        modules.add(new PacketMinePlus());
     }
 }
