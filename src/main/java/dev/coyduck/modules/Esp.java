@@ -47,7 +47,7 @@ public class Esp extends Module implements ShaderGlow.Source {
 
     private final Setting<SettingColor> outlineColor = sgOutline.add(new ColorSetting.Builder()
         .name("outline-color")
-        .description("Color of the outline and fill.")
+        .description("Color of the outline and fill. With shaders+ on and its all-renders setting, the shaders+ color is used instead.")
         .defaultValue(new SettingColor(185, 74, 230, 255))
         .visible(outline::get)
         .build()
@@ -133,7 +133,7 @@ public class Esp extends Module implements ShaderGlow.Source {
 
     @Override
     public Color maskColor() {
-        Color color = outlineColor.get();
+        Color color = Shaders.tint(outlineColor.get());
         return new Color(color.r, color.g, color.b, 255);
     }
 
