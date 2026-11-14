@@ -28,6 +28,7 @@ import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.EquipmentSlot;
@@ -77,6 +78,11 @@ public class ElytraPilot extends Module {
     private static final int THROW_TICKS = 2;
     private static final int CHUNKS_PER_TICK = 12;
     private static final double CRITICAL_WEAR = 0.03;
+    private static final int TAKEOFF_MEMORY = 100;
+    private static final int MEND_BLOCK = 400;
+    private static final double MEND_DANGER = 48;
+    private static final int SWAP_COOLDOWN = 20;
+    private static final Set<Block> TRAPS = Set.of(Blocks.COBWEB, Blocks.POWDER_SNOW, Blocks.SWEET_BERRY_BUSH, Blocks.WITHER_ROSE, Blocks.NETHER_PORTAL, Blocks.END_PORTAL, Blocks.END_GATEWAY, Blocks.FIRE, Blocks.SOUL_FIRE);
     private static final double BACKTRACK_DISTANCE = 20;
     private static final int MAX_DEAD_ENDS = 3;
     private static final int MAX_SPOT_RADIUS = 48;
@@ -266,6 +272,8 @@ public class ElytraPilot extends Module {
     private boolean pathFinished;
     private CompletableFuture<NetherRoute.Path> planning;
     private int planTick = -1000;
+    private int mendBlockedUntil;
+    private int swapTick = -1000;
     private int failures;
     private int endTick = -1;
     private final ArrayDeque<Vec3d> trail = new ArrayDeque<>();
@@ -385,6 +393,7 @@ public class ElytraPilot extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
+        if (mc.player != null && mc.world != null && mc.player.isAlive() && guard()) return;
         ElytraEvade evade = Modules.get().get(ElytraEvade.class);
         if (evade != null && evade.evading()) {
             if (eating && mc.player != null) {
@@ -421,7 +430,7 @@ public class ElytraPilot extends Module {
     }
 
     private void takeoff() {
-        if (mc.player.isOnGround() && needsMend() && mend.get()) {
+        if (mc.player.isOnGround() && needsMend() && mend.get() && ticks >= mendBlockedUntil && canMend()) {
             state = State.Mend;
             return;
         }
@@ -466,14 +475,33 @@ public class ElytraPilot extends Module {
         if (mc.getNetworkHandler() != null) mc.getNetworkHandler().getConnection().disconnect(Text.literal("Coyduck elytra-pilot logged out: " + reason));
     }
 
-    private void cruise() {
-        if (ticks - setbackTick < SETBACK_PAUSE) return;
+    private boolean guard() {
         if (logOnPlayer.get()) {
-            for (PlayerEntity player : mc.world.getPlayers()) {
-                if (player == mc.player || Friends.get().isFriend(player)) continue;
-                logOut(player.getName().getString() + " showed up");
-                return;
+            PlayerEntity stranger = stranger(Double.MAX_VALUE);
+            if (stranger != null) {
+                logOut(stranger.getName().getString() + " showed up");
+                return true;
             }
+        }
+        if (logOnElytra.get() && !mc.player.isOnGround() && mc.player.isGliding() && wear() < CRITICAL_WEAR && !swapSpare()) {
+            logOut("elytra about to break");
+            return true;
+        }
+        return false;
+    }
+
+    private PlayerEntity stranger(double range) {
+        for (PlayerEntity player : mc.world.getPlayers()) {
+            if (player == mc.player || Friends.get().isFriend(player) || !player.isAlive()) continue;
+            if (player.distanceTo(mc.player) <= range) return player;
+        }
+        return null;
+    }
+
+    private void cruise() {
+        if (ticks - setbackTick < SETBACK_PAUSE) {
+            ElytraFly.pilot(Vec3d.ZERO);
+            return;
         }
         if (!mc.player.isGliding()) {
             if (mc.player.isOnGround()) enterTakeoff();
@@ -483,7 +511,7 @@ public class ElytraPilot extends Module {
         if (!glideConfirmed()) return;
 
         if (needsMend() && !swapSpare()) {
-            if (mend.get()) {
+            if (mend.get() && ticks >= mendBlockedUntil && canMend()) {
                 beginLanding(true);
                 return;
             }
@@ -496,7 +524,7 @@ public class ElytraPilot extends Module {
         }
 
         double distance = horizontalDistance();
-        if (distance <= ARRIVE_RADIUS && spiralStep > 0) {
+        if (spiralStep > 0 && distance <= Math.max(ARRIVE_RADIUS, Modules.get().get(ElytraFly.class).horizontalSpeed() * 3)) {
             nextSpiralLeg();
             return;
         }
@@ -510,9 +538,9 @@ public class ElytraPilot extends Module {
     }
 
     private void enterTakeoff() {
+        if (ticks - takeoffTick > TAKEOFF_MEMORY) jumps = 0;
         state = State.Takeoff;
         takeoffTick = ticks;
-        jumps = 0;
     }
 
     private boolean glideConfirmed() {
@@ -551,7 +579,10 @@ public class ElytraPilot extends Module {
             arrive();
             return;
         }
-        if (ticks - setbackTick < SETBACK_PAUSE) return;
+        if (ticks - setbackTick < SETBACK_PAUSE) {
+            ElytraFly.pilot(Vec3d.ZERO);
+            return;
+        }
         if (!mc.player.isGliding()) {
             deploy();
             return;
@@ -582,6 +613,10 @@ public class ElytraPilot extends Module {
             }
             if (!warnedSpot) warning(landToMend ? "No safe ground below, flying on until there is some." : "No safe ground at the destination yet, looking wider.");
             warnedSpot = true;
+            if (landToMend && wear() < CRITICAL_WEAR && logOnElytra.get()) {
+                logOut("elytra about to break and no safe ground");
+                return;
+            }
             if (landToMend && wear() < CRITICAL_WEAR && !warnedCritical) {
                 warning("The elytra is almost broken and there is still no safe ground.");
                 warnedCritical = true;
@@ -635,6 +670,7 @@ public class ElytraPilot extends Module {
     private void mend() {
         if (!mc.player.isOnGround()) {
             if (mc.player.isGliding()) beginLanding(true);
+            else if (mc.player.getVelocity().y < 0 && mc.player.fallDistance > 1) deploy();
             return;
         }
 
@@ -655,17 +691,22 @@ public class ElytraPilot extends Module {
             return;
         }
 
-        if (warnPlayers.get() && !warnedPlayer) {
-            for (PlayerEntity player : mc.world.getPlayers()) {
-                if (player == mc.player || Friends.get().isFriend(player) || player.distanceTo(mc.player) > 48) continue;
-                warning("%s is near while you mend.", player.getName().getString());
-                warnedPlayer = true;
-                break;
-            }
+        PlayerEntity near = stranger(MEND_DANGER);
+        if (near != null && wear() > CRITICAL_WEAR) {
+            if (warnPlayers.get()) warning("%s came close while you mend, flying on.", near.getName().getString());
+            mendBlockedUntil = ticks + MEND_BLOCK;
+            enterTakeoff();
+            return;
         }
 
         int bottle = InventoryManager.get().find(stack -> stack.isOf(Items.EXPERIENCE_BOTTLE), 0, InventoryManager.MAIN_END);
         if (bottle == -1) {
+            if (wear() > CRITICAL_WEAR) {
+                warning("Out of experience bottles, flying on.");
+                mendBlockedUntil = ticks + MEND_BLOCK;
+                enterTakeoff();
+                return;
+            }
             if (!warnedXp) warning("Out of experience bottles, waiting here.");
             warnedXp = true;
             return;
@@ -784,6 +825,12 @@ public class ElytraPilot extends Module {
 
         boolean atEnd = !path.isEmpty() && pathIndex >= path.size() - 1 && point(path.size() - 1).distanceTo(feet) < 2.5;
         if (atEnd && pathFinished) {
+            if (spiralStep > 0) {
+                nextSpiralLeg();
+                path = List.of();
+                planTick = -1000;
+                return Vec3d.ZERO;
+            }
             beginLanding(false);
             return Vec3d.ZERO;
         }
@@ -929,7 +976,7 @@ public class ElytraPilot extends Module {
     private boolean blockedAhead() {
         for (int i = pathIndex; i < Math.min(path.size(), pathIndex + 3); i++) {
             BlockPos pos = path.get(i);
-            if (loaded(pos.getX(), pos.getZ()) && !mc.world.getBlockState(pos).getCollisionShape(mc.world, pos).isEmpty()) return true;
+            if (loaded(pos.getX(), pos.getZ()) && !mc.world.getBlockState(pos).isAir()) return true;
         }
         return false;
     }
@@ -1181,8 +1228,14 @@ public class ElytraPilot extends Module {
                 int x = cx + dx;
                 int z = cz + dz;
                 if (!loaded(x, z)) continue;
+                int start = top;
+                if (!nether()) {
+                    int surface = mc.world.getTopY(Heightmap.Type.MOTION_BLOCKING, x, z);
+                    if (surface <= bottom) continue;
+                    start = Math.min(top, surface);
+                }
 
-                for (int y = top; y >= bottom; y--) {
+                for (int y = start; y >= bottom; y--) {
                     pos.set(x, y, z);
                     if (!passable(pos)) break;
                     pos.set(x, y - 1, z);
@@ -1206,6 +1259,7 @@ public class ElytraPilot extends Module {
 
     private boolean passable(BlockPos pos) {
         BlockState state = mc.world.getBlockState(pos);
+        if (TRAPS.contains(state.getBlock())) return false;
         return state.getCollisionShape(mc.world, pos).isEmpty() && state.getFluidState().isEmpty();
     }
 
@@ -1245,7 +1299,7 @@ public class ElytraPilot extends Module {
     }
 
     private boolean swapSpare() {
-        if (!spare.get()) return false;
+        if (!spare.get() || ticks - swapTick < SWAP_COOLDOWN) return false;
 
         ScreenHandler handler = mc.player.playerScreenHandler;
         if (mc.player.currentScreenHandler != handler || !handler.getCursorStack().isEmpty()) return false;
@@ -1265,11 +1319,17 @@ public class ElytraPilot extends Module {
 
         int slot = InventoryManager.get().handlerSlot(handler, best);
         if (slot == -1) return false;
+        swapTick = ticks;
         mc.interactionManager.clickSlot(handler.syncId, slot, 0, SlotActionType.PICKUP, mc.player);
         mc.interactionManager.clickSlot(handler.syncId, CHEST_SLOT, 0, SlotActionType.PICKUP, mc.player);
         mc.interactionManager.clickSlot(handler.syncId, slot, 0, SlotActionType.PICKUP, mc.player);
         info("Put on a spare elytra (%.0f%%).", bestWear * 100);
         return true;
+    }
+
+    private boolean canMend() {
+        return hasMending(mc.player.getEquippedStack(EquipmentSlot.CHEST))
+            && InventoryManager.get().find(stack -> stack.isOf(Items.EXPERIENCE_BOTTLE), 0, InventoryManager.MAIN_END) != -1;
     }
 
     private static boolean hasMending(ItemStack stack) {

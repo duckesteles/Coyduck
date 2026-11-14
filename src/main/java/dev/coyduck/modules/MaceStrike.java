@@ -375,6 +375,12 @@ public class MaceStrike extends Module {
     }
 
     private void airTick() {
+        ElytraPilot pilot = Modules.get().get(ElytraPilot.class);
+        if (pilot != null && pilot.isActive()) {
+            target = null;
+            giveBack();
+            return;
+        }
         if (owed > 0) {
             ElytraFly.pilot(Vec3d.ZERO);
             return;
