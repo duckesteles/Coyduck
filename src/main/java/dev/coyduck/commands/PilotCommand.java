@@ -9,7 +9,7 @@ import net.minecraft.command.CommandSource;
 
 public class PilotCommand extends Command {
     public PilotCommand() {
-        super("pilot", "Flies to a destination with elytra-pilot: .pilot <x> <z>, .pilot <x> <y> <z>, .pilot stop");
+        super("pilot", "Flies to a destination with elytra-pilot: .pilot <x> <z>, .pilot <x> <y> <z>, .pilot spiral <step> to search outward in a square spiral, .pilot stop");
     }
 
     @Override
@@ -25,6 +25,12 @@ public class PilotCommand extends Command {
             info("Stopped.");
             return SINGLE_SUCCESS;
         }));
+
+        builder.then(literal("spiral").then(argument("step", IntegerArgumentType.integer(16, 4096)).executes(context -> {
+            pilot().spiral(context.getArgument("step", Integer.class));
+            info("Spiralling out from here, %d blocks between rings.", context.getArgument("step", Integer.class));
+            return SINGLE_SUCCESS;
+        })));
 
         builder.then(argument("x", IntegerArgumentType.integer())
             .then(argument("second", IntegerArgumentType.integer())

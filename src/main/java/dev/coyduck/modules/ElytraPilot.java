@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.utils.Trace;
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
@@ -43,6 +44,7 @@ import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -153,6 +155,20 @@ public class ElytraPilot extends Module {
         .build()
     );
 
+    private final Setting<Boolean> logOnPlayer = sgGeneral.add(new BoolSetting.Builder()
+        .name("log-out-on-player")
+        .description("Disconnects when a player who is not a friend shows up while it flies, for long unattended trips.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> logOnElytra = sgGeneral.add(new BoolSetting.Builder()
+        .name("log-out-on-elytra")
+        .description("Disconnects when the elytra is about to break and there is no spare and no mending.")
+        .defaultValue(false)
+        .build()
+    );
+
     private final Setting<Integer> overworldY = sgFlight.add(new IntSetting.Builder()
         .name("overworld-y")
         .description("Cruising height in the overworld. It climbs higher when the terrain ahead needs it.")
@@ -210,6 +226,8 @@ public class ElytraPilot extends Module {
     private double goalZ;
     private Integer goalY;
     private boolean hasGoal;
+    private int spiralStep;
+    private int spiralLeg;
 
     private State state = State.Takeoff;
     private boolean landToMend;
@@ -267,7 +285,32 @@ public class ElytraPilot extends Module {
         super(Coyduck.CATEGORY, "elytra-pilot", "Flies to a destination with elytra-fly+, routes through the nether with Baritone's pathfinder, and lands to mend the elytra on the way. Start it with .pilot x z");
     }
 
+    public void spiral(int step) {
+        if (mc.player == null) return;
+        spiralStep = step;
+        spiralLeg = 0;
+        goalX = mc.player.getX();
+        goalZ = mc.player.getZ();
+        goalY = null;
+        nextSpiralLeg();
+        hasGoal = true;
+        if (isActive()) start();
+        else toggle();
+    }
+
+    private void nextSpiralLeg() {
+        int length = spiralStep * (spiralLeg / 2 + 1);
+        int direction = spiralLeg % 4;
+        goalX += direction == 0 ? length : direction == 2 ? -length : 0;
+        goalZ += direction == 1 ? length : direction == 3 ? -length : 0;
+        spiralLeg++;
+        bestDistance = horizontalDistance();
+        bestTick = ticks;
+        Trace.log("pilot spiral leg {} of {} blocks", spiralLeg, length);
+    }
+
     public void travel(int x, Integer y, int z) {
+        spiralStep = 0;
         goalX = x + 0.5;
         goalZ = z + 0.5;
         goalY = y;
@@ -306,6 +349,7 @@ public class ElytraPilot extends Module {
 
     @Override
     public void onDeactivate() {
+        spiralStep = 0;
         ElytraFly.pilot(null);
         stopEating();
         closeRoute();
@@ -415,8 +459,22 @@ public class ElytraPilot extends Module {
         }
     }
 
+    private void logOut(String reason) {
+        hasGoal = false;
+        spiralStep = 0;
+        toggle();
+        if (mc.getNetworkHandler() != null) mc.getNetworkHandler().getConnection().disconnect(Text.literal("Coyduck elytra-pilot logged out: " + reason));
+    }
+
     private void cruise() {
         if (ticks - setbackTick < SETBACK_PAUSE) return;
+        if (logOnPlayer.get()) {
+            for (PlayerEntity player : mc.world.getPlayers()) {
+                if (player == mc.player || Friends.get().isFriend(player)) continue;
+                logOut(player.getName().getString() + " showed up");
+                return;
+            }
+        }
         if (!mc.player.isGliding()) {
             if (mc.player.isOnGround()) enterTakeoff();
             else deploy();
@@ -429,11 +487,19 @@ public class ElytraPilot extends Module {
                 beginLanding(true);
                 return;
             }
+            if (logOnElytra.get()) {
+                logOut("elytra about to break");
+                return;
+            }
             if (!warnedSpot) warning("Elytra is low and mend is off.");
             warnedSpot = true;
         }
 
         double distance = horizontalDistance();
+        if (distance <= ARRIVE_RADIUS && spiralStep > 0) {
+            nextSpiralLeg();
+            return;
+        }
         if (distance <= ARRIVE_RADIUS) {
             beginLanding(false);
             return;
