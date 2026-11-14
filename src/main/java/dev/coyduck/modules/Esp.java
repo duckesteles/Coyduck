@@ -6,6 +6,7 @@ import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
+import meteordevelopment.meteorclient.utils.player.PlayerUtils;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import net.minecraft.client.render.entity.state.EntityRenderState;
@@ -47,8 +48,16 @@ public class Esp extends Module implements ShaderGlow.Source {
 
     private final Setting<SettingColor> outlineColor = sgOutline.add(new ColorSetting.Builder()
         .name("outline-color")
-        .description("Color of the outline and fill. With shaders+ on and its all-renders setting, the shaders+ color is used instead.")
+        .description("Color of the outline and fill for players whose name has no color.")
         .defaultValue(new SettingColor(185, 74, 230, 255))
+        .visible(outline::get)
+        .build()
+    );
+
+    private final Setting<Boolean> nameColor = sgOutline.add(new BoolSetting.Builder()
+        .name("name-color")
+        .description("Colors each outline like Meteor's shader ESP: friends get the friend color, others the color of their name when Meteor's team color option is on.")
+        .defaultValue(true)
         .visible(outline::get)
         .build()
     );
@@ -133,7 +142,15 @@ public class Esp extends Module implements ShaderGlow.Source {
 
     @Override
     public Color maskColor() {
-        Color color = Shaders.tint(outlineColor.get());
+        Color color = outlineColor.get();
+        return new Color(color.r, color.g, color.b, 255);
+    }
+
+    @Override
+    public Color color(EntityRenderState state) {
+        if (!nameColor.get() || !(state instanceof PlayerEntityRenderState player) || mc.world == null) return maskColor();
+        if (!(mc.world.getEntityById(player.id) instanceof PlayerEntity entity)) return maskColor();
+        Color color = PlayerUtils.getPlayerColor(entity, outlineColor.get());
         return new Color(color.r, color.g, color.b, 255);
     }
 

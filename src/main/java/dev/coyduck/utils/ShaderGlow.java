@@ -54,6 +54,10 @@ public final class ShaderGlow extends EntityShader {
 
         Color maskColor();
 
+        default Color color(EntityRenderState state) {
+            return maskColor();
+        }
+
         int glowWidth();
 
         float fillOpacity();
@@ -129,6 +133,7 @@ public final class ShaderGlow extends EntityShader {
 
         for (EntityRenderState state : world.entityRenderStates) {
             if (!module.shows(state)) continue;
+            queue.setColor(module.color(state));
 
             var renderer = manager.getRenderer(state);
             Vec3d offset = renderer.getPositionOffset(state);
