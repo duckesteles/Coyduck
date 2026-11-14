@@ -24,7 +24,7 @@ public class CustomFov extends Module {
 
     private final Setting<Boolean> effects = sgGeneral.add(new BoolSetting.Builder()
         .name("effects")
-        .description("Keeps the vanilla field of view changes from sprinting, speed and drawing a bow.")
+        .description("Keeps the vanilla field of view changes from sprinting and speed. Zooming in, from a bow or a spyglass, always works.")
         .defaultValue(true)
         .build()
     );
@@ -63,7 +63,7 @@ public class CustomFov extends Module {
     public static float multiplier(float original) {
         CustomFov module = active();
         if (module == null) return original;
-        return module.effects.get() ? Math.min(original, MAX_FOV / module.fov.get()) : 1.0f;
+        return module.effects.get() ? Math.min(original, MAX_FOV / module.fov.get()) : Math.min(original, 1.0f);
     }
 
     public static float hand(float original) {

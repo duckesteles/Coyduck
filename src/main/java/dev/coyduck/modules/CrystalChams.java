@@ -11,6 +11,7 @@ import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
+import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.model.ModelPart;
@@ -20,7 +21,6 @@ import net.minecraft.client.render.entity.state.EndCrystalEntityRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.decoration.EndCrystalEntity;
-import net.minecraft.util.math.Vec3d;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -68,7 +68,15 @@ public class CrystalChams extends Module {
         .build()
     );
 
+    private static final double MAX_DISTANCE = 64;
+
     private final Vector3f[] corners = new Vector3f[8];
+    private final EndCrystalEntityRenderState state = new EndCrystalEntityRenderState();
+    private final MatrixStack matrices = new MatrixStack();
+    private Color side;
+    private Color line;
+    private boolean sides;
+    private boolean lines;
 
     public CrystalChams() {
         super(Coyduck.CATEGORY, "crystal-chams", "Draws end crystals as spinning wireframe cubes with see-through faces.");
@@ -88,28 +96,36 @@ public class CrystalChams extends Module {
     private void onRender(Render3DEvent event) {
         if (mc.world == null) return;
         Renderer3D renderer = throughWalls.get() ? event.renderer : event.depthRenderer;
+        side = Shaders.tint(sideColor.get());
+        line = Shaders.lightTint(lineColor.get());
+        sides = shapeMode.get().sides();
+        lines = shapeMode.get().lines();
+        double range = MAX_DISTANCE * MAX_DISTANCE;
         for (Entity entity : mc.world.getEntities()) {
-            if (entity instanceof EndCrystalEntity crystal) draw(crystal, event.tickDelta, renderer);
+            if (entity instanceof EndCrystalEntity crystal && (mc.player == null || mc.player.squaredDistanceTo(crystal) <= range)) draw(crystal, event.tickDelta, renderer);
         }
     }
 
     private void draw(EndCrystalEntity crystal, float tickDelta, Renderer3D renderer) {
         if (!(mc.getEntityRenderDispatcher().getRenderer(crystal) instanceof EndCrystalEntityRenderer crystalRenderer)) return;
         EndCrystalEntityModel model = ((ModelHolder) crystalRenderer).coyduck$model();
-        EndCrystalEntityRenderState state = crystalRenderer.getAndUpdateRenderState(crystal, tickDelta);
+        state.age = crystal.endCrystalAge + tickDelta;
+        state.baseVisible = crystal.shouldShowBottom();
         model.setAngles(state);
 
-        Vec3d pos = crystal.getLerpedPos(tickDelta);
-        MatrixStack matrices = new MatrixStack();
+        double x = crystal.getX();
+        double y = crystal.getY();
+        double z = crystal.getZ();
+        matrices.loadIdentity();
         matrices.scale(2, 2, 2);
         matrices.translate(0, -0.5f, 0);
         model.getRootPart().forEachCuboid(matrices, (entry, path, index, cuboid) -> {
             if (!model.base.visible && path.contains("base")) return;
-            cube(pos, entry.getPositionMatrix(), cuboid, renderer);
+            cube(x, y, z, entry.getPositionMatrix(), cuboid, renderer);
         });
     }
 
-    private void cube(Vec3d pos, Matrix4f matrix, ModelPart.Cuboid cuboid, Renderer3D renderer) {
+    private void cube(double px, double py, double pz, Matrix4f matrix, ModelPart.Cuboid cuboid, Renderer3D renderer) {
         for (int i = 0; i < 8; i++) {
             float x = ((i & 1) == 0 ? cuboid.minX : cuboid.maxX) / 16;
             float y = ((i & 2) == 0 ? cuboid.minY : cuboid.maxY) / 16;
@@ -117,20 +133,20 @@ public class CrystalChams extends Module {
             matrix.transformPosition(x, y, z, corners[i]);
         }
 
-        if (shapeMode.get().sides()) {
+        if (sides) {
             for (int[] face : FACES) {
                 Vector3f a = corners[face[0]], b = corners[face[1]], c = corners[face[2]], d = corners[face[3]];
-                renderer.quad(pos.x + a.x, pos.y + a.y, pos.z + a.z, pos.x + b.x, pos.y + b.y, pos.z + b.z,
-                    pos.x + c.x, pos.y + c.y, pos.z + c.z, pos.x + d.x, pos.y + d.y, pos.z + d.z, Shaders.tint(sideColor.get()));
+                renderer.quad(px + a.x, py + a.y, pz + a.z, px + b.x, py + b.y, pz + b.z,
+                    px + c.x, py + c.y, pz + c.z, px + d.x, py + d.y, pz + d.z, side);
             }
         }
 
-        if (shapeMode.get().lines()) {
+        if (lines) {
             for (int i = 0; i < 8; i++) {
                 for (int bit = 1; bit < 8; bit <<= 1) {
                     if ((i & bit) != 0) continue;
                     Vector3f a = corners[i], b = corners[i | bit];
-                    renderer.line(pos.x + a.x, pos.y + a.y, pos.z + a.z, pos.x + b.x, pos.y + b.y, pos.z + b.z, Shaders.lightTint(lineColor.get()));
+                    renderer.line(px + a.x, py + a.y, pz + a.z, px + b.x, py + b.y, pz + b.z, line);
                 }
             }
         }
