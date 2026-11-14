@@ -50,7 +50,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-public class AutoCity extends Module implements MiningManager.StopGate {
+public class AutoCity extends Module implements MiningManager.StopGate, MiningManager.HidesMining {
     public static final int PRIORITY = 50;
 
     private static final float BURROW_SCORE = 1000;
@@ -135,6 +135,13 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         .name("double-mine")
         .description("Mines the second best block in the background while mining the best one, so two gaps open in about the time of one. Briefly holds the pickaxe for the background break. Grim's fast-break check cancels the background finish, so it does not work on 6b6t.")
         .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> hideMining = sgGeneral.add(new BoolSetting.Builder()
+        .name("hide-mining")
+        .description("Cancels the mining right after starting it, so other players never see the block break or how far along it is. The server still remembers when it started, so the final break lands at the same time.")
+        .defaultValue(true)
         .build()
     );
 
@@ -472,6 +479,11 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         }
         target = first;
         return List.of();
+    }
+
+    @Override
+    public boolean hideMining() {
+        return hideMining.get();
     }
 
     @Override

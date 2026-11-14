@@ -103,6 +103,10 @@ public final class MiningManager {
     public interface RebreaksOwn {
     }
 
+    public interface HidesMining {
+        boolean hideMining();
+    }
+
     private MiningManager() {}
 
     public static MiningManager get() {
@@ -170,8 +174,10 @@ public final class MiningManager {
         side = facing(pos);
         startTick = ticks;
         startTime = Util.getMeasuringTimeMs();
+        boolean hide = owner instanceof HidesMining hides && hides.hideMining();
         PacketBatch.run(() -> {
             send(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK);
+            if (hide) send(PlayerActionC2SPacket.Action.ABORT_DESTROY_BLOCK);
             InteractionManager.get().swing(swing);
         });
     }
