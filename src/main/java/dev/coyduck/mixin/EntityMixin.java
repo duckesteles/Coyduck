@@ -2,6 +2,7 @@ package dev.coyduck.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import dev.coyduck.managers.RotationManager;
+import dev.coyduck.modules.Esp;
 import dev.coyduck.modules.NoClimb;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.Entity;
@@ -10,6 +11,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(Entity.class)
 public abstract class EntityMixin {
@@ -21,5 +23,10 @@ public abstract class EntityMixin {
     @Inject(method = "slowMovement", at = @At("HEAD"), cancellable = true)
     private void coyduck$noWebSlow(BlockState state, Vec3d multiplier, CallbackInfo info) {
         if (NoClimb.ignoresSlow((Entity) (Object) this, state)) info.cancel();
+    }
+
+    @Inject(method = "shouldRender(D)Z", at = @At("HEAD"), cancellable = true)
+    private void coyduck$espDistance(double distance, CallbackInfoReturnable<Boolean> info) {
+        if (Esp.shows((Entity) (Object) this)) info.setReturnValue(true);
     }
 }

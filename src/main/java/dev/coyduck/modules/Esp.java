@@ -47,8 +47,9 @@ public class Esp extends Module {
     }
 
     public static boolean shows(Entity entity) {
+        if (!(entity instanceof PlayerEntity player) || player == MeteorClient.mc.player) return false;
         Esp module = Modules.get().get(Esp.class);
-        if (module == null || !module.isActive() || !(entity instanceof PlayerEntity player) || player == MeteorClient.mc.player) return false;
+        if (module == null || !module.isActive()) return false;
         if (!module.friends.get() && Friends.get().isFriend(player)) return false;
         return module.invisible.get() || !player.isInvisible();
     }
