@@ -18,6 +18,7 @@ import net.minecraft.network.packet.c2s.play.PlayerInteractBlockC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
 import net.minecraft.network.packet.c2s.query.QueryPingC2SPacket;
 import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
+import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.network.packet.s2c.query.PingResultS2CPacket;
 import net.minecraft.util.Util;
 
@@ -31,11 +32,14 @@ public final class LatencyManager {
     private static final long SEQUENCE_LIFETIME = 5_000;
     private static final int TICK_WAIT = 25;
     private static final int FALLBACK = 150;
+    private static final long FREEZE = 1_200;
 
     private final Estimator network = new Estimator();
     private final Estimator action = new Estimator();
     private final Int2LongOpenHashMap sequences = new Int2LongOpenHashMap();
     private int probeTimer;
+    private volatile long lastPacketAt;
+    private long lastSetbackAt;
 
     private LatencyManager() {}
 
@@ -78,6 +82,19 @@ public final class LatencyManager {
         return (int) Math.clamp(timeout, 150, 3000);
     }
 
+    public long silentFor() {
+        long at = lastPacketAt;
+        return at == 0 ? 0 : Util.getMeasuringTimeMs() - at;
+    }
+
+    public boolean frozen() {
+        return silentFor() > Math.max(FREEZE, 2L * rtt());
+    }
+
+    public long sinceSetback() {
+        return lastSetbackAt == 0 ? Long.MAX_VALUE : Util.getMeasuringTimeMs() - lastSetbackAt;
+    }
+
     @EventHandler
     private void onSent(PacketEvent.Sent event) {
         int sequence = sequenceOf(event.packet);
@@ -90,6 +107,7 @@ public final class LatencyManager {
 
     @EventHandler
     private void onReceive(PacketEvent.Receive event) {
+        lastPacketAt = Util.getMeasuringTimeMs();
         if (event.packet instanceof PingResultS2CPacket packet) {
             network.sample(Util.getMeasuringTimeMs() - packet.startTime());
         }
@@ -97,6 +115,7 @@ public final class LatencyManager {
 
     @EventHandler
     private void onApply(PacketApplyEvent.Pre event) {
+        if (event.packet instanceof PlayerPositionLookS2CPacket) lastSetbackAt = Util.getMeasuringTimeMs();
         if (!(event.packet instanceof PlayerActionResponseS2CPacket packet) || mc.world == null) return;
 
         long now = Util.getMeasuringTimeMs();
@@ -136,6 +155,8 @@ public final class LatencyManager {
         network.reset();
         action.reset();
         probeTimer = 0;
+        lastPacketAt = 0;
+        lastSetbackAt = 0;
         synchronized (sequences) {
             sequences.clear();
         }

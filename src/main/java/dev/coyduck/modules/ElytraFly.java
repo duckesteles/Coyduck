@@ -3,6 +3,7 @@ package dev.coyduck.modules;
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.managers.InventoryManager;
+import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.RotationManager;
 import dev.coyduck.utils.Trace;
 import meteordevelopment.meteorclient.MeteorClient;
@@ -608,7 +609,7 @@ public class ElytraFly extends Module {
 
     private boolean stalled() {
         if (pilot != null || !mc.player.isAlive() || !mc.player.isGliding() || mc.player.isUsingItem() || inFluid()) return true;
-        if (waitingChunks || buildingEngaged || capTicks > 0 || overdriveSpent) return true;
+        if (waitingChunks || buildingEngaged || capTicks > 0 || overdriveSpent || LatencyManager.get().frozen()) return true;
         double top = speedCap() * OVERDRIVE_TOP;
         if (vanillaFlight) {
             if (lastSpeed > 1.0E-4 && lastSpeed < top) return false;
@@ -766,6 +767,12 @@ public class ElytraFly extends Module {
             buildingEngaged = false;
         }
         if (limitHeight.get() && y > 0) y = Math.max(0, Math.min(y, maxHeight.get() - mc.player.getY()));
+
+        if (LatencyManager.get().frozen()) {
+            x = 0;
+            z = 0;
+            y = 0;
+        }
 
         waitingChunks = mapping.get() && !chunksAround(mappingRadius.get());
         if (waitingChunks) {
