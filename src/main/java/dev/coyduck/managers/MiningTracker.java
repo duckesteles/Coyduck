@@ -22,11 +22,12 @@ public final class MiningTracker {
     private static final MiningTracker INSTANCE = new MiningTracker();
 
     private static final long LIFETIME = 5_000;
-    private static final long ABANDONED = 2_000;
+    private static final long SUPERSEDED = 1_000;
+    private static final int PRIMED = 10;
     private static final int MAX_STAGE = 9;
     private static final int ABORTED = 255;
 
-    public record Mining(int breaker, int stage, long time) {}
+    public record Mining(int breaker, int stage, long time, long first, int raw) {}
 
     private final Long2ObjectOpenHashMap<Mining> mining = new Long2ObjectOpenHashMap<>();
     private final Long2LongOpenHashMap broken = new Long2LongOpenHashMap();
@@ -72,20 +73,32 @@ public final class MiningTracker {
 
         long key = packet.getPos().asLong();
         int stage = packet.getProgress();
+        int breaker = packet.getEntityId();
+        long now = Util.getMeasuringTimeMs();
+        Mining previous = mining.get(key);
+        boolean same = previous != null && previous.breaker == breaker;
 
-        if (stage < 0 || stage >= ABORTED) mining.remove(key);
-        else mining.put(key, new Mining(packet.getEntityId(), Math.min(stage, MAX_STAGE), Util.getMeasuringTimeMs()));
+        if (same && previous.raw >= PRIMED && (stage == ((previous.raw + 1) & 0xFF) || stage < previous.raw && stage != ABORTED)) {
+            mining.put(key, new Mining(breaker, MAX_STAGE, now, previous.first, stage));
+            return;
+        }
+        if (stage < 0 || stage >= ABORTED) {
+            if (previous == null || same) mining.remove(key);
+            return;
+        }
+        mining.put(key, new Mining(breaker, Math.min(stage, MAX_STAGE), now, same ? previous.first : now, stage));
     }
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         long now = Util.getMeasuringTimeMs();
-        mining.values().removeIf(entry -> now - entry.time > LIFETIME);
+        if (!broken.isEmpty()) broken.long2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > LIFETIME);
+        if (mining.isEmpty()) return;
+        mining.values().removeIf(entry -> now - entry.time > LIFETIME || mc.world != null && mc.world.getEntityById(entry.breaker) == null);
 
-        Int2LongOpenHashMap latest = new Int2LongOpenHashMap();
-        for (Mining entry : mining.values()) latest.put(entry.breaker, Math.max(latest.getOrDefault(entry.breaker, Long.MIN_VALUE), entry.time));
-        mining.values().removeIf(entry -> latest.get(entry.breaker) - entry.time > ABANDONED);
-        broken.long2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > LIFETIME);
+        Int2LongOpenHashMap newest = new Int2LongOpenHashMap();
+        for (Mining entry : mining.values()) newest.put(entry.breaker, Math.max(newest.getOrDefault(entry.breaker, Long.MIN_VALUE), entry.first));
+        mining.values().removeIf(entry -> newest.get(entry.breaker) > entry.first && now - entry.time > SUPERSEDED);
     }
 
     @EventHandler
@@ -104,10 +117,11 @@ public final class MiningTracker {
     }
 
     private void track(BlockPos pos, BlockState state) {
+        long key = pos.asLong();
+        if (mining.containsKey(key) && state.getBlock() != mc.world.getBlockState(pos).getBlock()) mining.remove(key);
         if (!state.isReplaceable() || InteractionManager.get().isPending(pos)) return;
         if (mc.world.getBlockState(pos).isReplaceable()) return;
 
-        long key = pos.asLong();
         broken.put(key, Util.getMeasuringTimeMs());
         mining.remove(key);
     }

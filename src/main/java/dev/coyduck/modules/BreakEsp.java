@@ -6,7 +6,6 @@ import dev.coyduck.utils.DuckRender;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
-import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
@@ -20,13 +19,6 @@ import net.minecraft.util.math.Box;
 
 public class BreakEsp extends Module {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
-
-    private final Setting<Boolean> self = sgGeneral.add(new BoolSetting.Builder()
-        .name("self")
-        .description("Also shows blocks you are mining.")
-        .defaultValue(false)
-        .build()
-    );
 
     private final Setting<SettingColor> startColor = sgGeneral.add(new ColorSetting.Builder()
         .name("start-color")
@@ -80,9 +72,7 @@ public class BreakEsp extends Module {
         last = now;
 
         for (Entry entry : entries.values()) entry.present = false;
-        int own = mc.player.getId();
         MiningTracker.get().forEach((pos, mining) -> {
-            if (!self.get() && mining.breaker() == own) return;
             Entry entry = entries.computeIfAbsent(pos.asLong(), key -> new Entry(pos));
             entry.present = true;
             entry.target = (mining.stage() + 1) / 10.0;
