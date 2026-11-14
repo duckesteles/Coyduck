@@ -203,6 +203,10 @@ public class AutoCity extends Module implements MiningManager.StopGate {
     private long openSince;
     private long switchedAt;
     private long stopHeldSince;
+    private long holdUntil;
+    private int ticks;
+    private int updatedTick = -1;
+    private boolean pending;
 
     public AutoCity() {
         super(Coyduck.CATEGORY, "auto-city+", "Mines the target's surround or burrow and breaks it again whenever it is replaced.");
@@ -216,15 +220,22 @@ public class AutoCity extends Module implements MiningManager.StopGate {
             info("Disabled %s, it mines the same blocks.", meteor.title);
         }
 
-        target = null;
-        current = null;
+        reset();
     }
 
     @Override
     public void onDeactivate() {
         MiningManager.get().release(this);
+        reset();
+    }
+
+    private void reset() {
         target = null;
         current = null;
+        currentSupport = null;
+        stopHeldSince = 0;
+        holdUntil = 0;
+        pending = false;
     }
 
     @Override
@@ -234,6 +245,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
+        ticks++;
         update();
     }
 
@@ -241,17 +253,35 @@ public class AutoCity extends Module implements MiningManager.StopGate {
     private void onPacket(PacketApplyEvent.Post event) {
         if (target == null) return;
 
+        BlockPos center = target.getBlockPos();
+        boolean[] touched = {false};
         boolean relevant = switch (event.packet) {
-            case BlockUpdateS2CPacket packet -> packet.getPos().isWithinDistance(target.getBlockPos(), 3);
-            case ChunkDeltaUpdateS2CPacket packet -> Targets.touches(packet, target.getBlockPos(), 3);
+            case BlockUpdateS2CPacket packet -> {
+                touched[0] = ours(packet.getPos());
+                yield packet.getPos().isWithinDistance(center, 3);
+            }
+            case ChunkDeltaUpdateS2CPacket packet -> {
+                packet.visitUpdates((pos, state) -> touched[0] |= ours(pos));
+                yield Targets.touches(packet, center, 3);
+            }
             default -> false;
         };
+        if (!relevant) return;
 
-        if (relevant) update();
+        if (touched[0] || updatedTick != ticks) update();
+        else pending = true;
+    }
+
+    private boolean ours(BlockPos pos) {
+        return pos.equals(current) || pos.equals(currentSupport);
     }
 
     @EventHandler
     private void onRender(Render3DEvent event) {
+        if (pending) {
+            pending = false;
+            update();
+        }
         if (!render.get() || current == null || !MiningManager.get().owns(this)) return;
 
         Box box = new Box(current);
@@ -273,6 +303,8 @@ public class AutoCity extends Module implements MiningManager.StopGate {
     }
 
     private void update() {
+        updatedTick = ticks;
+        pending = false;
         if (InventoryManager.get().isOffhandEating()) return;
         if (mc.player == null || mc.world == null || !mc.player.isAlive()) return;
 
@@ -305,6 +337,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
             Trace.log("city target {} -> {} score {} -> {} {} target {}", current, best.pos, now == null ? null : now.score, best.score, reason, target.getName().getString());
             if (current != null) switchedAt = Util.getMeasuringTimeMs();
             stopHeldSince = 0;
+            holdUntil = 0;
             current = best.pos;
             openSince = 0;
             currentScore = best.score;
@@ -346,6 +379,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
             Trace.log("city release stop {} after {}ms", pos, now - stopHeldSince);
             stopHeldSince = 0;
         }
+        if (allow) holdUntil = 0;
         return allow;
     }
 
@@ -354,7 +388,13 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
         if (autoCrystal == null || !autoCrystal.isActive() || !InteractionManager.get().hasCrystals()) return true;
         if (!worthOpening(pos)) return false;
-        return !hurtSync.get() || HurtTracker.get().releaseTime(target) <= Util.getMeasuringTimeMs();
+        if (!hurtSync.get()) return true;
+
+        long now = Util.getMeasuringTimeMs();
+        long release = HurtTracker.get().releaseTime(target);
+        if (release <= now) return true;
+        if (holdUntil == 0) holdUntil = release;
+        return now >= holdUntil;
     }
 
     private boolean worthOpening(BlockPos pos) {
@@ -554,22 +594,33 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         if (support != null) view.set(support, Blocks.OBSIDIAN.getDefaultState());
         AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
         double range = autoCrystal != null && autoCrystal.isActive() ? autoCrystal.placeRange() : 5.5;
-        float best = 0;
-
+        Vec3d eye = mc.player.getEyePos();
+        Vec3d[] crystals = new Vec3d[9];
+        float[] bounds = new float[9];
+        int count = 0;
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
                 BlockPos base = gap.add(dx, -1, dz);
-                if (!Targets.canHoldCrystal(view, base)) continue;
-                if (new Box(base).squaredMagnitude(mc.player.getEyePos()) > range * range) continue;
+                if (new Box(base).squaredMagnitude(eye) > range * range || !Targets.canHoldCrystal(view, base)) continue;
 
                 Vec3d crystal = Targets.crystalCenter(base);
-                if (!Targets.safe(crystal, view, maxSelfDamage.get())) continue;
-
-                float damage = ExplosionDamage.crystal(target, feet, box, crystal, view);
-                if (damage > best) best = damage;
+                float bound = ExplosionDamage.upperBound(target, feet, crystal);
+                int at = count++;
+                while (at > 0 && bounds[at - 1] < bound) {
+                    bounds[at] = bounds[at - 1];
+                    crystals[at] = crystals[at - 1];
+                    at--;
+                }
+                bounds[at] = bound;
+                crystals[at] = crystal;
             }
         }
 
+        float best = 0;
+        for (int i = 0; i < count && bounds[i] > best; i++) {
+            if (!Targets.safe(crystals[i], view, maxSelfDamage.get())) continue;
+            best = Math.max(best, ExplosionDamage.crystal(target, feet, box, crystals[i], view));
+        }
         return best;
     }
 }
