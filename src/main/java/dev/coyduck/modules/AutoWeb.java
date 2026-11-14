@@ -2,10 +2,12 @@ package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MotionTracker;
+import dev.coyduck.utils.BlockRules;
 import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -31,6 +33,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -42,6 +45,10 @@ public class AutoWeb extends Module {
 
     private static final double SELF_MARGIN = 0.1;
     private static final int MAX_PREDICT_TICKS = 7;
+    private static final double MOVING_SPEED = 0.1;
+    private static final double FLYING_SPEED = 0.8;
+    private static final long REWEB_MS = 600;
+    private static final double REACH_MARGIN = 0.05;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -108,6 +115,7 @@ public class AutoWeb extends Module {
     private PlayerEntity target;
     private int budget;
     private boolean running;
+    private LongSet lastCells = new LongOpenHashSet();
 
     public AutoWeb() {
         super(Coyduck.CATEGORY, "auto-web+", "Webs the cells the target stands in and is about to step into.");
@@ -121,8 +129,23 @@ public class AutoWeb extends Module {
             info("Disabled %s, it webs the same target.", meteor.title);
         }
 
-        target = null;
+        reset();
         budget = websPerTick.get();
+    }
+
+    @Override
+    public void onDeactivate() {
+        reset();
+    }
+
+    @EventHandler
+    private void onWorldReset(WorldResetEvent event) {
+        reset();
+    }
+
+    private void reset() {
+        target = null;
+        lastCells = new LongOpenHashSet();
     }
 
     @Override
@@ -141,8 +164,12 @@ public class AutoWeb extends Module {
         if (target == null) return;
 
         switch (event.packet) {
-            case BlockUpdateS2CPacket packet when packet.getState().isReplaceable() && packet.getPos().isWithinDistance(target.getBlockPos(), 3) -> pass();
-            case ChunkDeltaUpdateS2CPacket packet when Targets.touches(packet, target.getBlockPos(), 3) -> pass();
+            case BlockUpdateS2CPacket packet when packet.getState().isReplaceable() && lastCells.contains(packet.getPos().asLong()) -> pass();
+            case ChunkDeltaUpdateS2CPacket packet -> {
+                boolean[] found = {false};
+                packet.visitUpdates((pos, state) -> found[0] |= state.isReplaceable() && lastCells.contains(pos.asLong()));
+                if (found[0]) pass();
+            }
             default -> {}
         }
     }
@@ -160,8 +187,10 @@ public class AutoWeb extends Module {
 
     private void run() {
         if (InventoryManager.get().isOffhandEating()) return;
+        if (target != null && target.getEntityWorld() != mc.world) target = null;
         target = Targets.find(targetRange.get());
         if (target == null || budget <= 0) return;
+        if (target.isGliding() || MotionTracker.get().velocity(target).horizontalLengthSquared() > FLYING_SPEED * FLYING_SPEED) return;
 
         int slot = InventoryManager.get().find(stack -> stack.isOf(Items.COBWEB), 0, InventoryManager.MAIN_END);
         if (slot == -1) return;
@@ -171,20 +200,36 @@ public class AutoWeb extends Module {
         boolean holed = Targets.isHoled(columns);
         if (mode.get() == Mode.Smart && holed) return;
 
-        LongSet cells = cells(box, holed);
-        if (predict.get()) {
-            int ticks = Math.min(MathHelper.ceil(LatencyManager.get().rtt() / 50.0) + 1, MAX_PREDICT_TICKS);
-            LongSet current = new LongOpenHashSet(cells);
-            for (long key : cells(MotionTracker.get().predict(target, ticks), false)) {
-                BlockPos cell = BlockPos.fromLong(key);
-                boolean crystalSpot = Targets.isBase(mc.world.getBlockState(cell.down())) && mc.world.getBlockState(cell).isAir();
-                if (current.contains(key) || !crystalSpot) cells.add(key);
-            }
+        long feet = BlockPos.ofFloored(Targets.feet(box)).asLong();
+        LongSet current = new LongLinkedOpenHashSet();
+        for (long key : cells(box, holed)) {
+            BlockPos cell = BlockPos.fromLong(key);
+            if (BlockPos.unpackLongX(key) == BlockPos.unpackLongX(feet) && BlockPos.unpackLongZ(key) == BlockPos.unpackLongZ(feet) || !crystalSpot(cell)) current.add(key);
         }
 
+        LongSet cells = new LongLinkedOpenHashSet();
+        if (predict.get()) {
+            int ticks = Math.min(MathHelper.ceil(LatencyManager.get().rtt() / 50.0) + 1, MAX_PREDICT_TICKS);
+            Box ahead = MotionTracker.get().predict(target, ticks);
+            boolean same = Targets.columns(ahead).equals(columns);
+            LongSet predicted = new LongLinkedOpenHashSet();
+            for (long key : cells(ahead, holed && same)) {
+                if (current.contains(key) || !crystalSpot(BlockPos.fromLong(key))) predicted.add(key);
+            }
+            if (!Targets.isStill(target, MOVING_SPEED)) cells.addAll(predicted);
+            cells.addAll(current);
+            cells.addAll(predicted);
+        } else {
+            cells.addAll(current);
+        }
+        lastCells = cells;
+
         Box self = selfBox();
+        Box body = mc.player.getBoundingBox();
+        int headY = MathHelper.floor(body.maxY - 1.0E-4);
         InteractionManager interaction = InteractionManager.get();
         List<BlockPos> planned = new ArrayList<>();
+        List<BlockHitResult> hits = new ArrayList<>();
         Surround surround = Modules.get().get(Surround.class);
         SelfTrap selfTrap = Modules.get().get(SelfTrap.class);
         boolean walled = surround != null && surround.isActive() || selfTrap != null && selfTrap.isActive();
@@ -195,23 +240,46 @@ public class AutoWeb extends Module {
 
             BlockPos pos = BlockPos.fromLong(key);
             if (!interaction.canPlace(pos) || mc.world.getBlockState(pos).isOf(Blocks.COBWEB) || ownRing.contains(pos)) continue;
-            if (self.intersects(new Box(pos)) || interaction.hit(pos, airplace.get()) == null) continue;
+            if (interaction.wasRejected(pos) || interaction.placedByUs(pos, REWEB_MS)) continue;
+            if (pos.getY() > headY && pos.getX() + 1 > body.minX && pos.getX() < body.maxX && pos.getZ() + 1 > body.minZ && pos.getZ() < body.maxZ) continue;
+            if (self.intersects(new Box(pos))) continue;
+            BlockHitResult hit = webHit(pos);
+            if (hit == null) continue;
             planned.add(pos);
+            hits.add(hit);
         }
 
-        if (planned.isEmpty() || !interaction.ready(planned.get(0), airplace.get(), rotate.get(), InteractionManager.TRAP_PRIORITY)) return;
+        if (planned.isEmpty() || !interaction.ready(planned.getFirst(), airplace.get(), rotate.get(), InteractionManager.TRAP_PRIORITY)) return;
 
         InventoryManager.get().withItem(slot, switchMode.get(), () -> {
-            for (BlockPos pos : planned) {
+            for (int i = 0; i < planned.size(); i++) {
                 if (budget <= 0 || !mc.player.getMainHandStack().isOf(Items.COBWEB)) break;
 
-                BlockHitResult hit = interaction.hit(pos, airplace.get());
+                BlockHitResult hit = i == 0 ? hits.get(i) : webHit(planned.get(i));
                 if (hit == null) continue;
 
-                if (!interaction.place(pos, hit, swing.get(), rotate.get(), InteractionManager.TRAP_PRIORITY)) break;
+                if (!interaction.place(planned.get(i), hit, swing.get(), rotate.get(), InteractionManager.TRAP_PRIORITY)) break;
                 budget--;
             }
         });
+    }
+
+    private boolean crystalSpot(BlockPos cell) {
+        return Targets.isBase(mc.world.getBlockState(cell.down())) && mc.world.getBlockState(cell).isAir();
+    }
+
+    private BlockHitResult webHit(BlockPos pos) {
+        BlockPos below = pos.down();
+        BlockState state = mc.world.getBlockState(below);
+        if (!state.isReplaceable() && !BlockRules.isInteractable(state.getBlock()) && InteractionManager.centerReach(below)) {
+            double reach = mc.player.getBlockInteractionRange() - REACH_MARGIN;
+            Vec3d eye = mc.player.getEyePos();
+            if (new Box(below).squaredMagnitude(eye) < reach * reach) {
+                Vec3d point = InteractionManager.get().visiblePoint(below, Direction.UP, eye, reach * reach);
+                if (point != null) return new BlockHitResult(point, Direction.UP, below, false);
+            }
+        }
+        return InteractionManager.get().hit(pos, airplace.get());
     }
 
     private LongSet cells(Box box, boolean head) {
@@ -220,13 +288,14 @@ public class AutoWeb extends Module {
         int top = MathHelper.floor(box.maxY - 1.0E-4);
         if (head) bottom = top;
 
+        InteractionManager interaction = InteractionManager.get();
         for (int x = MathHelper.floor(box.minX); x <= MathHelper.floor(box.maxX - 1.0E-4); x++) {
             for (int z = MathHelper.floor(box.minZ); z <= MathHelper.floor(box.maxZ - 1.0E-4); z++) {
                 for (int y = bottom; y <= top; y++) {
                     BlockPos pos = new BlockPos(x, y, z);
                     BlockState state = mc.world.getBlockState(pos);
                     if (state.isReplaceable() || state.isOf(Blocks.COBWEB)) {
-                        if (!state.isOf(Blocks.COBWEB) && washed(pos)) continue;
+                        if (!state.isOf(Blocks.COBWEB) && (washed(pos) || interaction.wasRejected(pos))) continue;
                         cells.add(pos.asLong());
                         break;
                     }
