@@ -38,7 +38,6 @@ import java.util.List;
 
 public class ChestSorter extends Module {
     private static final int PLAYER_SLOTS = 36;
-    private static final int TOTEM_SLOT = 35;
     private static final int UNLISTED = 1_000_000;
 
     public enum Order {
@@ -80,7 +79,7 @@ public class ChestSorter extends Module {
 
     private final Setting<Boolean> dumpHotbar = sgGeneral.add(new BoolSetting.Builder()
         .name("dump-hotbar")
-        .description("Dump empties the hotbar too, never slot 9.")
+        .description("Dump empties the hotbar too.")
         .defaultValue(true)
         .build()
     );
@@ -158,7 +157,6 @@ public class ChestSorter extends Module {
         List<Item> kept = keep.get();
         List<Click> clicks = new ArrayList<>();
         for (int i = start; i < end; i++) {
-            if (i - start == TOTEM_SLOT) continue;
             ItemStack stack = handler.getSlot(i).getStack();
             if (stack.isEmpty() || kept.contains(stack.getItem())) continue;
             clicks.add(new Click(i, SlotActionType.QUICK_MOVE));
