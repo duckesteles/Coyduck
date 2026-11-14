@@ -358,6 +358,7 @@ public class MaceStrike extends Module {
         if (Util.getMeasuringTimeMs() < pausedUntil) return;
         if (!canAct() || maceSlot() == -1) {
             target = null;
+            lastTarget = null;
             giveBack();
             return;
         }
@@ -365,6 +366,7 @@ public class MaceStrike extends Module {
         if (flying()) {
             airTick();
         } else {
+            lastTarget = null;
             giveBack();
             groundTick();
         }
@@ -397,6 +399,7 @@ public class MaceStrike extends Module {
         ElytraPilot pilot = Modules.get().get(ElytraPilot.class);
         if (pilot != null && pilot.isActive()) {
             target = null;
+            lastTarget = null;
             giveBack();
             return;
         }
@@ -407,6 +410,7 @@ public class MaceStrike extends Module {
         target = choose(followRange.get(), false);
         if (target == null) {
             lastTargetPos = null;
+            lastTarget = null;
             giveBack();
             return;
         }
@@ -425,6 +429,7 @@ public class MaceStrike extends Module {
             target = null;
             chasing = null;
             lastTargetPos = null;
+            lastTarget = null;
             giveBack();
             return;
         }
@@ -642,6 +647,8 @@ public class MaceStrike extends Module {
         noStrikeSince = 0;
         stuckLimit = STUCK_MS;
         lastTarget = null;
+        huntSince = 0;
+        lastStrike = 0;
         strikeLead = Vec3d.ZERO;
         pausedUntil = 0;
         waitTraced = false;
@@ -667,6 +674,7 @@ public class MaceStrike extends Module {
         long now = Util.getMeasuringTimeMs();
         Trace.log("mace gives up on {} for {}s, {}", target.getName().getString(), SKIP_MS / 1000, why);
         skipped.put(target.getId(), now + SKIP_MS);
+        lastTarget = null;
         noStrikeSince = 0;
         stuckLimit = STUCK_MS;
         target = null;
@@ -779,6 +787,7 @@ public class MaceStrike extends Module {
     private void strike(boolean preStopped) {
         PlayerEntity victim = target;
         int slot = maceSlot(InventoryManager.MAIN_END);
+        if (slot == -1 || victim == null) return;
         if (victim != null && mc.player.getMainHandStack().isOf(Items.MACE)) {
             learnVictim = victim.getId();
             learnHealth = victim.getHealth() + victim.getAbsorptionAmount();
