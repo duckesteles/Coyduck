@@ -1,7 +1,9 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.RotationManager;
+import dev.coyduck.utils.Trace;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
@@ -11,14 +13,22 @@ import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
+import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.MovementType;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.util.PlayerInput;
 import net.minecraft.util.Util;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.ChunkSectionPos;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.world.RaycastContext;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
@@ -36,7 +46,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> wallGuard = sgGeneral.add(new BoolSetting.Builder()
         .name("wall-guard")
-        .description("Shortens a move that would slam you into a wall, so you stop right in front of it instead of taking elytra crash damage.")
+        .description("Slows you down near walls and shortens a move that would slam into one, so you never take elytra crash damage. Also stops at chunks that are not loaded yet.")
         .defaultValue(true)
         .build()
     );
@@ -52,29 +62,43 @@ public class ElytraFly extends Module {
 
     private final Setting<Double> up = sgSpeed.add(new DoubleSetting.Builder()
         .name("up-speed")
-        .description("Blocks moved up per tick while holding jump.")
-        .defaultValue(2.4)
-        .min(0)
-        .sliderRange(0, 5)
+        .description("Blocks moved up per tick while holding jump. The 6b6t anticheat flags anything over 3.")
+        .defaultValue(MAX_VERTICAL)
+        .range(0, MAX_VERTICAL)
+        .sliderRange(0, MAX_VERTICAL)
         .build()
     );
 
     private final Setting<Double> down = sgSpeed.add(new DoubleSetting.Builder()
         .name("down-speed")
-        .description("Blocks moved down per tick while holding sneak.")
-        .defaultValue(2.4)
-        .min(0)
-        .sliderRange(0, 5)
+        .description("Blocks moved down per tick while holding sneak. Slows down near the ground so landing never hurts. The 6b6t anticheat flags anything over 3.")
+        .defaultValue(MAX_VERTICAL)
+        .range(0, MAX_VERTICAL)
+        .sliderRange(0, MAX_VERTICAL)
+        .build()
+    );
+
+    private final Setting<Boolean> replace = sgGeneral.add(new BoolSetting.Builder()
+        .name("replace")
+        .description("Swaps in a fresh elytra from your inventory before the worn one breaks, then picks the flight back up.")
+        .defaultValue(true)
         .build()
     );
 
     private static final int TAKEOFF_TRIES = 5;
     private static final int TAKEOFF_WINDOW = 40;
 
-    private static final long PILOT_FRESH = 150;
+    private static final double MAX_VERTICAL = 2.99;
+    private static final double LAND_SPEED = 0.45;
+    private static final double LAND_START = 10;
+    private static final double LAND_END = 0.5;
+    private static final double WALL_SLOW = 0.5;
+    private static final int REPLACE_DURABILITY = 2;
+    private static final long REPLACE_EVERY = 1_000;
 
     private static Vec3d pilot;
-    private static long pilotAt;
+    private long replacedAt;
+    private boolean warnedWorn;
 
     private boolean fluidFlight;
     private int takeoffTries;
@@ -101,7 +125,11 @@ public class ElytraFly extends Module {
 
     public static void pilot(Vec3d movement) {
         pilot = movement;
-        pilotAt = Util.getMeasuringTimeMs();
+    }
+
+    @EventHandler
+    private void onTickPost(TickEvent.Post event) {
+        pilot = null;
     }
 
     public double horizontalSpeed() {
@@ -119,6 +147,7 @@ public class ElytraFly extends Module {
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         if (mc.player == null) return;
+        if (replace.get() && !mc.player.isOnGround()) replaceElytra();
 
         if (inFluid()) {
             if (wasGliding || fluidFlight) {
@@ -177,13 +206,32 @@ public class ElytraFly extends Module {
         if (input.jump() && !input.sneak()) y = up.get();
         else if (input.sneak() && !input.jump()) y = -down.get();
 
-        if (pilot != null && (Modules.get().isActive(ElytraPilot.class) || Util.getMeasuringTimeMs() - pilotAt < PILOT_FRESH)) {
+        boolean piloted = pilot != null;
+        if (piloted) {
             x = pilot.x;
             y = pilot.y;
             z = pilot.z;
         }
+        y = MathHelper.clamp(y, -MAX_VERTICAL, MAX_VERTICAL);
+        if (!piloted && y < -LAND_SPEED) y = -landing(-y);
 
         if (wallGuard.get() && (x != 0 || z != 0)) {
+            if (!loaded(mc.player.getX() + x, mc.player.getZ() + z)) {
+                x = 0;
+                z = 0;
+            }
+            double length = Math.sqrt(x * x + z * z);
+            if (length > 0) {
+                double reach = length + 1;
+                double free = freeScale(x / length * reach, z / length * reach, y) * reach;
+                if (free < reach) {
+                    double cap = Math.sqrt(WALL_SLOW * free);
+                    if (cap < length) {
+                        x *= cap / length;
+                        z *= cap / length;
+                    }
+                }
+            }
             x *= freeScale(x, 0, y);
             z *= freeScale(0, z, y);
             double both = freeScale(x, z, y);
@@ -199,16 +247,64 @@ public class ElytraFly extends Module {
         if (x == 0 && z == 0) return 1;
         Box box = mc.player.getBoundingBox().offset(0, y, 0);
         if (!mc.world.isSpaceEmpty(mc.player, box)) box = mc.player.getBoundingBox();
-        if (mc.world.isSpaceEmpty(mc.player, box.offset(x, 0, z))) return 1;
+        if (!mc.world.isSpaceEmpty(mc.player, box)) return 1;
+        if (mc.world.isSpaceEmpty(mc.player, box.stretch(x, 0, z))) return 1;
 
         double low = 0;
         double high = 1;
         for (int i = 0; i < 6; i++) {
             double mid = (low + high) / 2;
-            if (mc.world.isSpaceEmpty(mc.player, box.offset(x * mid, 0, z * mid))) low = mid;
+            if (mc.world.isSpaceEmpty(mc.player, box.stretch(x * mid, 0, z * mid))) low = mid;
             else high = mid;
         }
         return low;
+    }
+
+    private double landing(double speed) {
+        Box box = mc.player.getBoundingBox();
+        double ground = LAND_START;
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                double px = MathHelper.lerp(i / 2.0, box.minX, box.maxX);
+                double pz = MathHelper.lerp(j / 2.0, box.minZ, box.maxZ);
+                Vec3d start = new Vec3d(px, box.minY, pz);
+                BlockHitResult hit = mc.world.raycast(new RaycastContext(start, start.add(0, -LAND_START, 0), RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.ANY, mc.player));
+                if (hit.getType() != HitResult.Type.MISS) ground = Math.min(ground, start.y - hit.getPos().y);
+            }
+        }
+        double share = MathHelper.clamp((ground - LAND_END) / (LAND_START - LAND_END), 0, 1);
+        return Math.min(speed, LAND_SPEED + share * (speed - LAND_SPEED));
+    }
+
+    private boolean loaded(double x, double z) {
+        return mc.world.getChunkManager().isChunkLoaded(ChunkSectionPos.getSectionCoord(x), ChunkSectionPos.getSectionCoord(z));
+    }
+
+    private void replaceElytra() {
+        ItemStack worn = mc.player.getEquippedStack(EquipmentSlot.CHEST);
+        boolean wearing = worn.isOf(Items.ELYTRA);
+        if (wearing && worn.getMaxDamage() - worn.getDamage() > REPLACE_DURABILITY) {
+            warnedWorn = false;
+            return;
+        }
+        if (!wearing && !mc.player.isGliding() && !wasGliding) return;
+        long now = Util.getMeasuringTimeMs();
+        if (now - replacedAt < REPLACE_EVERY) return;
+
+        int slot = InventoryManager.get().find(stack -> stack.isOf(Items.ELYTRA) && stack.getMaxDamage() - stack.getDamage() > REPLACE_DURABILITY, 0, InventoryManager.MAIN_END);
+        if (slot == -1) {
+            if (!warnedWorn) {
+                warnedWorn = true;
+                warning("Your elytra is about to break and there is no spare one.");
+            }
+            return;
+        }
+        replacedAt = now;
+        InvUtils.move().from(slot).toArmor(2);
+        fluidFlight = true;
+        takeoffTries = TAKEOFF_TRIES;
+        airTicks = 0;
+        Trace.log("elytra swapped in a fresh one from slot {}", slot);
     }
 
     private boolean canTakeoff() {
