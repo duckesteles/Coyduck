@@ -2,6 +2,7 @@ package dev.coyduck.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import dev.coyduck.managers.RotationManager;
+import dev.coyduck.modules.NoRotate;
 import dev.coyduck.modules.BoatFly;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.util.PlayerInput;
@@ -21,6 +22,11 @@ public abstract class ClientPlayerEntityMixin {
     @ModifyExpressionValue(method = {"sendMovementPackets", "tick"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getPitch()F"))
     private float coyduck$packetPitch(float original) {
         return RotationManager.get().packetPitch(original);
+    }
+
+    @Inject(method = "sendMovementPackets", at = @At("HEAD"), cancellable = true)
+    private void coyduck$holdInBlocks(CallbackInfo info) {
+        if (NoRotate.frozen()) info.cancel();
     }
 
     @Inject(method = "sendMovementPackets", at = @At("TAIL"))

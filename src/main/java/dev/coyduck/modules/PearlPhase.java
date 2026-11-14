@@ -334,7 +334,7 @@ public class PearlPhase extends Module {
 
     private void aim(RotationManager rotations) {
         rotations.request(ROTATE_PRIORITY, targetYaw, targetPitch, 180, false);
-        boolean aimed = Math.abs(MathHelper.wrapDegrees(rotations.serverYaw() - targetYaw)) < 0.5 && Math.abs(rotations.serverPitch() - targetPitch) < 0.5;
+        boolean aimed = NoRotate.frozen() || Math.abs(MathHelper.wrapDegrees(rotations.serverYaw() - targetYaw)) < 0.5 && Math.abs(rotations.serverPitch() - targetPitch) < 0.5;
         if (!aimed) {
             if (++aimTicks < AIM_TICKS) return;
             fail("Could not turn to the throw angle in time, so no pearl was thrown.");
