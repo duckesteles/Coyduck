@@ -3,6 +3,7 @@ package dev.coyduck.modules;
 import dev.coyduck.Coyduck;
 import meteordevelopment.meteorclient.events.game.GameJoinedEvent;
 import meteordevelopment.meteorclient.events.game.ReceiveMessageEvent;
+import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
@@ -11,6 +12,7 @@ import meteordevelopment.meteorclient.settings.StringListSetting;
 import meteordevelopment.meteorclient.settings.StringSetting;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.network.packet.s2c.common.ServerTransferS2CPacket;
 import net.minecraft.util.Util;
 
 import java.util.List;
@@ -19,6 +21,7 @@ import java.util.regex.Pattern;
 
 public class AutoLogin extends Module {
     private static final long JOIN_WINDOW = 60_000;
+    private static final long TRANSFER_WINDOW = 30_000;
     private static final Pattern TIMESTAMP = Pattern.compile("^<\\d{1,2}:\\d{2}(?::\\d{2})?> ");
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -49,6 +52,9 @@ public class AutoLogin extends Module {
     private long sendAt;
     private long joinedAt;
     private boolean sent;
+    private volatile String transferHost;
+    private volatile long transferAt;
+    private String sessionHost;
 
     public AutoLogin() {
         super(Coyduck.CATEGORY, "auto-login", "Types /login with your password when a server you listed asks for it in the first minute after you join. Messages from other players never trigger it.");
@@ -66,6 +72,15 @@ public class AutoLogin extends Module {
         sendAt = 0;
         sent = false;
         joinedAt = Util.getMeasuringTimeMs();
+        sessionHost = transferAt != 0 && joinedAt - transferAt < TRANSFER_WINDOW ? transferHost : null;
+        transferAt = 0;
+    }
+
+    @EventHandler
+    private void onReceive(PacketEvent.Receive event) {
+        if (!(event.packet instanceof ServerTransferS2CPacket packet)) return;
+        transferHost = packet.host().toLowerCase(Locale.ROOT);
+        transferAt = Util.getMeasuringTimeMs();
     }
 
     @EventHandler
@@ -90,10 +105,13 @@ public class AutoLogin extends Module {
     }
 
     private boolean trusted() {
-        if (mc.getCurrentServerEntry() == null) return false;
-        String address = mc.getCurrentServerEntry().address.toLowerCase(Locale.ROOT);
-        int port = address.lastIndexOf(':');
-        String host = port > 0 ? address.substring(0, port) : address;
+        String host = sessionHost;
+        if (host == null) {
+            if (mc.getCurrentServerEntry() == null) return false;
+            String address = mc.getCurrentServerEntry().address.toLowerCase(Locale.ROOT);
+            int port = address.lastIndexOf(':');
+            host = port > 0 ? address.substring(0, port) : address;
+        }
         for (String server : servers.get()) {
             String entry = server.toLowerCase(Locale.ROOT).trim();
             if (!entry.isEmpty() && (host.equals(entry) || host.endsWith("." + entry))) return true;
