@@ -18,8 +18,11 @@ import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.util.math.Direction;
 
 public class HoleEsp extends Module {
@@ -64,6 +67,13 @@ public class HoleEsp extends Module {
         .build()
     );
 
+    private final Setting<Boolean> markTrapped = sgGeneral.add(new BoolSetting.Builder()
+        .name("mark-trapped")
+        .description("Gives holes with a solid roof their own color, since you can't jump out of them.")
+        .defaultValue(true)
+        .build()
+    );
+
     private final Setting<Double> height = sgRender.add(new DoubleSetting.Builder()
         .name("height")
         .description("Height of the boxes.")
@@ -96,6 +106,14 @@ public class HoleEsp extends Module {
         .build()
     );
 
+    private final Setting<SettingColor> trappedColor = sgRender.add(new ColorSetting.Builder()
+        .name("trapped-color")
+        .description("Holes with a solid roof. The alpha sets how strong the glass looks.")
+        .defaultValue(new SettingColor(255, 180, 70, 60))
+        .visible(markTrapped::get)
+        .build()
+    );
+
     private static final class Hole {
         final double minX;
         final double minZ;
@@ -103,16 +121,18 @@ public class HoleEsp extends Module {
         final double maxZ;
         final double y;
         boolean safe;
+        boolean trapped;
         boolean present = true;
         double shown;
 
-        Hole(double minX, double minZ, double maxX, double maxZ, double y, boolean safe) {
+        Hole(double minX, double minZ, double maxX, double maxZ, double y, boolean safe, boolean trapped) {
             this.minX = minX;
             this.minZ = minZ;
             this.maxX = maxX;
             this.maxZ = maxZ;
             this.y = y;
             this.safe = safe;
+            this.trapped = trapped;
         }
     }
 
@@ -125,6 +145,7 @@ public class HoleEsp extends Module {
     private final Color lineClear = new Color();
     private int ticks;
     private long last;
+    private boolean anchorsWork;
 
     public HoleEsp() {
         super(Coyduck.CATEGORY, "hole-esp+", "Shows safe holes as glass boxes that rise in and fade out smoothly.");
@@ -143,6 +164,7 @@ public class HoleEsp extends Module {
 
         seen.clear();
         BlockPos center = mc.player.getBlockPos();
+        anchorsWork = mc.world.getRegistryKey() == World.NETHER || Boolean.TRUE.equals(mc.world.getEnvironmentAttributes().getAttributeValue(EnvironmentAttributes.RESPAWN_ANCHOR_WORKS_GAMEPLAY, center));
         int r = range.get();
         int v = vertical.get();
         for (int dx = -r; dx <= r; dx++) {
@@ -175,7 +197,7 @@ public class HoleEsp extends Module {
         safe &= floor == BEDROCK;
 
         if (walls == 4) {
-            add(BlockPos.asLong(x, y, z), x, z, x + 1, z + 1, y, safe);
+            add(BlockPos.asLong(x, y, z), x, z, x + 1, z + 1, y, safe, roofed(x, y, z));
             return;
         }
         if (!doubles.get() || gap == null || (gap != Direction.EAST && gap != Direction.SOUTH)) return;
@@ -192,16 +214,23 @@ public class HoleEsp extends Module {
             if (kind == OPEN) return;
             safe &= kind == BEDROCK;
         }
-        add(BlockPos.asLong(x, y, z), x, z, x + 1 + gap.getOffsetX(), z + 1 + gap.getOffsetZ(), y, safe);
+        add(BlockPos.asLong(x, y, z), x, z, x + 1 + gap.getOffsetX(), z + 1 + gap.getOffsetZ(), y, safe, roofed(x, y, z) && roofed(ox, y, oz));
     }
 
-    private void add(long id, double minX, double minZ, double maxX, double maxZ, double y, boolean safe) {
+    private boolean roofed(int x, int y, int z) {
+        return markTrapped.get() && kind(x, y + 2, z) != OPEN;
+    }
+
+    private void add(long id, double minX, double minZ, double maxX, double maxZ, double y, boolean safe, boolean trapped) {
         if (hideOwn.get() && mc.player.getBoundingBox().intersects(minX, y, minZ, maxX, y + 2, maxZ)) return;
 
         seen.add(id);
         Hole hole = holes.get(id);
-        if (hole == null || hole.maxX != maxX || hole.maxZ != maxZ) holes.put(id, new Hole(minX, minZ, maxX, maxZ, y, safe));
-        else hole.safe = safe;
+        if (hole == null || hole.maxX != maxX || hole.maxZ != maxZ) holes.put(id, new Hole(minX, minZ, maxX, maxZ, y, safe, trapped));
+        else {
+            hole.safe = safe;
+            hole.trapped = trapped;
+        }
     }
 
     private boolean open(int x, int y, int z) {
@@ -211,6 +240,7 @@ public class HoleEsp extends Module {
     private int kind(int x, int y, int z) {
         BlockState state = mc.world.getBlockState(cursor.set(x, y, z));
         if (state.getHardness(mc.world, cursor) < 0) return BEDROCK;
+        if (state.isOf(Blocks.RESPAWN_ANCHOR) && !anchorsWork) return OPEN;
         return state.getBlock().getBlastResistance() >= SAFE_RESISTANCE ? SOLID : OPEN;
     }
 
@@ -235,7 +265,7 @@ public class HoleEsp extends Module {
     private void draw(Renderer3D r, Hole hole) {
         double inverse = 1 - hole.shown;
         double t = 1 - inverse * inverse * inverse;
-        Color base = Shaders.tint(hole.safe ? safeColor.get() : otherColor.get());
+        Color base = Shaders.tint(hole.trapped ? trappedColor.get() : hole.safe ? safeColor.get() : otherColor.get());
         fill.set(base.r, base.g, base.b, (int) (base.a * t));
         clear.set(base.r, base.g, base.b, 0);
         line.set(base.r, base.g, base.b, (int) (Math.min(255, base.a * 3.5) * t));
