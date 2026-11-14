@@ -146,7 +146,7 @@ public class PlayersHud extends HudElement {
         if (rows.isEmpty()) {
             if (!isInEditor()) return;
             CoyHud.panel(r, x, y, w, h, background.alpha());
-            r.text("No players", x + pad, y + pad, CoyHud.color(CoyHud.MUTED), false);
+            r.text("No players", x + pad, y + pad, CoyHud.color(CoyHud.MUTED), background.shadow());
             return;
         }
 
@@ -162,14 +162,14 @@ public class PlayersHud extends HudElement {
                 int size = (int) Math.round(head);
                 r.post(() -> drawHead(r, skin, hx, hy, size));
             }
-            r.text(row.name, nameX, rowY, CoyHud.color(row.friend ? CoyHud.GOOD : CoyHud.TEXT), false);
+            r.text(row.name, nameX, rowY, CoyHud.color(row.friend ? CoyHud.GOOD : CoyHud.TEXT), background.shadow());
 
             double sideX = right ? x + w - pad : x + pad + head + headGap + nameWidth + gap;
             double px = right ? sideX - partsWidth(r, row.parts) : sideX;
             for (int i = 0; i < row.parts.size(); i++) {
                 Part part = row.parts.get(i);
                 if (i > 0) px += 6;
-                r.text(part.text, px, rowY, CoyHud.color(part.color), false);
+                r.text(part.text, px, rowY, CoyHud.color(part.color), background.shadow());
                 px += r.textWidth(part.text);
             }
             rowY += line;

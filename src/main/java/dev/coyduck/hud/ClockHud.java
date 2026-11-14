@@ -8,6 +8,7 @@ import meteordevelopment.meteorclient.settings.StringSetting;
 import meteordevelopment.meteorclient.systems.hud.HudElement;
 import meteordevelopment.meteorclient.systems.hud.HudElementInfo;
 import meteordevelopment.meteorclient.systems.hud.HudRenderer;
+import meteordevelopment.meteorclient.utils.Utils;
 
 import java.time.DateTimeException;
 import java.time.ZoneId;
@@ -65,9 +66,16 @@ public class ClockHud extends HudElement {
     );
 
     private final Setting<Boolean> date = sgGeneral.add(new BoolSetting.Builder()
-        .name("date")
+        .name("show-date")
         .description("Shows the day and date in your computer's language.")
-        .defaultValue(true)
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> accentTime = sgGeneral.add(new BoolSetting.Builder()
+        .name("accent-time")
+        .description("Draws the time in the accent color instead of white.")
+        .defaultValue(false)
         .build()
     );
 
@@ -79,16 +87,16 @@ public class ClockHud extends HudElement {
     );
 
     private final Setting<Boolean> greeting = sgGeneral.add(new BoolSetting.Builder()
-        .name("greeting")
+        .name("show-greeting")
         .description("Says good morning, afternoon, evening or night with your name.")
-        .defaultValue(true)
+        .defaultValue(false)
         .build()
     );
 
     private final Setting<Boolean> session = sgGeneral.add(new BoolSetting.Builder()
-        .name("session")
+        .name("show-session")
         .description("Shows how long you have been in this world or server.")
-        .defaultValue(true)
+        .defaultValue(false)
         .build()
     );
 
@@ -126,30 +134,39 @@ public class ClockHud extends HudElement {
 
         double scale = size.get();
         double big = scale * timeSize.get();
-        double pad = 5 * scale;
-        double bar = 3 * scale;
-        double timeWidth = r.textWidth(time, false, big);
-        double timeHeight = r.textHeight(false, big);
+        boolean shadow = background.shadow();
+        boolean boxed = background.boxed();
+        double pad = boxed ? 5 * scale : 0;
+        double bar = boxed ? 3 * scale : 0;
+        double timeWidth = Math.max(r.textWidth(time, shadow, big), r.textWidth(steady(time), shadow, big));
+        double timeHeight = r.textHeight(shadow, big);
         double width = timeWidth;
-        for (String line : small) width = Math.max(width, r.textWidth(line, false, scale));
-        double lineHeight = r.textHeight(false, scale) + 2 * scale;
+        for (String line : small) width = Math.max(width, r.textWidth(line, shadow, scale));
+        double lineHeight = r.textHeight(shadow, scale) + 2 * scale;
         double w = pad * 2 + bar + width;
         double h = pad * 2 + timeHeight + (small.isEmpty() ? 0 : 2 * scale + lineHeight * small.size() - 2 * scale);
         setSize(w, h);
         int x = box.getRenderX();
         int y = box.getRenderY();
+        boolean right = getX() + getWidth() / 2.0 > Utils.getWindowWidth() / 2.0;
 
         CoyHud.panel(r, x, y, w, h, background.alpha());
-        CoyHud.round(r, x, y + 3 * scale, 2 * scale, h - 6 * scale, 1, CoyHud.color(CoyHud.accent()));
+        if (boxed) CoyHud.round(r, x, y + 3 * scale, 2 * scale, h - 6 * scale, 1, CoyHud.color(CoyHud.accent()));
 
-        double tx = x + pad + bar;
+        double left = x + pad + bar;
+        double end = x + w - pad;
         double ty = y + pad;
-        r.text(time, tx, ty, CoyHud.color(CoyHud.TEXT), false, big);
+        r.text(time, right ? end - r.textWidth(time, shadow, big) : left, ty, CoyHud.color(accentTime.get() ? CoyHud.accent() : CoyHud.TEXT), shadow, big);
         ty += timeHeight + 2 * scale;
         for (int i = 0; i < small.size(); i++) {
-            r.text(small.get(i), tx, ty, CoyHud.color(i == 0 && date.get() ? CoyHud.SUBTLE : CoyHud.MUTED), false, scale);
+            String line = small.get(i);
+            r.text(line, right ? end - r.textWidth(line, shadow, scale) : left, ty, CoyHud.color(i == 0 && date.get() ? CoyHud.SUBTLE : CoyHud.MUTED), shadow, scale);
             ty += lineHeight;
         }
+    }
+
+    private static String steady(String time) {
+        return time.replaceAll("[0-9]", "0");
     }
 
     private ZoneId zoneId() {

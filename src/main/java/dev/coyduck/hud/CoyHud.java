@@ -22,6 +22,7 @@ public final class CoyHud {
     public static final int GOOD = 0xFF7CCE9A;
     public static final int WARN = 0xFFF4C660;
     public static final int BAD = 0xFFE26C7A;
+    private static final double SHADOW_BELOW = 0.35;
 
     private CoyHud() {
     }
@@ -33,13 +34,13 @@ public final class CoyHud {
         public Background(Settings settings) {
             SettingGroup group = settings.createGroup("Background");
             enabled = group.add(new BoolSetting.Builder()
-                .name("background")
-                .description("Draws the dark box behind this element.")
-                .defaultValue(true)
+                .name("box")
+                .description("Draws a dark box behind this element. Off leaves only the text, with a shadow so it stays readable.")
+                .defaultValue(false)
                 .build()
             );
             opacity = group.add(new IntSetting.Builder()
-                .name("background-opacity")
+                .name("box-opacity")
                 .description("How see-through the box is, in percent. 100 is fully dark.")
                 .defaultValue(65)
                 .range(0, 100)
@@ -51,6 +52,14 @@ public final class CoyHud {
 
         public double alpha() {
             return enabled.get() ? opacity.get() / 100.0 : 0;
+        }
+
+        public boolean boxed() {
+            return alpha() > 0;
+        }
+
+        public boolean shadow() {
+            return alpha() < SHADOW_BELOW;
         }
     }
 

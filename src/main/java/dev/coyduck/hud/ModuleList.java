@@ -99,6 +99,13 @@ public class ModuleList extends HudElement {
         .build()
     );
 
+    private final Setting<Boolean> bar = sgLayout.add(new BoolSetting.Builder()
+        .name("bar")
+        .description("Draws a thin accent line on the screen-edge side of each row.")
+        .defaultValue(false)
+        .build()
+    );
+
     private final Setting<Boolean> slide = sgLayout.add(new BoolSetting.Builder()
         .name("slide")
         .description("Slides modules in and out instead of showing them at once.")
@@ -107,6 +114,8 @@ public class ModuleList extends HudElement {
     );
 
     private final CoyHud.Background background = new CoyHud.Background(settings);
+
+    private static final double BAR = 2;
 
     private final Map<Module, Double> shown = new HashMap<>();
     private final Map<Module, String> extras = new HashMap<>();
@@ -124,6 +133,8 @@ public class ModuleList extends HudElement {
         double delta = last == 0 ? 0 : Math.min((now - last) / 1000.0, 0.1);
         last = now;
         double s = scale.get();
+        boolean shadow = background.shadow();
+        boolean boxed = background.boxed();
         List<Module> hide = hidden.get();
 
         for (Module module : Modules.get().getAll()) {
@@ -141,7 +152,7 @@ public class ModuleList extends HudElement {
         for (Module module : list) {
             String extra = info.get() ? cut(module.getInfoString()) : null;
             extras.put(module, extra);
-            widths.put(module, rowWidth(r, module, extra, s));
+            widths.put(module, rowWidth(r, module, extra, s, shadow, boxed));
         }
         if (sort.get() == Sort.Length) list.sort((a, b) -> Double.compare(widths.get(b), widths.get(a)));
         else list.sort((a, b) -> a.title.compareToIgnoreCase(b.title));
@@ -150,16 +161,17 @@ public class ModuleList extends HudElement {
         if (overflow > 0) list = list.subList(0, maxRows.get());
         String more = overflow > 0 ? "+" + overflow + " more" : null;
 
-        double textHeight = r.textHeight(false, s);
-        double rowHeight = textHeight + (compact.get() ? 2 : 5) * s;
-        double widest = more == null ? 0 : r.textWidth(more, false, s) + 12 * s;
+        double textHeight = r.textHeight(shadow, s);
+        double rowHeight = textHeight + (compact.get() ? 1 : 4) * s + (boxed ? 2 * s : 0);
+        double side = side(s, boxed);
+        double widest = more == null ? 0 : r.textWidth(more, shadow, s) + side * 2;
         double total = more == null ? 0 : rowHeight;
         for (Module module : list) {
             widest = Math.max(widest, widths.get(module));
             total += rowHeight * shown.get(module);
         }
         if (list.isEmpty() && isInEditor()) {
-            widest = r.textWidth("Modules", false, s) + 14 * s;
+            widest = r.textWidth("Modules", shadow, s) + side * 2;
             total = rowHeight;
         }
         double target = Math.max(widest, 30 * s);
@@ -173,7 +185,7 @@ public class ModuleList extends HudElement {
         double alpha = background.alpha();
         if (list.isEmpty() && isInEditor()) {
             CoyHud.panel(r, x, y, getWidth(), rowHeight, alpha);
-            r.text("Modules", x + 7 * s, y + (rowHeight - textHeight) / 2, CoyHud.color(CoyHud.SUBTLE), false, s);
+            r.text("Modules", x + side, y + (rowHeight - textHeight) / 2, CoyHud.color(CoyHud.SUBTLE), shadow, s);
             return;
         }
 
@@ -185,23 +197,27 @@ public class ModuleList extends HudElement {
             double offset = (1 - t) * (w * 0.6);
             double rowX = right ? x + getWidth() - w + offset : x - offset;
 
-            if (alpha > 0) r.quad(rowX, rowY, w, h, CoyHud.color(CoyHud.BACKGROUND | 0xFF000000, t * alpha));
-            r.quad(right ? rowX + w - 2 : rowX, rowY, 2, h, CoyHud.color(CoyHud.accent(), t));
+            if (boxed) r.quad(rowX, rowY, w, h, CoyHud.color(CoyHud.BACKGROUND | 0xFF000000, t * alpha));
+            if (bar.get()) r.quad(right ? rowX + w - BAR : rowX, rowY, BAR, h, CoyHud.color(CoyHud.accent(), t));
 
             if (t > 0.5) {
-                double tx = rowX + (right ? 5 : 6) * s;
+                double tx = rowX + side;
                 double ty = rowY + (h - textHeight) / 2;
-                r.text(module.title, tx, ty, CoyHud.color(CoyHud.TEXT, t), false, s);
+                tx = r.text(module.title, tx, ty, CoyHud.color(CoyHud.accent(), t), shadow, s);
                 String extra = extras.get(module);
-                if (extra != null) r.text(extra, tx + r.textWidth(module.title, false, s) + 4 * s, ty, CoyHud.color(CoyHud.SUBTLE, t), false, s);
+                if (extra != null) {
+                    tx = r.text(" [", tx, ty, CoyHud.color(CoyHud.SUBTLE, t), shadow, s);
+                    tx = r.text(extra, tx, ty, CoyHud.color(CoyHud.TEXT, t), shadow, s);
+                    r.text("]", tx, ty, CoyHud.color(CoyHud.SUBTLE, t), shadow, s);
+                }
             }
             rowY += h;
         }
         if (more != null) {
-            double w = r.textWidth(more, false, s) + 12 * s;
+            double w = r.textWidth(more, shadow, s) + side * 2;
             double rowX = right ? x + getWidth() - w : x;
-            if (alpha > 0) r.quad(rowX, rowY, w, rowHeight, CoyHud.color(CoyHud.BACKGROUND | 0xFF000000, alpha));
-            r.text(more, rowX + 6 * s, rowY + (rowHeight - textHeight) / 2, CoyHud.color(CoyHud.MUTED), false, s);
+            if (boxed) r.quad(rowX, rowY, w, rowHeight, CoyHud.color(CoyHud.BACKGROUND | 0xFF000000, alpha));
+            r.text(more, rowX + side, rowY + (rowHeight - textHeight) / 2, CoyHud.color(CoyHud.MUTED), shadow, s);
         }
     }
 
@@ -211,9 +227,13 @@ public class ModuleList extends HudElement {
         return extra.length() <= max ? extra : extra.substring(0, Math.max(1, max - 1)).stripTrailing() + "..";
     }
 
-    private double rowWidth(HudRenderer r, Module module, String extra, double s) {
-        double w = r.textWidth(module.title, false, s) + 11 * s;
-        if (extra != null) w += r.textWidth(extra, false, s) + 4 * s;
+    private double side(double s, boolean boxed) {
+        return (boxed ? 4 * s : 0) + (bar.get() ? BAR + 2 * s : 0);
+    }
+
+    private double rowWidth(HudRenderer r, Module module, String extra, double s, boolean shadow, boolean boxed) {
+        double w = r.textWidth(module.title, shadow, s) + side(s, boxed) * 2;
+        if (extra != null) w += r.textWidth(" [" + extra + "]", shadow, s);
         return w;
     }
 }

@@ -141,9 +141,9 @@ public class InfoHud extends HudElement {
         boolean right = getX() + getWidth() / 2.0 > Utils.getWindowWidth() / 2.0;
         double rowY = y + pad;
         for (Line line : lines) {
-            r.text(line.label, x + pad, rowY, CoyHud.color(CoyHud.SUBTLE), false);
+            r.text(line.label, x + pad, rowY, CoyHud.color(CoyHud.SUBTLE), background.shadow());
             double vx = right ? x + w - pad - r.textWidth(line.value) : x + pad + labelWidth + gap;
-            r.text(line.value, vx, rowY, CoyHud.color(line.color), false);
+            r.text(line.value, vx, rowY, CoyHud.color(line.color), background.shadow());
             rowY += rowHeight;
         }
     }

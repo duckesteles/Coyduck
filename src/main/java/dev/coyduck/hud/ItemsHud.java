@@ -111,7 +111,7 @@ public class ItemsHud extends HudElement {
         int y = box.getRenderY();
         CoyHud.panel(r, x, y, w, h, background.alpha());
         if (entries.isEmpty()) {
-            if (isInEditor()) r.text("Items", x + pad, y + pad, CoyHud.color(CoyHud.MUTED), false, s);
+            if (isInEditor()) r.text("Items", x + pad, y + pad, CoyHud.color(CoyHud.MUTED), background.shadow(), s);
             return;
         }
 
@@ -127,7 +127,7 @@ public class ItemsHud extends HudElement {
             ItemStack stack = entry.stack;
             r.post(() -> r.item(stack, ix, iy, icon, false, ""));
             int color = entry.count == 0 ? CoyHud.BAD : entry.count <= low.get() ? CoyHud.WARN : CoyHud.TEXT;
-            r.text(entry.text, textX, cellY + (size - textHeight) / 2, CoyHud.color(color), false, s);
+            r.text(entry.text, textX, cellY + (size - textHeight) / 2, CoyHud.color(color), background.shadow(), s);
         }
     }
 
