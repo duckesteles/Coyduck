@@ -25,7 +25,6 @@ import net.minecraft.util.math.Box;
 
 public class AutoXp extends Module {
     private static final int ROTATE_PRIORITY = 40;
-    private static final int ORB_BACKLOG = 4;
     private static final int BOTTLE_VALUE = 7;
     private static final double ORB_RANGE = 3;
     private static final double REPAIR_PER_XP = 2;
@@ -52,8 +51,8 @@ public class AutoXp extends Module {
 
     private final Setting<Integer> perTick = sgGeneral.add(new IntSetting.Builder()
         .name("bottles-per-tick")
-        .description("Most bottles thrown in one tick while mending. Fewer go out while thrown experience still waits to be picked up.")
-        .defaultValue(1)
+        .description("Bottles thrown each tick while mending. None go out while the experience already thrown covers the repair.")
+        .defaultValue(2)
         .range(1, 5)
         .sliderRange(1, 5)
         .build()
@@ -146,17 +145,10 @@ public class AutoXp extends Module {
 
     private int throwable() {
         Box area = mc.player.getBoundingBox().expand(ORB_RANGE);
-        int orbs = 0;
         int pending = 0;
-        for (ExperienceOrbEntity orb : mc.world.getEntitiesByClass(ExperienceOrbEntity.class, area, orb -> !orb.isRemoved())) {
-            orbs++;
-            pending += orb.getValue();
-        }
-        for (ExperienceBottleEntity bottle : mc.world.getEntitiesByClass(ExperienceBottleEntity.class, area.expand(ORB_RANGE), bottle -> bottle.getOwner() == mc.player)) {
-            orbs += 2;
-            pending += BOTTLE_VALUE;
-        }
-        if (orbs >= ORB_BACKLOG || pending * REPAIR_PER_XP >= needed()) return 0;
+        for (ExperienceOrbEntity orb : mc.world.getEntitiesByClass(ExperienceOrbEntity.class, area, orb -> !orb.isRemoved())) pending += orb.getValue();
+        for (ExperienceBottleEntity bottle : mc.world.getEntitiesByClass(ExperienceBottleEntity.class, area.expand(ORB_RANGE), bottle -> bottle.getOwner() == mc.player)) pending += BOTTLE_VALUE;
+        if (pending * REPAIR_PER_XP >= needed()) return 0;
         return perTick.get();
     }
 
