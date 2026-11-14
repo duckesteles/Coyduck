@@ -8,6 +8,7 @@ import meteordevelopment.orbit.EventPriority;
 import net.minecraft.entity.Entity;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientPlayerEntityAccessor;
+import dev.coyduck.modules.MaceStrike;
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.util.PlayerInput;
@@ -72,7 +73,7 @@ public final class RotationManager {
     }
 
     public boolean lookNow(Vec3d target, int priority) {
-        if (mc.player == null || mc.getNetworkHandler() == null) return false;
+        if (mc.player == null || mc.getNetworkHandler() == null || MaceStrike.blocksMoves()) return false;
         if (current != null && current.priority > priority || pending != null && pending.priority > priority) return false;
         Vec3d eye = mc.player.getEyePos();
         double dx = target.x - eye.x;
@@ -90,7 +91,7 @@ public final class RotationManager {
     }
 
     public boolean afterRotation(Vec3d target, int priority, Runnable action) {
-        if (mc.player == null || mc.getNetworkHandler() == null) return false;
+        if (mc.player == null || mc.getNetworkHandler() == null || MaceStrike.blocksMoves()) return false;
         if (current != null && current.priority > priority || pending != null && pending.priority > priority) return false;
         Vec3d eye = mc.player.getEyePos();
         double dx = target.x - eye.x;
