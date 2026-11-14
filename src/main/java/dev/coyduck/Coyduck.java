@@ -1,5 +1,6 @@
 package dev.coyduck;
 
+import dev.coyduck.commands.KitCommand;
 import dev.coyduck.commands.PilotCommand;
 import dev.coyduck.gui.CoyduckTheme;
 import dev.coyduck.hud.ClockHud;
@@ -20,6 +21,8 @@ import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.managers.MotionTracker;
 import dev.coyduck.managers.PopTracker;
 import dev.coyduck.managers.RotationManager;
+import dev.coyduck.modules.Regear;
+import dev.coyduck.modules.AntiRegear;
 import dev.coyduck.modules.LogoutSpots;
 import dev.coyduck.modules.PhaseEsp;
 import dev.coyduck.modules.AirMine;
@@ -151,8 +154,11 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new NametagsPlus());
         Modules.get().add(new PhaseEsp());
         Modules.get().add(new LogoutSpots());
+        Modules.get().add(new AntiRegear());
+        Modules.get().add(new Regear());
 
         Commands.add(new PilotCommand());
+        Commands.add(new KitCommand());
     }
 
     @Override
