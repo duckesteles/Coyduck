@@ -6,6 +6,7 @@ import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
 import dev.coyduck.modules.AirMine;
 import dev.coyduck.modules.AutoCity;
+import dev.coyduck.modules.NoRotate;
 import dev.coyduck.modules.AutoTotem;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.PacketBatch;
@@ -63,6 +64,8 @@ public final class MiningManager {
     private static final double MAX_EYE = 1.62;
     private static final long OWN_BLOCK_TIME = 2_000;
     private static final long START_GAP = 600;
+    private static final double STOP_FACE_COS = Math.cos(Math.toRadians(15));
+    private static final int STOP_FACE_PRIORITY = 95;
     private static final long QUIET = 150;
     private static final long QUIET_CAP = 400;
 
@@ -283,6 +286,7 @@ public final class MiningManager {
             send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
         };
 
+        faceForStop();
         if (tool == -1) action.run();
         else if (!InventoryManager.get().withItem(tool, switchMode, action)) return false;
 
@@ -295,6 +299,18 @@ public final class MiningManager {
 
         MeteorClient.EVENT_BUS.post(MineStopEvent.get(pos));
         return true;
+    }
+
+    private void faceForStop() {
+        if (NoRotate.frozen()) return;
+        Direction face = side != null ? side : facing(pos);
+        Vec3d point = Vec3d.ofCenter(pos).add(face.getOffsetX() * 0.5, face.getOffsetY() * 0.5, face.getOffsetZ() * 0.5);
+        RotationManager rotations = RotationManager.get();
+        Vec3d eye = mc.player.getEyePos();
+        Vec3d look = Vec3d.fromPolar(rotations.serverPitch(), rotations.serverYaw());
+        Vec3d want = point.subtract(eye).normalize();
+        if (look.dotProduct(want) >= STOP_FACE_COS) return;
+        if (rotations.lookNow(point, STOP_FACE_PRIORITY) && Trace.on()) Trace.log("mine faces {} before stop", pos);
     }
 
     private void blindStop() {
