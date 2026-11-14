@@ -111,7 +111,7 @@ public class CoyGuiScreen extends Screen {
         Map.entry("break-esp+", "Render"), Map.entry("crystal-chams", "Render"), Map.entry("custom-fov", "Render"),
         Map.entry("esp+", "Render"), Map.entry("nametags+", "Render"), Map.entry("phase-esp", "Render"), Map.entry("logout-spots+", "Render"), Map.entry("hole-esp+", "Render"),
         Map.entry("kill-effects", "Render"), Map.entry("no-explosion", "Render"), Map.entry("shaders+", "Render"),
-        Map.entry("discord-webhook", "Misc"), Map.entry("schem-builder", "World")
+        Map.entry("discord-webhook", "Misc"), Map.entry("chest-search", "Misc"), Map.entry("schem-builder", "World")
     );
     private static final String[] CHANNELS = {"Red", "Green", "Blue", "Alpha"};
     private static final Identifier RESET_ICON = Identifier.of("coyduck", "textures/gui/reset.png");

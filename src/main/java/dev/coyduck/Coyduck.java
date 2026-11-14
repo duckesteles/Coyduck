@@ -21,6 +21,7 @@ import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.managers.MotionTracker;
 import dev.coyduck.managers.PopTracker;
 import dev.coyduck.managers.RotationManager;
+import dev.coyduck.modules.ChestSearch;
 import dev.coyduck.modules.HitboxDesync;
 import dev.coyduck.modules.DiscordWebhook;
 import dev.coyduck.modules.PortalGodMode;
@@ -162,6 +163,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new PortalGodMode());
         Modules.get().add(new DiscordWebhook());
         Modules.get().add(new HitboxDesync());
+        Modules.get().add(new ChestSearch());
 
         Commands.add(new PilotCommand());
         Commands.add(new KitCommand());

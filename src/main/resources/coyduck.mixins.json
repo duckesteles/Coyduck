@@ -12,6 +12,7 @@
     "PlayerLikeEntityAccessor",
     "GameOptionsMixin",
     "PlayerLabelMixin",
+    "HandledScreenMixin",
     "ClientPlayerInteractionManagerAccessor",
     "ClientPlayerInteractionManagerMixin",
     "ClientWorldAccessor",
