@@ -1382,7 +1382,7 @@ public class AutoCrystal extends Module {
 
             EndCrystalEntity fake = new EndCrystalEntity(mc.world, 0, 0, 0);
             fake.setId(id);
-            mc.getNetworkHandler().sendPacket(PlayerInteractEntityC2SPacket.attack(fake, mc.player.isSneaking()));
+            mc.getNetworkHandler().sendPacket(PlayerInteractEntityC2SPacket.attack(fake, mc.player.isSneaking() && !BoatFly.keepSeat()));
             mc.getNetworkHandler().sendPacket(new HandSwingC2SPacket(Hand.MAIN_HAND));
             predictedIds.add(id);
         }

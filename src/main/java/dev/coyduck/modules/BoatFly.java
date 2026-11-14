@@ -17,11 +17,15 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.vehicle.AbstractBoatEntity;
 import net.minecraft.network.packet.c2s.play.PlayerInputC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.network.packet.s2c.play.VehicleMoveS2CPacket;
+import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -62,6 +66,10 @@ public class BoatFly extends Module {
     private static final long REMOUNT_EVERY = 500;
     private static final int REMOUNT_TRIES = 10;
     private static final double REMOUNT_RANGE = 4.5;
+    private static final double LAVA_MARGIN = 0.1;
+    private static final double WEB_SLOW = 0.25;
+    private static final double WEB_SLOW_Y = 0.05;
+    private static final double REST_PROBE = 0.05;
 
     private enum Lane {
         Air("air", 0.9),
@@ -153,7 +161,7 @@ public class BoatFly extends Module {
 
     private final Setting<Double> cruiseY = sgTravel.add(new DoubleSetting.Builder()
         .name("cruise-y")
-        .description("Height of the boat while travelling. At 127 in the nether the boat sits inside the top bedrock layer and your head is just above the roof, so nothing can reach you and you do not suffocate.")
+        .description("Height of the boat while travelling. At 127 in the nether the boat sits inside the top bedrock layer and your head is just above the roof, so you do not suffocate and only someone standing on the roof can reach you.")
         .defaultValue(127)
         .range(-64, 320)
         .sliderRange(0, 128)
@@ -253,7 +261,7 @@ public class BoatFly extends Module {
         if (travel.get() && now && atCruise(mc.player.getVehicle()) && mc.player.isInsideWall()) {
             if (!warnedWall) {
                 warnedWall = true;
-                warning("Your head is inside blocks at this cruise-y, so you take suffocation damage. Raise it until your head is above the roof, 127 in the nether.");
+                warning("Your head is inside a block, so you take suffocation damage. Either a block sits on the roof at your head or cruise-y is too low; 127 keeps your head above the nether roof.");
             }
         } else {
             warnedWall = false;
@@ -275,7 +283,7 @@ public class BoatFly extends Module {
         if (time - remountAt < REMOUNT_EVERY) return;
         remountAt = time;
         remountTries++;
-        mc.interactionManager.interactEntity(mc.player, lastBoat, Hand.MAIN_HAND);
+        mc.getNetworkHandler().sendPacket(PlayerInteractEntityC2SPacket.interact(lastBoat, false, Hand.MAIN_HAND));
         Trace.log("boat remount try {}", remountTries);
     }
 
@@ -297,6 +305,7 @@ public class BoatFly extends Module {
         }
         vehicle.noClip = phase.get();
         Vec3d move = phase.get() ? forgiven(vehicle, want) : want;
+        move = guarded(vehicle, move);
         move = antiKick(vehicle, move);
         vehicle.setVelocity(new Vec3d(0, 0, 0));
         remember(vehicle, want, move);
@@ -387,6 +396,13 @@ public class BoatFly extends Module {
         Vec3d pos = vehicle.getEntityPos();
         double dy = cruiseY.get() - pos.y;
         if (!atCruise(vehicle)) {
+            Box box = vehicle.getBoundingBox();
+            if (dy < 0 && !inside(vehicle, box) && !mc.world.isSpaceEmpty(vehicle, box.offset(0, -REST_PROBE, 0))) {
+                travel.set(false);
+                status = null;
+                warning("The boat rests on a block above cruise-y and the server never lets it sink into the block below. Start travel from below cruise-y or over a hole.");
+                return new Vec3d(0, 0, 0);
+            }
             status = String.format(Locale.ROOT, "to y %.0f", cruiseY.get());
             double step = Math.min(pace(Lane.Vertical, verticalSpeed.get()), Math.abs(dy));
             used(Lane.Vertical, step, verticalSpeed.get());
@@ -490,6 +506,28 @@ public class BoatFly extends Module {
             ez *= SIDE_SLACK / error;
         }
         return new Vec3d(free.x + ex, y, free.z + ez);
+    }
+
+    private Vec3d guarded(AbstractBoatEntity vehicle, Vec3d move) {
+        if (move.lengthSquared() == 0) return move;
+        Box path = vehicle.getBoundingBox().stretch(move).expand(LAVA_MARGIN);
+        boolean lava = false;
+        boolean web = false;
+        for (BlockPos pos : BlockPos.iterate(BlockPos.ofFloored(path.minX, path.minY, path.minZ), BlockPos.ofFloored(path.maxX, path.maxY, path.maxZ))) {
+            BlockState state = mc.world.getBlockState(pos);
+            if (state.getFluidState().isIn(FluidTags.LAVA)) lava = true;
+            else if (state.isOf(Blocks.COBWEB)) web = true;
+        }
+        if (lava) {
+            status = "lava ahead";
+            if (travel.get()) {
+                travel.set(false);
+                warning("Lava on the way, travel stopped so the boat does not burn.");
+            }
+            Trace.log("boat stopped before lava at y {}", num(vehicle.getY()));
+            return new Vec3d(0, 0, 0);
+        }
+        return web ? new Vec3d(move.x * WEB_SLOW, move.y * WEB_SLOW_Y, move.z * WEB_SLOW) : move;
     }
 
     private Vec3d antiKick(AbstractBoatEntity vehicle, Vec3d move) {

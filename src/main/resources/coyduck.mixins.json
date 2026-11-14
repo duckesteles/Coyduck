@@ -9,6 +9,7 @@
     "ClientPlayerEntityMixin",
     "ClientPlayerEntityAccessor",
     "ClientPlayerInteractionManagerAccessor",
+    "ClientPlayerInteractionManagerMixin",
     "ClientWorldAccessor",
     "EndCrystalEntityRendererMixin",
     "EntityMixin",
