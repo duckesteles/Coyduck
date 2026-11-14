@@ -220,8 +220,8 @@ public class Pusher extends Module {
         Vec3d point = hit.getPos();
         float[] look = angles(point);
         boolean[] placed = {false};
-        boolean done = InventoryManager.get().withItem(slot, switchMode.get(), () -> {
-            if (!rotations.lookNow(point, PRIORITY)) return;
+        placed[0] = rotations.afterRotation(point, PRIORITY, () -> InventoryManager.get().withItem(slot, switchMode.get(), () -> {
+            if (!mc.world.getBlockState(at).isReplaceable()) return;
             float yaw = mc.player.getYaw();
             float pitch = mc.player.getPitch();
             mc.player.setYaw(look[0]);
@@ -229,10 +229,9 @@ public class Pusher extends Module {
             InteractionManager.get().place(at, hit, swing.get());
             mc.player.setYaw(yaw);
             mc.player.setPitch(pitch);
-            placed[0] = true;
-        });
-        if (done && placed[0]) Trace.log("pusher piston at {} facing {}", at, direction.getOpposite());
-        return done && placed[0];
+            Trace.log("pusher piston at {} facing {}", at, direction.getOpposite());
+        }));
+        return placed[0];
     }
 
     private boolean power(BlockPos at, BlockPos head) {

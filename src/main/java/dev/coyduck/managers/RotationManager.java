@@ -16,6 +16,10 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec2f;
 import net.minecraft.util.math.Vec3d;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 public final class RotationManager {
@@ -24,6 +28,14 @@ public final class RotationManager {
     private static final int KEEP_TICKS = 5;
 
     private record Request(int priority, float yaw, float pitch, float speed, boolean moveFix) {}
+
+    private record Deferred(float yaw, float pitch, Runnable action, int expires) {}
+
+    private static final int DEFER_TICKS = 3;
+    private static final float DEFER_TOLERANCE = 1.0f;
+
+    private final ArrayList<Deferred> deferred = new ArrayList<>();
+    private int ticks;
 
     private Request pending;
     private Request current;
@@ -75,6 +87,38 @@ public final class RotationManager {
         float deltaPitch = Math.round((wantPitch - basePitch) / gcd) * gcd;
         mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(base + deltaYaw, MathHelper.clamp(basePitch + deltaPitch, -90.0f, 90.0f), mc.player.isOnGround(), mc.player.horizontalCollision));
         return true;
+    }
+
+    public boolean afterRotation(Vec3d target, int priority, Runnable action) {
+        if (mc.player == null || mc.getNetworkHandler() == null) return false;
+        if (current != null && current.priority > priority || pending != null && pending.priority > priority) return false;
+        Vec3d eye = mc.player.getEyePos();
+        double dx = target.x - eye.x;
+        double dy = target.y - eye.y;
+        double dz = target.z - eye.z;
+        float wantYaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90.0f;
+        float wantPitch = MathHelper.clamp((float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz))), -90.0f, 90.0f);
+        request(priority, wantYaw, wantPitch, 180, false);
+        deferred.add(new Deferred(wantYaw, wantPitch, action, ticks + DEFER_TICKS));
+        return true;
+    }
+
+    public void afterMovement() {
+        if (deferred.isEmpty()) return;
+        float yawNow = serverYaw();
+        float pitchNow = serverPitch();
+        Iterator<Deferred> iterator = deferred.iterator();
+        List<Runnable> ready = new ArrayList<>();
+        while (iterator.hasNext()) {
+            Deferred entry = iterator.next();
+            if (Math.abs(MathHelper.wrapDegrees(entry.yaw - yawNow)) <= DEFER_TOLERANCE && Math.abs(entry.pitch - pitchNow) <= DEFER_TOLERANCE) {
+                ready.add(entry.action);
+                iterator.remove();
+            } else if (ticks >= entry.expires) {
+                iterator.remove();
+            }
+        }
+        for (Runnable action : ready) action.run();
     }
 
     public boolean isLookingAt(Box box, double range) {
@@ -146,6 +190,7 @@ public final class RotationManager {
 
     @EventHandler(priority = EventPriority.LOWEST)
     private void onTick(TickEvent.Pre event) {
+        ticks++;
         if (mc.player == null) {
             active = false;
             return;
@@ -218,6 +263,7 @@ public final class RotationManager {
     }
 
     private void reset() {
+        deferred.clear();
         pending = null;
         current = null;
         active = false;

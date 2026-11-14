@@ -7,7 +7,9 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.util.PlayerInput;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ClientPlayerEntity.class)
 public abstract class ClientPlayerEntityMixin {
@@ -19,6 +21,11 @@ public abstract class ClientPlayerEntityMixin {
     @ModifyExpressionValue(method = {"sendMovementPackets", "tick"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;getPitch()F"))
     private float coyduck$packetPitch(float original) {
         return RotationManager.get().packetPitch(original);
+    }
+
+    @Inject(method = "sendMovementPackets", at = @At("TAIL"))
+    private void coyduck$afterMovement(CallbackInfo info) {
+        RotationManager.get().afterMovement();
     }
 
     @ModifyArg(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/packet/c2s/play/PlayerInputC2SPacket;<init>(Lnet/minecraft/util/PlayerInput;)V"))
