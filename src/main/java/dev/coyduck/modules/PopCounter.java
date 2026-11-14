@@ -2,15 +2,12 @@ package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
-import dev.coyduck.events.WorldResetEvent;
-import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
-import meteordevelopment.meteorclient.events.game.GameLeftEvent;
+import dev.coyduck.managers.PopTracker;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.player.ChatUtils;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.EntityStatuses;
@@ -19,8 +16,6 @@ import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-
-import java.util.UUID;
 
 public class PopCounter extends Module {
     private static final int NAME = 0xB94AE6;
@@ -49,20 +44,12 @@ public class PopCounter extends Module {
         .build()
     );
 
-    private final Object2IntOpenHashMap<UUID> pops = new Object2IntOpenHashMap<>();
-
     public PopCounter() {
         super(Coyduck.CATEGORY, "pop-counter", "Counts every totem your enemies pop in chat, and how many they popped when they die.");
     }
 
     public static int pops(PlayerEntity player) {
-        PopCounter module = Modules.get().get(PopCounter.class);
-        return module == null ? 0 : module.pops.getInt(player.getUuid());
-    }
-
-    @Override
-    public void onDeactivate() {
-        pops.clear();
+        return PopTracker.get().pops(player);
     }
 
     @EventHandler
@@ -73,10 +60,10 @@ public class PopCounter extends Module {
 
         String name = player.getName().getString();
         if (packet.getStatus() == EntityStatuses.USE_TOTEM_OF_UNDYING) {
-            int count = pops.addTo(player.getUuid(), 1) + 1;
+            int count = PopTracker.get().pops(player);
             send(player, name, Text.literal(" popped ").formatted(Formatting.GRAY), count);
         } else if (packet.getStatus() == EntityStatuses.PLAY_DEATH_SOUND_OR_ADD_PROJECTILE_HIT_PARTICLES) {
-            int count = pops.removeInt(player.getUuid());
+            int count = PopTracker.get().pops(player);
             if (deaths.get()) send(player, name, Text.literal(" died after popping ").formatted(Formatting.GRAY), count);
         }
     }
@@ -92,15 +79,5 @@ public class PopCounter extends Module {
     private static int id(PlayerEntity player) {
         int hash = player.getUuid().hashCode();
         return hash == 0 ? 1 : hash;
-    }
-
-    @EventHandler
-    private void onWorldReset(WorldResetEvent event) {
-        pops.clear();
-    }
-
-    @EventHandler
-    private void onGameLeft(GameLeftEvent event) {
-        pops.clear();
     }
 }
