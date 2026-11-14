@@ -96,6 +96,7 @@ public class Surround extends Module {
     private static final double CENTER_SPEED = 0.2;
     private static final double NEAR = 5 * 5;
     private static final float POP_MARGIN = 1.5f;
+    private static final float SHIELD_MARGIN = 0.5f;
     private static final float LOW_HEALTH = 12;
     private static final double FACE_ENEMY_RANGE = 12;
     private static final float FACE_MIN_DAMAGE = 2;
@@ -673,7 +674,7 @@ public class Surround extends Module {
             if (!(entity instanceof EndCrystalEntity crystal)) return false;
             if (interaction.recentlyAttacked(crystal)) return true;
 
-            Verdict verdict = verdict(crystal);
+            Verdict verdict = verdict(crystal, true);
             if (verdict.ordinal() < safestVerdict.ordinal()) {
                 safest = crystal;
                 safestVerdict = verdict;
@@ -706,7 +707,7 @@ public class Surround extends Module {
             if (mining == null || mining.breaker() == mc.player.getId() || mc.world.getBlockState(cell).isReplaceable()) continue;
             for (Entity entity : mc.world.getOtherEntities(null, new Box(cell.up()))) {
                 if (!(entity instanceof EndCrystalEntity crystal) || !crystal.getBlockPos().down().equals(cell) || CrystalTracker.get().isDead(crystal) || interaction.recentlyAttacked(crystal)) continue;
-                Verdict verdict = verdict(crystal);
+                Verdict verdict = verdict(crystal, false);
                 if (verdict == Verdict.Unsafe) continue;
                 if (!interaction.attack(crystal, switchMode.get(), swing.get(), true, rotate.get(), crystal.getBoundingBox().getCenter())) return;
                 CrystalTracker.get().explodeAt(crystal.getEntityPos());
@@ -717,7 +718,7 @@ public class Surround extends Module {
         }
     }
 
-    private Verdict verdict(EndCrystalEntity crystal) {
+    private Verdict verdict(EndCrystalEntity crystal, boolean gap) {
         float raw = ExplosionDamage.crystalRaw(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), crystal.getEntityPos(), mc.world);
         long arrival = Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2;
         float damage = HurtTracker.get().effectiveOnSelf(raw, arrival);
@@ -726,7 +727,16 @@ public class Surround extends Module {
         boolean worst = mc.player.isInsideWall() || health <= LOW_HEALTH;
         float full = worst ? ExplosionDamage.upperBound(mc.player, mc.player.getEntityPos(), crystal.getEntityPos()) : ExplosionDamage.mitigate(mc.player, raw);
         if (damage < health - POP_MARGIN && full < health - POP_MARGIN) return Verdict.Safe;
+        if (gap && shielded(crystal, raw, worst, arrival, health)) return Verdict.Safe;
         return allowPop.get() && AutoTotem.canAffordPop() ? Verdict.Pop : Verdict.Unsafe;
+    }
+
+    private boolean shielded(EndCrystalEntity crystal, float raw, boolean worst, long arrival, float health) {
+        float bound = worst ? Math.max(raw, ExplosionDamage.rawBound(mc.player, mc.player.getEntityPos(), crystal.getEntityPos(), ExplosionDamage.CRYSTAL_POWER)) : raw;
+        float damage = HurtTracker.get().effectiveOnSelf(bound, arrival);
+        boolean covered = damage + SHIELD_MARGIN < ExplosionDamage.mitigate(mc.player, bound) && damage < health - POP_MARGIN;
+        if (covered) Trace.log("surround breaks the gap crystal inside its hurt window, {} instead of {}", damage, ExplosionDamage.mitigate(mc.player, bound));
+        return covered;
     }
 
     private List<BlockPos> targets() {
