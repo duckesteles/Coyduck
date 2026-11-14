@@ -123,7 +123,6 @@ public class AutoXp extends Module {
         InventoryManager inventory = InventoryManager.get();
         int slot = inventory.find(stack -> stack.isOf(Items.EXPERIENCE_BOTTLE), 0, InventoryManager.MAIN_END);
         if (slot == -1) return;
-        if (slot >= InventoryManager.HOTBAR_END && !emptyHotbar()) return;
 
         RotationManager rotations = RotationManager.get();
         float yaw = rotations.serverYaw();
@@ -168,14 +167,6 @@ public class AutoXp extends Module {
         Box ours = mc.player.getBoundingBox().expand(0.5);
         for (PlayerEntity player : mc.world.getPlayers()) {
             if (player != mc.player && !player.isSpectator() && player.isAlive() && player.getBoundingBox().expand(1, 0.5, 1).intersects(ours)) return true;
-        }
-        return false;
-    }
-
-    private boolean emptyHotbar() {
-        int reserved = AutoTotem.totemSlot();
-        for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
-            if (i != reserved && InventoryManager.get().stack(i).isEmpty()) return true;
         }
         return false;
     }

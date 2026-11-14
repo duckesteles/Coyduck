@@ -171,7 +171,7 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
     );
 
     private final Setting<List<Block>> fillers = sgGeneral.add(new BlockListSetting.Builder()
-        .name("filler-blocks")
+        .name("fillers")
         .description("Blocks anti-replace may use. The fastest to break is picked.")
         .defaultValue(
             Blocks.PACKED_ICE, Blocks.NETHERRACK, Blocks.CRIMSON_NYLIUM, Blocks.WARPED_NYLIUM, Blocks.END_STONE,
