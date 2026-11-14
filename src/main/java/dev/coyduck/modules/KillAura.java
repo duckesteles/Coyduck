@@ -40,6 +40,7 @@ import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.registry.tag.EntityTypeTags;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.util.Util;
@@ -234,8 +235,11 @@ public class KillAura extends Module {
 
         InteractionManager.SwingMode swing = swingAnimation.get() ? InteractionManager.SwingMode.Client : InteractionManager.SwingMode.Packet;
         Runnable hit = () -> {
+            boolean sprinting = crit && mc.player.isSprinting();
+            if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
             mc.interactionManager.attackEntity(mc.player, entity);
             InteractionManager.get().swing(swing);
+            if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_SPRINTING));
         };
 
         hit.run();
@@ -457,7 +461,7 @@ public class KillAura extends Module {
 
     private boolean critCapable() {
         return !mc.player.isClimbing() && !mc.player.isTouchingWater() && !mc.player.isInLava() && !mc.player.hasVehicle()
-            && !mc.player.isSprinting() && !mc.player.isGliding() && !mc.player.getAbilities().flying
+            && !mc.player.isGliding() && !mc.player.getAbilities().flying
             && !mc.player.hasStatusEffect(StatusEffects.BLINDNESS) && !mc.player.hasStatusEffect(StatusEffects.LEVITATION)
             && !mc.player.hasStatusEffect(StatusEffects.SLOW_FALLING) && !inWeb();
     }
