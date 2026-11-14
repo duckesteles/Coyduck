@@ -47,9 +47,9 @@ public class Esp extends Module implements ShaderGlow.Source {
     );
 
     private final Setting<SettingColor> outlineColor = sgOutline.add(new ColorSetting.Builder()
-        .name("outline-color")
-        .description("Color of the outline and fill for players whose name has no color.")
-        .defaultValue(new SettingColor(185, 74, 230, 255))
+        .name("players-color")
+        .description("Outline and fill color for players whose name has no color, white like Meteor's shader ESP.")
+        .defaultValue(new SettingColor(255, 255, 255, 255))
         .visible(outline::get)
         .build()
     );
