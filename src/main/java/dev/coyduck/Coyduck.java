@@ -60,7 +60,6 @@ import dev.coyduck.modules.NoClimb;
 import dev.coyduck.modules.NametagsPlus;
 import dev.coyduck.modules.NoRotate;
 import dev.coyduck.modules.PacketMinePlus;
-import dev.coyduck.modules.Pusher;
 import dev.coyduck.modules.SpeedPlus;
 import dev.coyduck.modules.LadderTrap;
 import dev.coyduck.modules.PearlPhase;
@@ -149,7 +148,6 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new BreakEsp());
         Modules.get().add(new Shaders());
         Modules.get().add(new UpdateChecker());
-        Modules.get().add(new Pusher());
         Modules.get().add(new PacketMinePlus());
         Modules.get().add(new NametagsPlus());
         Modules.get().add(new PhaseEsp());

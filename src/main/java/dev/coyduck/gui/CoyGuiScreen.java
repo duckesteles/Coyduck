@@ -102,7 +102,7 @@ public class CoyGuiScreen extends Screen {
         Map.entry("auto-web+", "Combat"), Map.entry("burrow+", "Combat"), Map.entry("hole-fill", "Combat"),
         Map.entry("kill-aura+", "Combat"), Map.entry("ladder-trap", "Combat"), Map.entry("pearl-phase", "Combat"),
         Map.entry("self-trap+", "Combat"), Map.entry("surround+", "Combat"), Map.entry("mace-strike", "Combat"),
-        Map.entry("pusher", "Combat"), Map.entry("anti-regear", "Combat"),
+        Map.entry("anti-regear", "Combat"),
         Map.entry("air-mine", "Player"), Map.entry("packet-mine+", "Player"), Map.entry("regear", "Player"), Map.entry("auto-xp", "Player"), Map.entry("no-rotate+", "Player"),
         Map.entry("elytra-fly+", "Movement"), Map.entry("elytra-pilot", "Movement"), Map.entry("hole-snap", "Movement"),
         Map.entry("speed+", "Movement"), Map.entry("no-climb", "Movement"), Map.entry("elytra-evade", "Movement"),
