@@ -40,6 +40,8 @@ public class AutoEz extends Module {
     private static final long ENGAGED_MS = 15_000;
     private static final double EXPLOSION_REACH = 12;
     private static final int CHAT_LIMIT = 256;
+    private static final long CHAT_GAP = 1_500;
+    private static final int MAX_PENDING = 5;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -118,6 +120,7 @@ public class AutoEz extends Module {
     private final Map<UUID, Long> engaged = new HashMap<>();
     private final List<Pending> pending = new ArrayList<>();
     private int last = -1;
+    private long nextSendAt;
 
     private record Pending(String name, long at) {}
 
@@ -127,8 +130,13 @@ public class AutoEz extends Module {
 
     @Override
     public void onDeactivate() {
+        reset();
+    }
+
+    private void reset() {
         engaged.clear();
         pending.clear();
+        nextSendAt = 0;
     }
 
     @EventHandler
@@ -152,26 +160,26 @@ public class AutoEz extends Module {
         if (!(packet.getEntity(mc.world) instanceof PlayerEntity player) || player == mc.player || Friends.get().isFriend(player)) return;
 
         Long at = engaged.remove(player.getUuid());
-        if (at == null || Util.getMeasuringTimeMs() - at > ENGAGED_MS) return;
+        if (at == null || Util.getMeasuringTimeMs() - at > ENGAGED_MS || pending.size() >= MAX_PENDING) return;
         pending.add(new Pending(player.getName().getString(), Util.getMeasuringTimeMs() + delay.get() * 50L));
     }
 
     @EventHandler
     private void onTick(TickEvent.Post event) {
-        if (pending.isEmpty() || mc.getNetworkHandler() == null) return;
-
         long now = Util.getMeasuringTimeMs();
-        pending.removeIf(entry -> {
-            if (entry.at > now) return false;
-            send(entry.name);
-            return true;
-        });
+        if (!engaged.isEmpty()) engaged.values().removeIf(at -> now - at > ENGAGED_MS);
+        if (pending.isEmpty() || mc.getNetworkHandler() == null || now < nextSendAt) return;
+
+        Pending first = pending.getFirst();
+        if (first.at > now) return;
+        pending.removeFirst();
+        send(first.name);
+        nextSendAt = now + CHAT_GAP;
     }
 
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
-        engaged.clear();
-        pending.clear();
+        reset();
     }
 
     private static boolean isAttack(PlayerInteractEntityC2SPacket packet) {
