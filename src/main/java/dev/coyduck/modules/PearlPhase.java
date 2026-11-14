@@ -46,6 +46,7 @@ public class PearlPhase extends Module {
     private static final double STANDING = 1.8;
     private static final double CRAWLING = 0.6;
     private static final double CRAWL_EYE = 0.4;
+    private static final float CRAWL_LOWEST = -30;
     private static final int MAX_TICKS = 8;
     private static final int AIM_TICKS = 10;
     private static final int ROBUST_CANDIDATES = 60;
@@ -455,7 +456,7 @@ public class PearlPhase extends Module {
         Vec3d shooter = mc.player.isOnGround() ? new Vec3d(mc.player.getVelocity().x, 0, mc.player.getVelocity().z) : mc.player.getVelocity();
 
         List<float[]> candidates = new ArrayList<>();
-        float lowest = mc.player.isCrawling() ? 0 : 40;
+        float lowest = mc.player.isCrawling() ? CRAWL_LOWEST : 40;
         for (float pitch = lowest; pitch <= 90; pitch += 0.5f) {
             for (float yaw = -180; yaw < 180; yaw += 1.5f) {
                 double score = landingScore(spawn, shooter, feet, yaw, pitch);
