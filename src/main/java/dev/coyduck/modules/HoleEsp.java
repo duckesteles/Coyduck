@@ -20,12 +20,14 @@ import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 
 public class HoleEsp extends Module {
     private static final double SAFE_RESISTANCE = 600;
     private static final int SCAN_TICKS = 3;
+    private static final int OPEN = 0;
+    private static final int SOLID = 1;
+    private static final int BEDROCK = 2;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgRender = settings.createGroup("Render");
@@ -152,17 +154,15 @@ public class HoleEsp extends Module {
     }
 
     private void scan(int x, int y, int z) {
-        cursor.set(x, y, z);
-        if (!open(cursor)) return;
+        if (!open(x, y, z)) return;
 
-        BlockPos pos = cursor.toImmutable();
         int walls = 0;
         boolean safe = true;
         Direction gap = null;
         for (Direction side : Direction.Type.HORIZONTAL) {
-            BlockPos next = pos.offset(side);
-            if (solid(next)) {
-                safe &= bedrock(next);
+            int kind = kind(x + side.getOffsetX(), y, z + side.getOffsetZ());
+            if (kind != OPEN) {
+                safe &= kind == BEDROCK;
                 walls++;
             } else if (gap == null) {
                 gap = side;
@@ -170,48 +170,48 @@ public class HoleEsp extends Module {
                 return;
             }
         }
-        if (!solid(pos.down())) return;
-        safe &= bedrock(pos.down());
+        int floor = kind(x, y - 1, z);
+        if (floor == OPEN) return;
+        safe &= floor == BEDROCK;
 
         if (walls == 4) {
-            add(pos, x, z, x + 1, z + 1, y, safe);
+            add(BlockPos.asLong(x, y, z), x, z, x + 1, z + 1, y, safe);
             return;
         }
         if (!doubles.get() || gap == null || (gap != Direction.EAST && gap != Direction.SOUTH)) return;
 
-        BlockPos other = pos.offset(gap);
-        if (!open(other) || !solid(other.down())) return;
-        safe &= bedrock(other.down());
+        int ox = x + gap.getOffsetX();
+        int oz = z + gap.getOffsetZ();
+        if (!open(ox, y, oz)) return;
+        int otherFloor = kind(ox, y - 1, oz);
+        if (otherFloor == OPEN) return;
+        safe &= otherFloor == BEDROCK;
         for (Direction side : Direction.Type.HORIZONTAL) {
             if (side == gap.getOpposite()) continue;
-            BlockPos next = other.offset(side);
-            if (!solid(next)) return;
-            safe &= bedrock(next);
+            int kind = kind(ox + side.getOffsetX(), y, oz + side.getOffsetZ());
+            if (kind == OPEN) return;
+            safe &= kind == BEDROCK;
         }
-        add(pos, x, z, x + 1 + gap.getOffsetX(), z + 1 + gap.getOffsetZ(), y, safe);
+        add(BlockPos.asLong(x, y, z), x, z, x + 1 + gap.getOffsetX(), z + 1 + gap.getOffsetZ(), y, safe);
     }
 
-    private void add(BlockPos key, double minX, double minZ, double maxX, double maxZ, double y, boolean safe) {
-        if (hideOwn.get() && mc.player.getBoundingBox().intersects(new Box(minX, y, minZ, maxX, y + 2, maxZ))) return;
+    private void add(long id, double minX, double minZ, double maxX, double maxZ, double y, boolean safe) {
+        if (hideOwn.get() && mc.player.getBoundingBox().intersects(minX, y, minZ, maxX, y + 2, maxZ)) return;
 
-        long id = key.asLong();
         seen.add(id);
         Hole hole = holes.get(id);
         if (hole == null || hole.maxX != maxX || hole.maxZ != maxZ) holes.put(id, new Hole(minX, minZ, maxX, maxZ, y, safe));
         else hole.safe = safe;
     }
 
-    private boolean open(BlockPos pos) {
-        return mc.world.getBlockState(pos).isAir() && mc.world.getBlockState(pos.up()).isAir();
+    private boolean open(int x, int y, int z) {
+        return mc.world.getBlockState(cursor.set(x, y, z)).isAir() && mc.world.getBlockState(cursor.set(x, y + 1, z)).isAir();
     }
 
-    private boolean solid(BlockPos pos) {
-        BlockState state = mc.world.getBlockState(pos);
-        return state.getHardness(mc.world, pos) < 0 || state.getBlock().getBlastResistance() >= SAFE_RESISTANCE;
-    }
-
-    private boolean bedrock(BlockPos pos) {
-        return mc.world.getBlockState(pos).getHardness(mc.world, pos) < 0;
+    private int kind(int x, int y, int z) {
+        BlockState state = mc.world.getBlockState(cursor.set(x, y, z));
+        if (state.getHardness(mc.world, cursor) < 0) return BEDROCK;
+        return state.getBlock().getBlastResistance() >= SAFE_RESISTANCE ? SOLID : OPEN;
     }
 
     @EventHandler
