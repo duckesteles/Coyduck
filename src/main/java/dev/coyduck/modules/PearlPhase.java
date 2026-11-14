@@ -14,6 +14,7 @@ import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.decoration.AbstractDecorationEntity;
 import net.minecraft.item.Items;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.HitResult;
@@ -44,6 +45,9 @@ public class PearlPhase extends Module {
     private static final double MIN_OVERLAP = 0.005;
     private static final double FULL_OVERLAP = 0.03;
     private static final float MIN_HEALTH = 3;
+    private static final int CLEAR_TICKS = 16;
+    private static final int CLEAR_EVERY = 2;
+    private static final double CLEAR_REACH = 3;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -74,6 +78,7 @@ public class PearlPhase extends Module {
     private float targetPitch;
     private int slot;
     private int aimTicks;
+    private int clearTicks;
     private Vec3d planned;
 
     public PearlPhase() {
@@ -102,12 +107,16 @@ public class PearlPhase extends Module {
             toggle();
             return;
         }
+        aimTicks = 0;
+        clearTicks = 0;
         if (!plan()) {
+            if (decoration() != null) {
+                clearTicks = CLEAR_TICKS;
+                return;
+            }
             error(reason());
             toggle();
-            return;
         }
-        aimTicks = 0;
     }
 
     @EventHandler
@@ -125,6 +134,7 @@ public class PearlPhase extends Module {
         if (mc.player == null) return;
 
         RotationManager rotations = RotationManager.get();
+        if (clearTicks > 0 && !clear(rotations)) return;
         rotations.request(ROTATE_PRIORITY, targetYaw, targetPitch, 180, false);
         boolean aimed = Math.abs(MathHelper.wrapDegrees(rotations.serverYaw() - targetYaw)) < 0.5 && Math.abs(rotations.serverPitch() - targetPitch) < 0.5;
         if (!aimed) {
@@ -158,6 +168,44 @@ public class PearlPhase extends Module {
         if (!thrown) error("Couldn't switch to the pearl while eating.");
         else Trace.log("phase pearl thrown yaw {} pitch {} from {}", targetYaw, targetPitch, mc.player.getEntityPos());
         toggle();
+    }
+
+    private boolean clear(RotationManager rotations) {
+        clearTicks--;
+        if (plan()) {
+            clearTicks = 0;
+            Trace.log("phase path cleared");
+            return true;
+        }
+        Entity decoration = decoration();
+        if (decoration == null || clearTicks <= 0) {
+            error(decoration == null ? reason() : "Could not break the item frame or painting in the way.");
+            toggle();
+            return false;
+        }
+        Box box = decoration.getBoundingBox();
+        rotations.request(ROTATE_PRIORITY, box.getCenter(), 180, true);
+        if (clearTicks % CLEAR_EVERY == 0 && rotations.isLookingAt(box, CLEAR_REACH)) {
+            mc.interactionManager.attackEntity(mc.player, decoration);
+            mc.player.swingHand(Hand.MAIN_HAND);
+            Trace.log("phase hits a {} in the pearl's way", decoration.getType().getUntranslatedName());
+        }
+        return false;
+    }
+
+    private Entity decoration() {
+        Box around = mc.player.getBoundingBox().expand(1.5, 0.5, 1.5).stretch(0, 0.5, 0);
+        Vec3d eye = mc.player.getEyePos();
+        Entity best = null;
+        double closest = CLEAR_REACH * CLEAR_REACH;
+        for (Entity entity : mc.world.getOtherEntities(mc.player, around, entity -> entity instanceof AbstractDecorationEntity && entity.isAlive())) {
+            double distance = entity.getBoundingBox().squaredMagnitude(eye);
+            if (distance < closest) {
+                closest = distance;
+                best = entity;
+            }
+        }
+        return best;
     }
 
     private boolean plan() {
