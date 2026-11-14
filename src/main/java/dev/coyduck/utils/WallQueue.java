@@ -27,6 +27,7 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
 import org.joml.Quaternionf;
 
+import java.lang.reflect.Method;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,9 @@ public class WallQueue implements OrderedRenderCommandQueue {
 
     private static final Map<RenderLayer, RenderLayer> LAYERS = new IdentityHashMap<>();
     private static final Map<RenderPipeline, RenderPipeline> PIPELINES = new IdentityHashMap<>();
+    private static final String IRIS_PIPELINES = "net.irisshaders.iris.pipeline.IrisPipelines";
+    private static boolean irisChecked;
+    private static Method irisCopy;
 
     protected final RenderCommandQueue delegate;
 
@@ -64,9 +68,28 @@ public class WallQueue implements OrderedRenderCommandQueue {
 
     private static RenderPipeline biased(RenderPipeline p) {
         Identifier location = Identifier.of("coyduck", "walls/" + p.getLocation().getNamespace() + "/" + p.getLocation().getPath());
-        return new RenderPipeline(location, p.getVertexShader(), p.getFragmentShader(), p.getShaderDefines(), p.getSamplers(), p.getUniforms(), p.getBlendFunction(),
+        RenderPipeline copy = new RenderPipeline(location, p.getVertexShader(), p.getFragmentShader(), p.getShaderDefines(), p.getSamplers(), p.getUniforms(), p.getBlendFunction(),
             p.getDepthTestFunction(), p.getPolygonMode(), p.isCull(), p.isWriteColor(), p.isWriteAlpha(), p.isWriteDepth(), p.getColorLogic(),
             p.getVertexFormat(), p.getVertexFormatMode(), BIAS_SCALE, BIAS_CONSTANT, p.getSortKey()) {};
+        irisCopy(p, copy);
+        return copy;
+    }
+
+    private static void irisCopy(RenderPipeline from, RenderPipeline to) {
+        if (!irisChecked) {
+            irisChecked = true;
+            try {
+                irisCopy = Class.forName(IRIS_PIPELINES).getMethod("copyPipeline", RenderPipeline.class, RenderPipeline.class);
+            } catch (ReflectiveOperationException | LinkageError ignored) {
+                irisCopy = null;
+            }
+        }
+        if (irisCopy == null) return;
+        try {
+            irisCopy.invoke(null, from, to);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            irisCopy = null;
+        }
     }
 
     @Override
