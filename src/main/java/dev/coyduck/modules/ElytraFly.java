@@ -1006,6 +1006,7 @@ public class ElytraFly extends Module {
             warnedWorn = false;
             return;
         }
+        if (!wearing && !worn.isEmpty()) return;
         if (!wearing && !mc.player.isGliding() && !wasGliding) return;
         long now = Util.getMeasuringTimeMs();
         if (now - replacedAt < REPLACE_EVERY) return;
