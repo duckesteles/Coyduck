@@ -11,6 +11,7 @@ import dev.coyduck.managers.MiningManager;
 import dev.coyduck.utils.DuckRender;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
+import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.entity.EntityAddedEvent;
@@ -27,15 +28,19 @@ import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.block.AbstractRedstoneGateBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.ComparatorBlock;
 import net.minecraft.block.PistonBlock;
+import net.minecraft.block.entity.PistonBlockEntity;
 import net.minecraft.block.piston.PistonBehavior;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
+import net.minecraft.network.packet.s2c.play.BlockEventS2CPacket;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.EntitiesDestroyS2CPacket;
@@ -58,7 +63,10 @@ public class AntiPiston extends Module {
     private static final float POP_MARGIN = 1.5f;
     private static final float LOW_HEALTH = 12;
     private static final float CHEAP_BREAK = 6;
+    private static final int QUICK_MINE_TICKS = 2;
     private static final int MINE_PRIORITY = 60;
+    private static final int MINE_HOLD_TICKS = 10;
+    private static final int MAX_PUSH = 12;
     private static final int BELOW = 2;
     private static final int ABOVE = 4;
     private static final double SHRINK = 1.0E-3;
@@ -79,14 +87,14 @@ public class AntiPiston extends Module {
 
     private final Setting<Boolean> breakCrystals = sgGeneral.add(new BoolSetting.Builder()
         .name("break-crystals")
-        .description("Breaks a crystal a piston is about to push into you, as long as the break itself does not pop you. While the piston is not powered yet, only breaks it when that costs little, since mining the piston is free.")
+        .description("Breaks a crystal a piston is about to push into you, judged where the push will leave it, as long as the break does not pop you. While the piston is not powered yet and can be mined quickly, only breaks it when that costs little, since mining the piston is free.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> popIfPushed = sgGeneral.add(new BoolSetting.Builder()
         .name("pop-if-pushed")
-        .description("Also breaks such a crystal when it pops you, but only if the piston is already powered, the pushed crystal would pop you anyway and Auto Totem+ has confirmed your offhand totem with a spare left.")
+        .description("Also breaks such a crystal when it pops you, but only if the piston is already pushing, the pushed crystal would pop you anyway and Auto Totem+ has confirmed your offhand totem with a spare left.")
         .defaultValue(true)
         .visible(breakCrystals::get)
         .build()
@@ -94,14 +102,14 @@ public class AntiPiston extends Module {
 
     private final Setting<Boolean> mine = sgGeneral.add(new BoolSetting.Builder()
         .name("mine")
-        .description("Mines the piston or the redstone powering it, whichever breaks sooner, once it really threatens you: a crystal in front of it, power on it, or its head about to shove you. Only while no other module is mining, so it never takes the pick from one.")
+        .description("Mines the piston or the redstone powering it, whichever breaks sooner, once it really threatens you: a crystal in front of it, power on it, a push that can move you, or a web in the way of blocking it. Takes the pick over from lower priority mining such as Auto City+ while it does.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> place = sgGeneral.add(new BoolSetting.Builder()
         .name("place")
-        .description("Places a block where the piston would push, and where a broken crystal sat, so the push cannot happen.")
+        .description("Places a block where the piston would push, and where a crystal it broke sat, so the push cannot happen.")
         .defaultValue(true)
         .build()
     );
@@ -191,13 +199,10 @@ public class AntiPiston extends Module {
         Spot
     }
 
-    private record Threat(BlockPos piston, Direction push, BlockPos zone, boolean extended, boolean powered, Kind kind, List<EndCrystalEntity> crystals) {
+    private record Threat(BlockPos piston, Direction push, BlockPos head, BlockPos zone, boolean extended, boolean powered, double travel,
+                          Kind kind, boolean urgent, List<EndCrystalEntity> crystals) {
         boolean imminent() {
             return extended || powered;
-        }
-
-        boolean urgent() {
-            return kind != Kind.Spot || imminent();
         }
     }
 
@@ -208,12 +213,15 @@ public class AntiPiston extends Module {
     }
 
     private final Long2LongOpenHashMap rendered = new Long2LongOpenHashMap();
+    private final Int2LongOpenHashMap broken = new Int2LongOpenHashMap();
     private List<Threat> threats = List.of();
     private Box detectedBox;
     private int detectedTick = -1;
     private int ticks;
+    private int lastUrgent = -MINE_HOLD_TICKS - 1;
     private int budget;
     private boolean dirty = true;
+    private boolean mineBlocked;
     private boolean running;
 
     public AntiPiston() {
@@ -223,9 +231,12 @@ public class AntiPiston extends Module {
     @Override
     public void onActivate() {
         rendered.clear();
+        broken.clear();
         threats = List.of();
         detectedBox = null;
         dirty = true;
+        mineBlocked = false;
+        lastUrgent = ticks - MINE_HOLD_TICKS - 1;
         budget = blocksPerTick.get();
         pass();
     }
@@ -235,12 +246,15 @@ public class AntiPiston extends Module {
         MiningManager.get().release(this);
         threats = List.of();
         detectedBox = null;
+        broken.clear();
     }
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         ticks++;
         budget = blocksPerTick.get();
+        long now = Util.getMeasuringTimeMs();
+        broken.int2LongEntrySet().removeIf(entry -> entry.getLongValue() < now);
         pass();
         mine();
     }
@@ -257,14 +271,9 @@ public class AntiPiston extends Module {
         BlockPos center = mc.player.getBlockPos();
         double near = range.get() + PACKET_REACH;
         switch (event.packet) {
-            case BlockUpdateS2CPacket packet when packet.getPos().isWithinDistance(center, near) -> {
-                dirty = true;
-                pass();
-            }
-            case ChunkDeltaUpdateS2CPacket packet when Targets.touches(packet, center, near) -> {
-                dirty = true;
-                pass();
-            }
+            case BlockUpdateS2CPacket packet when packet.getPos().isWithinDistance(center, near) -> refresh();
+            case ChunkDeltaUpdateS2CPacket packet when Targets.touches(packet, center, near) -> refresh();
+            case BlockEventS2CPacket packet when packet.getBlock() instanceof PistonBlock && packet.getPos().isWithinDistance(center, near) -> refresh();
             case EntitiesDestroyS2CPacket ignored when !threats.isEmpty() -> pass();
             case PlayerActionResponseS2CPacket ignored when !threats.isEmpty() -> pass();
             default -> {}
@@ -274,9 +283,7 @@ public class AntiPiston extends Module {
     @EventHandler
     private void onEntityAdded(EntityAddedEvent event) {
         if (!(event.entity instanceof EndCrystalEntity) || !canAct()) return;
-        if (!event.entity.getBlockPos().isWithinDistance(mc.player.getBlockPos(), range.get() + PACKET_REACH)) return;
-        dirty = true;
-        pass();
+        if (event.entity.getBlockPos().isWithinDistance(mc.player.getBlockPos(), range.get() + PACKET_REACH)) refresh();
     }
 
     @EventHandler
@@ -288,6 +295,11 @@ public class AntiPiston extends Module {
         for (var entry : rendered.long2LongEntrySet()) {
             DuckRender.box(event.renderer, new Box(BlockPos.fromLong(entry.getLongKey())), sideColor.get(), lineColor.get(), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
         }
+    }
+
+    private void refresh() {
+        dirty = true;
+        pass();
     }
 
     private void pass() {
@@ -302,7 +314,10 @@ public class AntiPiston extends Module {
                 detectedTick = ticks;
                 detectedBox = box;
                 long now = Util.getMeasuringTimeMs();
-                for (Threat threat : threats) rendered.put(threat.piston.asLong(), now);
+                for (Threat threat : threats) {
+                    rendered.put(threat.piston.asLong(), now);
+                    if (threat.urgent) lastUrgent = ticks;
+                }
             }
             if (threats.isEmpty()) return;
 
@@ -341,50 +356,69 @@ public class AntiPiston extends Module {
                     BlockState state = mc.world.getBlockState(cursor);
                     if (!(state.getBlock() instanceof PistonBlock)) continue;
 
-                    BlockPos piston = cursor.toImmutable();
-                    Direction push = state.get(PistonBlock.FACING);
-                    boolean extended = state.get(PistonBlock.EXTENDED);
-                    BlockPos head = piston.offset(push);
-                    BlockPos zone = extended ? head : zone(head, push);
-                    if (zone == null) continue;
-
-                    boolean powered = !extended && powered(piston, push);
-                    List<EndCrystalEntity> pushed = pushed(crystals, zone, push, extended, box);
-                    Kind kind;
-                    if (!pushed.isEmpty()) kind = Kind.Crystal;
-                    else if (!extended && new Box(zone).contract(SHRINK).intersects(box)) kind = Kind.Body;
-                    else if (extended ? aimed(zone, push, box) : spotNear(zone, push, box)) kind = Kind.Spot;
-                    else continue;
-
-                    found.add(new Threat(piston, push, zone, extended, powered, kind, pushed));
+                    Threat threat = threat(cursor.toImmutable(), state, crystals, box);
+                    if (threat != null) found.add(threat);
                 }
             }
         }
 
         Vec3d eye = mc.player.getEyePos();
         found.sort(Comparator.<Threat>comparingInt(threat -> threat.kind.ordinal())
+            .thenComparing(threat -> !threat.urgent)
             .thenComparing(threat -> !threat.imminent())
             .thenComparingDouble(threat -> Vec3d.ofCenter(threat.zone).squaredDistanceTo(eye)));
         return found;
     }
 
+    private Threat threat(BlockPos piston, BlockState state, List<EndCrystalEntity> crystals, Box box) {
+        Direction push = state.get(PistonBlock.FACING);
+        boolean extended = state.get(PistonBlock.EXTENDED);
+        BlockPos head = piston.offset(push);
+        BlockPos zone = extended ? head : zone(head, push);
+        if (zone == null) return null;
+
+        boolean powered = !extended && powered(piston, push);
+        double travel = extended ? remaining(head) : 1;
+        List<EndCrystalEntity> pushed = pushed(crystals, head, zone, push, extended, travel, powered, box);
+        if (!pushed.isEmpty()) return new Threat(piston, push, head, zone, extended, powered, travel, Kind.Crystal, true, pushed);
+
+        if (!extended && new Box(zone).contract(SHRINK).intersects(box)) {
+            boolean moves = !zone.equals(head) || mc.world.isSpaceEmpty(mc.player, box.offset(push.getOffsetX() * 0.5, push.getOffsetY() * 0.5, push.getOffsetZ() * 0.5));
+            return new Threat(piston, push, head, zone, false, powered, travel, Kind.Body, moves, List.of());
+        }
+
+        if (extended ? aimed(zone, push, box) : spotNear(zone, push, box)) {
+            BlockState inZone = mc.world.getBlockState(zone);
+            boolean webbed = !extended && !inZone.isReplaceable() && inZone.getPistonBehavior() == PistonBehavior.DESTROY;
+            boolean urgent = powered || webbed || extended && travel > 0;
+            return new Threat(piston, push, head, zone, extended, powered, travel, Kind.Spot, urgent, List.of());
+        }
+        return null;
+    }
+
     private BlockPos zone(BlockPos head, Direction push) {
-        InteractionManager interaction = InteractionManager.get();
-        if (interaction.isPending(head)) return null;
+        BlockPos cell = head;
+        for (int moved = 0; moved <= MAX_PUSH; moved++) {
+            if (mc.world.isOutOfHeightLimit(cell)) return null;
+            BlockState state = mc.world.getBlockState(cell);
+            if (state.isReplaceable() || state.getPistonBehavior() == PistonBehavior.DESTROY) return cell;
+            if (moved == MAX_PUSH || !movable(state, cell)) return null;
+            cell = cell.offset(push);
+        }
+        return null;
+    }
 
-        BlockState state = mc.world.getBlockState(head);
-        if (state.isReplaceable() || state.isOf(Blocks.PISTON_HEAD) || state.isOf(Blocks.MOVING_PISTON) || state.getPistonBehavior() == PistonBehavior.DESTROY) return head;
-        if (!movable(state, head)) return null;
-
-        BlockPos next = head.offset(push);
-        if (interaction.isPending(next)) return null;
-        return mc.world.getBlockState(next).isReplaceable() ? next : null;
+    private double remaining(BlockPos head) {
+        if (mc.world.getBlockEntity(head) instanceof PistonBlockEntity piston && piston.isExtending()) {
+            return MathHelper.clamp(1 - piston.getProgress(1.0f), 0, 1);
+        }
+        return 0;
     }
 
     private boolean movable(BlockState state, BlockPos pos) {
-        if (state.isAir() || state.getHardness(mc.world, pos) < 0 || immovable(state.getBlock())) return false;
-        if (state.getBlock() instanceof PistonBlock && state.get(PistonBlock.EXTENDED)) return false;
-        return state.getPistonBehavior() != PistonBehavior.BLOCK && !state.hasBlockEntity();
+        if (state.isAir() || state.getHardness(mc.world, pos) < 0) return false;
+        if (state.getBlock() instanceof PistonBlock) return !state.get(PistonBlock.EXTENDED);
+        return !immovable(state.getBlock()) && state.getPistonBehavior() != PistonBehavior.BLOCK && !state.hasBlockEntity();
     }
 
     private static boolean immovable(Block block) {
@@ -395,24 +429,31 @@ public class AntiPiston extends Module {
 
     private boolean powered(BlockPos piston, Direction face) {
         for (Direction direction : Direction.values()) {
-            if (direction != face && mc.world.isEmittingRedstonePower(piston.offset(direction), direction)) return true;
+            if (direction != face && emits(piston.offset(direction), direction)) return true;
         }
-        if (mc.world.isEmittingRedstonePower(piston, Direction.DOWN)) return true;
+        if (emits(piston, Direction.DOWN)) return true;
 
         BlockPos above = piston.up();
         for (Direction direction : Direction.values()) {
-            if (direction != Direction.DOWN && mc.world.isEmittingRedstonePower(above.offset(direction), direction)) return true;
+            if (direction != Direction.DOWN && emits(above.offset(direction), direction)) return true;
         }
         return false;
     }
 
-    private List<EndCrystalEntity> pushed(List<EndCrystalEntity> crystals, BlockPos zone, Direction push, boolean extended, Box body) {
-        Box zoneBox = new Box(zone).contract(SHRINK);
+    private boolean emits(BlockPos pos, Direction direction) {
+        if (mc.world.isEmittingRedstonePower(pos, direction)) return true;
+        BlockState state = mc.world.getBlockState(pos);
+        return state.getBlock() instanceof ComparatorBlock && state.get(AbstractRedstoneGateBlock.POWERED) && state.get(AbstractRedstoneGateBlock.FACING) == direction;
+    }
+
+    private List<EndCrystalEntity> pushed(List<EndCrystalEntity> crystals, BlockPos head, BlockPos zone, Direction push, boolean extended, double travel, boolean powered, Box body) {
+        Box sweep = new Box(head).union(new Box(zone)).contract(SHRINK);
         List<EndCrystalEntity> pushed = new ArrayList<>();
         for (EndCrystalEntity crystal : crystals) {
-            if (!crystal.getBoundingBox().intersects(zoneBox)) continue;
+            if (!crystal.getBoundingBox().intersects(sweep)) continue;
+            if (CrystalTracker.get().isOwn(crystal) && !extended && !powered) continue;
             Vec3d at = crystal.getEntityPos();
-            Vec3d after = extended ? at : at.add(push.getOffsetX(), push.getOffsetY(), push.getOffsetZ());
+            Vec3d after = at.add(push.getOffsetX() * travel, push.getOffsetY() * travel, push.getOffsetZ() * travel);
             double gap = gap(after, body);
             if (gap <= PUSH_REACH && (extended || gap < gap(at, body))) pushed.add(crystal);
         }
@@ -453,11 +494,11 @@ public class AntiPiston extends Module {
         for (Threat threat : threats) {
             for (EndCrystalEntity crystal : threat.crystals) {
                 if (!handled.add(crystal)) continue;
-                if (interaction.recentlyAttacked(crystal)) {
+                if (broken.containsKey(crystal.getId())) {
                     cleared.add(crystal.getBlockPos());
                     continue;
                 }
-                if (crystal.isRemoved() || CrystalTracker.get().isDead(crystal)) continue;
+                if (crystal.isRemoved() || CrystalTracker.get().isDead(crystal) || interaction.recentlyAttacked(crystal)) continue;
 
                 Verdict verdict = verdict(crystal, threat);
                 if (verdict == Verdict.Unsafe) continue;
@@ -465,6 +506,7 @@ public class AntiPiston extends Module {
                 Vec3d aim = canBlock(threat.zone) ? interaction.clearAim(crystal, threat.zone, airplace.get()) : crystal.getBoundingBox().getCenter();
                 if (!interaction.attack(crystal, switchMode.get(), swing.get(), true, rotate.get(), aim)) continue;
 
+                broken.put(crystal.getId(), Util.getMeasuringTimeMs() + LatencyManager.get().timeout());
                 CrystalTracker.get().explodeAt(crystal.getEntityPos());
                 if (verdict == Verdict.Pop) AutoTotem.notePop();
                 cleared.add(crystal.getBlockPos());
@@ -481,19 +523,37 @@ public class AntiPiston extends Module {
         boolean worst = mc.player.isInsideWall() || health <= LOW_HEALTH;
 
         Vec3d at = crystal.getEntityPos();
-        float raw = ExplosionDamage.crystalRaw(mc.player, position, box, at, mc.world);
-        float damage = HurtTracker.get().effectiveOnSelf(raw, arrival);
-        float full = worst ? ExplosionDamage.upperBound(mc.player, position, at) : ExplosionDamage.mitigate(mc.player, raw);
-        if (damage < health - POP_MARGIN && full < health - POP_MARGIN) {
-            return threat.imminent() || damage <= CHEAP_BREAK ? Verdict.Safe : Verdict.Unsafe;
+        float[] now = damage(at, position, box, arrival, worst);
+        if (!threat.imminent()) {
+            if (!fits(now, health)) return Verdict.Unsafe;
+            return now[0] <= CHEAP_BREAK || !quickMine(threat) ? Verdict.Safe : Verdict.Unsafe;
         }
-        if (!threat.imminent() || !popIfPushed.get() || !AutoTotem.canAffordPop()) return Verdict.Unsafe;
 
-        Vec3d pushed = threat.extended ? at : at.add(threat.push.getOffsetX(), threat.push.getOffsetY(), threat.push.getOffsetZ());
-        float pushedRaw = ExplosionDamage.crystalRaw(mc.player, position, box, pushed, mc.world);
-        float pushedDamage = HurtTracker.get().effectiveOnSelf(pushedRaw, arrival);
-        float pushedFull = worst ? ExplosionDamage.upperBound(mc.player, position, pushed) : ExplosionDamage.mitigate(mc.player, pushedRaw);
-        return pushedDamage >= health - POP_MARGIN || pushedFull >= health - POP_MARGIN ? Verdict.Pop : Verdict.Unsafe;
+        double travel = threat.extended ? threat.travel : 1;
+        float[] landed = travel <= 0 ? now : damage(at.add(threat.push.getOffsetX() * travel, threat.push.getOffsetY() * travel, threat.push.getOffsetZ() * travel), position, box, arrival, worst);
+        if (fits(now, health) && fits(landed, health)) return Verdict.Safe;
+        if (!popIfPushed.get() || !AutoTotem.canAffordPop()) return Verdict.Unsafe;
+        return fits(landed, health) ? Verdict.Unsafe : Verdict.Pop;
+    }
+
+    private float[] damage(Vec3d crystal, Vec3d position, Box box, long arrival, boolean worst) {
+        float raw = ExplosionDamage.crystalRaw(mc.player, position, box, crystal, mc.world);
+        float effective = HurtTracker.get().effectiveOnSelf(raw, arrival);
+        float full = worst ? ExplosionDamage.upperBound(mc.player, position, crystal) : ExplosionDamage.mitigate(mc.player, raw);
+        return new float[] {effective, full};
+    }
+
+    private static boolean fits(float[] damage, float health) {
+        return damage[0] < health - POP_MARGIN && damage[1] < health - POP_MARGIN;
+    }
+
+    private boolean quickMine(Threat threat) {
+        if (!mine.get() || mineBlocked) return false;
+        MiningManager mining = MiningManager.get();
+        for (BlockPos option : targets(threat)) {
+            if (Targets.isMinable(option) && mining.inRange(option) && ticks(option) <= QUICK_MINE_TICKS) return true;
+        }
+        return false;
     }
 
     private boolean canBlock(BlockPos pos) {
@@ -580,13 +640,13 @@ public class AntiPiston extends Module {
     private void mine() {
         MiningManager mining = MiningManager.get();
         if (!mine.get() || !canAct()) {
+            mineBlocked = false;
             mining.release(this);
             return;
         }
-        if (mining.pos() != null && !mining.owns(this)) return;
 
         for (Threat threat : threats) {
-            if (!threat.urgent()) continue;
+            if (!threat.urgent) continue;
 
             List<BlockPos> options = new ArrayList<>();
             BlockPos best = null;
@@ -602,10 +662,16 @@ public class AntiPiston extends Module {
             }
             if (best == null) continue;
 
-            if (mining.owns(this) && options.contains(mining.pos()) && !mining.wasBroken()) return;
-            mining.mine(this, MINE_PRIORITY, best, true, switchMode.get(), swing.get());
+            if (mining.owns(this) && options.contains(mining.pos()) && !mining.wasBroken()) {
+                mineBlocked = false;
+                return;
+            }
+            mineBlocked = !mining.mine(this, MINE_PRIORITY, best, true, switchMode.get(), swing.get());
             return;
         }
+
+        mineBlocked = false;
+        if (mining.owns(this) && ticks - lastUrgent <= MINE_HOLD_TICKS && !mining.wasBroken() && mining.pos() != null && !mc.world.getBlockState(mining.pos()).isAir()) return;
         mining.release(this);
     }
 
@@ -625,7 +691,7 @@ public class AntiPiston extends Module {
     private void addSource(Set<BlockPos> targets, BlockPos pos, Direction direction) {
         BlockState state = mc.world.getBlockState(pos);
         if (state.isAir() || state.getBlock() instanceof PistonBlock || state.getBlock().getBlastResistance() >= 600) return;
-        if (mc.world.isEmittingRedstonePower(pos, direction)) targets.add(pos);
+        if (emits(pos, direction)) targets.add(pos);
     }
 
     private int ticks(BlockPos pos) {
