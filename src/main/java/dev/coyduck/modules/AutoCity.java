@@ -59,6 +59,7 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
     private static final long OPEN_LIMIT = 1500;
     private static final long SWITCH_COOLDOWN = 1000;
     private static final float FACE_PENALTY = 1.5f;
+    private static final float SPEED_BONUS = 3;
     private static final float SUPPORT_PENALTY = 1;
     private static final long LOST_GRACE = 750;
     private static final long REFILL_BAN = 5000;
@@ -644,6 +645,13 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
         return best;
     }
 
+    private float speedBonus(BlockPos pos, float obsidian) {
+        if (obsidian <= 0) return 0;
+        float delta = bestDelta(mc.world.getBlockState(pos), pos);
+        if (delta <= obsidian) return 0;
+        return SPEED_BONUS * (1 - obsidian / delta);
+    }
+
     private record Choice(BlockPos pos, float score, BlockPos support) {}
 
     private List<Choice> choose(Box box, LongSet columns) {
@@ -665,6 +673,7 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
         }
 
         Vec3d feet = Targets.feet(box);
+        float obsidian = -1;
         for (BlockPos pos : Targets.ring(columns, 0)) {
             if (!candidate(pos, own, face, background, mining)) continue;
 
@@ -677,14 +686,16 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
             }
             if (damage < minDamage.get()) continue;
 
-            choices.add(new Choice(pos, damage, support));
+            if (obsidian < 0) obsidian = bestDelta(Blocks.OBSIDIAN.getDefaultState(), pos);
+            choices.add(new Choice(pos, damage + speedBonus(pos, obsidian), support));
         }
 
         for (BlockPos pos : Targets.ring(columns, 1)) {
             if (!candidate(pos, own, face, background, mining) || mc.world.getBlockState(pos).isOf(Blocks.BEDROCK)) continue;
             float damage = gapDamage(pos, box, feet, null);
             if (damage < minDamage.get()) continue;
-            choices.add(new Choice(pos, damage - FACE_PENALTY, null));
+            if (obsidian < 0) obsidian = bestDelta(Blocks.OBSIDIAN.getDefaultState(), pos);
+            choices.add(new Choice(pos, damage - FACE_PENALTY + speedBonus(pos, obsidian), null));
         }
 
         if (cev.get()) {
