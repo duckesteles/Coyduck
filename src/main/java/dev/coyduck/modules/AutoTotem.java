@@ -685,7 +685,7 @@ public class AutoTotem extends Module {
             if (!(gapple && i == gappleHome) && isTotem(inventory.stack(i))) hotbar = i;
         }
         if (hotbar == NONE) {
-            if (pending) return;
+            if (pending && (verifying || pendingSource != NONE)) return;
             int source = NONE;
             for (int i = InventoryManager.HOTBAR_END; i < InventoryManager.MAIN_END && source == NONE; i++) {
                 if (isTotem(inventory.stack(i)) && !recentSource(i)) source = i;
