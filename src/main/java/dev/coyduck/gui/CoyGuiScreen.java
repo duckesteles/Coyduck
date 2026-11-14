@@ -95,7 +95,8 @@ public class CoyGuiScreen extends Screen {
         return passThrough;
     }
 
-    private static final List<String> GROUPS = List.of("Combat", "Player", "Movement", "Render", "World", "Misc");
+    private static final List<String> GROUPS = List.of("Combat", "Exploit", "Player", "Movement", "Render", "World", "Misc");
+    private static final String GROUP_PACKAGE = "dev.coyduck.modules.";
     private static final Map<String, String> SPLIT = Map.ofEntries(
         Map.entry("anti-piston", "Combat"), Map.entry("auto-anchor", "Combat"), Map.entry("auto-city+", "Combat"),
         Map.entry("auto-crystal", "Combat"), Map.entry("auto-totem+", "Combat"), Map.entry("auto-trap+", "Combat"),
@@ -358,7 +359,7 @@ public class CoyGuiScreen extends Screen {
             if (category == Coyduck.CATEGORY && owner.splitsCoyduck()) {
                 for (String group : GROUPS) {
                     List<Module> grouped = new ArrayList<>();
-                    for (Module module : inCategory) if (SPLIT.getOrDefault(module.name, "Misc").equals(group)) grouped.add(module);
+                    for (Module module : inCategory) if (group(module).equals(group)) grouped.add(module);
                     if (grouped.isEmpty()) continue;
                     String title = paged ? group : "Coyduck " + group;
                     target.panels.add(new Panel(prefix + title, title, Type.MODULES, grouped));
@@ -367,6 +368,18 @@ public class CoyGuiScreen extends Screen {
             }
             target.panels.add(new Panel(prefix + category.name, category.name, Type.MODULES, inCategory));
         }
+    }
+
+    private static String group(Module module) {
+        String mapped = SPLIT.get(module.name);
+        if (mapped != null) return mapped;
+        String pkg = module.getClass().getPackageName();
+        if (!pkg.startsWith(GROUP_PACKAGE)) return "Misc";
+        String sub = pkg.substring(GROUP_PACKAGE.length());
+        int dot = sub.indexOf('.');
+        if (dot >= 0) sub = sub.substring(0, dot);
+        for (String group : GROUPS) if (group.equalsIgnoreCase(sub)) return group;
+        return "Misc";
     }
 
     private void buildExtra() {

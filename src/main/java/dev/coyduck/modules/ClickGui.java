@@ -91,7 +91,7 @@ public class ClickGui extends Module {
 
     private final Setting<Boolean> splitCoyduck = sgGeneral.add(new BoolSetting.Builder()
         .name("split-coyduck")
-        .description("Sorts Coyduck modules into Combat, Player, Movement, Render, World and Misc panels like Meteor's own.")
+        .description("Sorts Coyduck modules into Combat, Exploit, Player, Movement, Render, World and Misc panels like Meteor's own.")
         .defaultValue(false)
         .build()
     );

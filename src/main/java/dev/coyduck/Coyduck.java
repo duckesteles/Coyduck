@@ -17,6 +17,7 @@ import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.managers.MotionTracker;
 import dev.coyduck.managers.RotationManager;
+import dev.coyduck.modules.AddonModules;
 import dev.coyduck.modules.AirMine;
 import dev.coyduck.modules.AutoAnchor;
 import dev.coyduck.modules.CrystalChams;
@@ -133,6 +134,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new BreakEsp());
         Modules.get().add(new Shaders());
         Modules.get().add(new UpdateChecker());
+        AddonModules.register(Modules.get());
 
         Commands.add(new PilotCommand());
     }
