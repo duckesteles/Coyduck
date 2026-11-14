@@ -106,10 +106,18 @@ public class NametagsPlus extends Module {
         .build()
     );
 
+    private final Setting<Boolean> background = sgGeneral.add(new BoolSetting.Builder()
+        .name("background")
+        .description("Draws a box behind the tag. Off keeps it see-through with shadowed text.")
+        .defaultValue(false)
+        .build()
+    );
+
     private final Setting<SettingColor> fill = sgGeneral.add(new ColorSetting.Builder()
         .name("fill")
         .description("Tag background.")
         .defaultValue(new SettingColor(15, 15, 20, 165))
+        .visible(background::get)
         .build()
     );
 
@@ -117,6 +125,7 @@ public class NametagsPlus extends Module {
         .name("outline")
         .description("Thin accent colored border around the tag.")
         .defaultValue(true)
+        .visible(background::get)
         .build()
     );
 
@@ -160,7 +169,7 @@ public class NametagsPlus extends Module {
     @EventHandler
     private void onRender2D(Render2DEvent event) {
         if (mc.world == null || mc.player == null) return;
-        boolean shadow = Config.get().customFont.get();
+        boolean shadow = !background.get() || Config.get().customFont.get();
         boolean thirdPerson = mc.options.getPerspective() != Perspective.FIRST_PERSON;
 
         for (PlayerEntity player : mc.world.getPlayers()) {
@@ -212,14 +221,14 @@ public class NametagsPlus extends Module {
         double top = -height - bar;
 
         Renderer2D.COLOR.begin();
-        Renderer2D.COLOR.quad(left - PAD, top - PAD, width + PAD * 2, height + bar + PAD * 2, fill.get());
+        if (background.get()) Renderer2D.COLOR.quad(left - PAD, top - PAD, width + PAD * 2, height + bar + PAD * 2, fill.get());
         if (progress >= 0) {
             double barY = top + height + 1;
             barColor.set(CoyHud.color(CoyHud.health(1 - progress)));
             Renderer2D.COLOR.quad(left, barY, width, EAT_BAR, BAR_BACKGROUND);
             Renderer2D.COLOR.quad(left, barY, width * progress, EAT_BAR, barColor);
         }
-        if (outline.get()) {
+        if (background.get() && outline.get()) {
             line.set(CoyHud.color(CoyHud.accent()));
             double x0 = left - PAD;
             double y0 = top - PAD;
