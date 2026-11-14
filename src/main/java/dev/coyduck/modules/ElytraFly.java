@@ -12,6 +12,7 @@ import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
+import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.KeybindSetting;
 import meteordevelopment.meteorclient.settings.Setting;
@@ -49,6 +50,11 @@ import net.minecraft.world.RaycastContext;
 import java.util.ArrayDeque;
 
 public class ElytraFly extends Module {
+    public enum Style {
+        Casual,
+        Ultra
+    }
+
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgSpeed = settings.createGroup("Speed");
     private final SettingGroup sgLanding = settings.createGroup("Landing");
@@ -56,6 +62,14 @@ public class ElytraFly extends Module {
     private final SettingGroup sgAutopilot = settings.createGroup("Autopilot");
     private final SettingGroup sgInventory = settings.createGroup("Inventory");
     private final SettingGroup sgKeybinds = settings.createGroup("Keybinds");
+
+    private final Setting<Style> style = sgGeneral.add(new EnumSetting.Builder<Style>()
+        .name("mode")
+        .description("Casual flies at one steady speed. Ultra speeds up to max speed while you hold a key, with overdrive and the rubberband cap.")
+        .defaultValue(Style.Casual)
+        .onChanged(mode -> resetRamp())
+        .build()
+    );
 
     private final Setting<Boolean> wallGuard = sgGeneral.add(new BoolSetting.Builder()
         .name("wall-guard")
@@ -115,12 +129,23 @@ public class ElytraFly extends Module {
         .build()
     );
 
+    private final Setting<Double> speed = sgSpeed.add(new DoubleSetting.Builder()
+        .name("speed")
+        .description("Horizontal blocks moved per tick.")
+        .defaultValue(2.9)
+        .min(0)
+        .sliderRange(0, 5)
+        .visible(() -> !ultra())
+        .build()
+    );
+
     private final Setting<Double> minSpeed = sgSpeed.add(new DoubleSetting.Builder()
         .name("min-speed")
         .description("Horizontal blocks per tick you start at and drop back to when you let go of the movement keys.")
         .defaultValue(2.999)
         .min(0)
         .sliderRange(0, 5)
+        .visible(this::ultra)
         .build()
     );
 
@@ -130,6 +155,7 @@ public class ElytraFly extends Module {
         .defaultValue(14.999)
         .min(0)
         .sliderRange(0, 17)
+        .visible(this::ultra)
         .build()
     );
 
@@ -139,6 +165,7 @@ public class ElytraFly extends Module {
         .defaultValue(0.3)
         .min(0)
         .sliderRange(0, 2)
+        .visible(this::ultra)
         .build()
     );
 
@@ -148,6 +175,7 @@ public class ElytraFly extends Module {
         .defaultValue(14.999)
         .min(0.1)
         .sliderRange(1, 30)
+        .visible(this::ultra)
         .build()
     );
 
@@ -173,6 +201,7 @@ public class ElytraFly extends Module {
         .name("overdrive")
         .description("Runs extra flight ticks while you speed up, each with its own small step, so you reach max speed far sooner. Never moves you further per tick than max speed.")
         .defaultValue(true)
+        .visible(this::ultra)
         .build()
     );
 
@@ -180,6 +209,7 @@ public class ElytraFly extends Module {
         .name("rubberband-cap")
         .description("Every pull back winds the speed back a little. After 3 pull backs within 3 seconds at or above the cap speed, holds you at the cap speed for 10 seconds.")
         .defaultValue(true)
+        .visible(this::ultra)
         .build()
     );
 
@@ -189,7 +219,7 @@ public class ElytraFly extends Module {
         .defaultValue(200)
         .min(1)
         .sliderRange(20, 340)
-        .visible(rubberbandCap::get)
+        .visible(() -> ultra() && rubberbandCap.get())
         .build()
     );
 
@@ -276,7 +306,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> bypass = sgModes.add(new BoolSetting.Builder()
         .name("bypass")
-        .description("Keeps the vanilla glide direction and only speeds it up along the same curve. Always used inside cobwebs.")
+        .description("Keeps the vanilla glide direction and only speeds it up along the same curve. Ultra mode also uses it inside cobwebs on its own.")
         .defaultValue(false)
         .build()
     );
@@ -386,6 +416,18 @@ public class ElytraFly extends Module {
         .description("Toggles anti-slam.")
         .defaultValue(Keybind.none())
         .action(() -> flip(antiSlam, "Anti slam"))
+        .build()
+    );
+
+    private final Setting<Keybind> modeKey = sgKeybinds.add(new KeybindSetting.Builder()
+        .name("mode-key")
+        .description("Switches between casual and ultra.")
+        .defaultValue(Keybind.none())
+        .action(() -> {
+            if (mc.currentScreen != null) return;
+            style.set(ultra() ? Style.Casual : Style.Ultra);
+            info("Mode %s.", style.get().name().toLowerCase());
+        })
         .build()
     );
 
@@ -503,7 +545,7 @@ public class ElytraFly extends Module {
     }
 
     public double horizontalSpeed() {
-        return minSpeed.get();
+        return low();
     }
 
     public double upSpeed() {
@@ -528,7 +570,7 @@ public class ElytraFly extends Module {
 
     @EventHandler
     private void onTickPost(TickEvent.Post event) {
-        if (overdrive.get()) overdrive();
+        if (ultra() && overdrive.get()) overdrive();
         else overdriveSpent = false;
         pilot = null;
     }
@@ -540,7 +582,7 @@ public class ElytraFly extends Module {
             return;
         }
         double now = vanillaFlight ? lastSpeed : ramp;
-        if (now <= minSpeed.get()) overdriveSpent = false;
+        if (now <= low()) overdriveSpent = false;
 
         double budget = speedCap();
         double moved = lastSpeed;
@@ -572,7 +614,7 @@ public class ElytraFly extends Module {
         } else if (keyed && rampDelay >= RAMP_DELAY && ramp < top) {
             return false;
         }
-        if ((vanillaFlight ? lastSpeed : ramp) >= maxSpeed.get() * OVERDRIVE_TOP) overdriveSpent = true;
+        if ((vanillaFlight ? lastSpeed : ramp) >= high() * OVERDRIVE_TOP) overdriveSpent = true;
         return true;
     }
 
@@ -628,7 +670,7 @@ public class ElytraFly extends Module {
     private void onPacket(PacketApplyEvent.Pre event) {
         if (!(event.packet instanceof PlayerPositionLookS2CPacket) || mc.player == null || !mc.player.isGliding()) return;
 
-        if (rubberbandCap.get() && lastSpeed * 20 >= capSpeed.get()) {
+        if (ultra() && rubberbandCap.get() && lastSpeed * 20 >= capSpeed.get()) {
             long now = Util.getMeasuringTimeMs();
             pullBacks.addLast(now);
             while (now - pullBacks.peekFirst() > CAP_WINDOW) pullBacks.pollFirst();
@@ -640,7 +682,7 @@ public class ElytraFly extends Module {
             }
         }
 
-        double floor = minSpeed.get();
+        double floor = low();
         for (int i = 0; i < REWIND_TICKS && ramp > floor; i++) ramp = Math.max(floor, ramp - gain(ramp));
         rampDelay = 0;
     }
@@ -672,7 +714,7 @@ public class ElytraFly extends Module {
         if (autopilot.get() && forward == 0 && strafe == 0 && mc.player.getY() > autopilotHeight.get()) forward = 1;
 
         boolean piloted = pilot != null;
-        boolean vanilla = !piloted && !fluid && (bypass.get() || inCobweb());
+        boolean vanilla = !piloted && !fluid && (bypass.get() || ultra() && inCobweb());
         vanillaFlight = vanilla;
         keyed = !piloted && !vanilla && (forward != 0 || strafe != 0);
 
@@ -760,7 +802,7 @@ public class ElytraFly extends Module {
         if (!piloted && !held && moved < intended - 1.0E-3) {
             if (vanilla) rampDelay = 0;
             else {
-                ramp = Math.max(minSpeed.get(), Math.min(ramp, moved));
+                ramp = Math.max(low(), Math.min(ramp, moved));
                 rampDelay = 0;
             }
         }
@@ -780,19 +822,32 @@ public class ElytraFly extends Module {
     }
 
     private void resetRamp() {
-        ramp = minSpeed.get();
+        ramp = low();
         rampDelay = 0;
     }
 
+    private boolean ultra() {
+        return style.get() == Style.Ultra;
+    }
+
+    private double low() {
+        return ultra() ? minSpeed.get() : speed.get();
+    }
+
+    private double high() {
+        return ultra() ? maxSpeed.get() : speed.get();
+    }
+
     private double gain(double speed) {
+        if (!ultra()) return 0;
         double top = plateau.get();
         return acceleration.get() * Math.max(0, top - speed) / top;
     }
 
     private double speedCap() {
-        double cap = maxSpeed.get();
-        if (capTicks > 0) cap = Math.min(cap, capLimit);
-        return Math.max(minSpeed.get(), cap);
+        double cap = high();
+        if (capTicks > 0 && ultra()) cap = Math.min(cap, capLimit);
+        return Math.max(low(), cap);
     }
 
     private double[] building(double x, double y, double z) {
