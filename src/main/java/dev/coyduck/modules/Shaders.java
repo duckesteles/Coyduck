@@ -15,6 +15,7 @@ import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.render.entity.state.EndCrystalEntityRenderState;
+import net.minecraft.entity.EntityType;
 import net.minecraft.client.render.entity.state.EntityRenderState;
 import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
 
@@ -39,6 +40,13 @@ public class Shaders extends Module {
     private final Setting<Boolean> crystals = sgGeneral.add(new BoolSetting.Builder()
         .name("crystals")
         .description("Puts the shader on end crystals.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> pearls = sgGeneral.add(new BoolSetting.Builder()
+        .name("pearls")
+        .description("Puts the shader on flying ender pearls, so you can follow enemy pearls through walls.")
         .defaultValue(true)
         .build()
     );
@@ -181,6 +189,7 @@ public class Shaders extends Module {
 
     public boolean shows(EntityRenderState state) {
         if (state instanceof PlayerEntityRenderState player) return players.get() && (mc.player == null || player.id != mc.player.getId());
+        if (state.entityType == EntityType.ENDER_PEARL) return pearls.get();
         return state instanceof EndCrystalEntityRenderState && crystals.get();
     }
 
