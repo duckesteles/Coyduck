@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.hud.ArmorHud;
 import dev.coyduck.hud.InventoryHud;
 import dev.coyduck.hud.ItemsHud;
 import dev.coyduck.managers.PopTracker;
@@ -14,5 +15,6 @@ public final class AddonModules {
         MeteorClient.EVENT_BUS.subscribe(PopTracker.get());
         Hud.get().register(InventoryHud.INFO);
         Hud.get().register(ItemsHud.INFO);
+        Hud.get().register(ArmorHud.INFO);
     }
 }
