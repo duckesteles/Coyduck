@@ -4,7 +4,10 @@ import dev.coyduck.events.WorldResetEvent;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import dev.coyduck.utils.Trace;
 import dev.coyduck.Coyduck;
+import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
+import dev.coyduck.managers.LatencyManager;
+import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.RotationManager;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
@@ -14,12 +17,18 @@ import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.Entity;
+import net.minecraft.block.BlockState;
 import net.minecraft.entity.decoration.AbstractDecorationEntity;
+import net.minecraft.entity.projectile.thrown.EnderPearlEntity;
 import net.minecraft.item.Items;
 import net.minecraft.util.Hand;
+import net.minecraft.registry.tag.BlockTags;
+import net.minecraft.util.Util;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
@@ -48,6 +57,12 @@ public class PearlPhase extends Module {
     private static final int CLEAR_TICKS = 16;
     private static final int CLEAR_EVERY = 2;
     private static final double CLEAR_REACH = 3;
+    private static final int MINE_PRIORITY = 160;
+    private static final int CELL_TICKS = 20;
+    private static final int WALL_TICKS = 10;
+    private static final long AUTO_GAP = 1000;
+    private static final long VERIFY_MIN = 600;
+    private static final int MAX_RETRIES = 1;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -74,11 +89,41 @@ public class PearlPhase extends Module {
         .build()
     );
 
+    private final Setting<Boolean> clearCell = sgGeneral.add(new BoolSetting.Builder()
+        .name("clear-cell")
+        .description("Breaks a ladder, scaffolding or vine in your own cell before throwing. 6b6t refused every pearl we threw while standing in an enemy's ladder.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> placeWall = sgGeneral.add(new BoolSetting.Builder()
+        .name("place-wall")
+        .description("With no wall next to your feet, places one obsidian beside you first and phases into it.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> auto = sgGeneral.add(new BoolSetting.Builder()
+        .name("auto")
+        .description("Stays on and phases by itself whenever you walk into a wall on the ground with a pearl ready.")
+        .defaultValue(false)
+        .build()
+    );
+
+    private enum State { Idle, Cell, Decoration, Wall, Aim, Verify }
+
+    private State state = State.Idle;
     private float targetYaw;
     private float targetPitch;
     private int slot;
     private int aimTicks;
     private int clearTicks;
+    private int retries;
+    private long verifyUntil;
+    private long thrownAt;
+    private long nextAuto;
+    private BlockPos cell;
+    private BlockPos wall;
     private Vec3d planned;
 
     public PearlPhase() {
@@ -91,32 +136,23 @@ public class PearlPhase extends Module {
             toggle();
             return;
         }
-        if (mc.player.getHealth() + mc.player.getAbsorptionAmount() <= MIN_HEALTH) {
-            error("Too low for a pearl, it would hurt you.");
-            toggle();
-            return;
-        }
-        if (mc.player.getItemCooldownManager().isCoolingDown(Items.ENDER_PEARL.getDefaultStack())) {
-            error("Pearl is on cooldown.");
-            toggle();
-            return;
-        }
-        slot = InventoryManager.get().find(stack -> stack.isOf(Items.ENDER_PEARL), 0, InventoryManager.MAIN_END);
-        if (slot == -1) {
-            error("No ender pearls.");
-            toggle();
-            return;
-        }
-        aimTicks = 0;
-        clearTicks = 0;
-        if (!plan()) {
-            if (decoration() != null) {
-                clearTicks = CLEAR_TICKS;
-                return;
+        state = State.Idle;
+        retries = 0;
+        nextAuto = 0;
+        if (auto.get()) {
+            if (pearlSlot() == -1) {
+                error("No ender pearls.");
+                toggle();
             }
-            error(reason());
-            toggle();
+            return;
         }
+        start();
+    }
+
+    @Override
+    public void onDeactivate() {
+        MiningManager.get().release(this);
+        state = State.Idle;
     }
 
     @EventHandler
@@ -129,30 +165,162 @@ public class PearlPhase extends Module {
         toggle();
     }
 
+    private int pearlSlot() {
+        return InventoryManager.get().find(stack -> stack.isOf(Items.ENDER_PEARL), 0, InventoryManager.MAIN_END);
+    }
+
+    private boolean coolingDown() {
+        return mc.player.getItemCooldownManager().isCoolingDown(Items.ENDER_PEARL.getDefaultStack());
+    }
+
+    private void start() {
+        if (mc.player.getHealth() + mc.player.getAbsorptionAmount() <= MIN_HEALTH) {
+            fail("Too low for a pearl, it would hurt you.");
+            return;
+        }
+        if (coolingDown()) {
+            fail("Pearl is on cooldown.");
+            return;
+        }
+        slot = pearlSlot();
+        if (slot == -1) {
+            fail("No ender pearls.");
+            return;
+        }
+        aimTicks = 0;
+        clearTicks = 0;
+        prepare(clearCell.get());
+    }
+
+    private void prepare(boolean breakCell) {
+        cell = breakCell ? climbable() : null;
+        if (cell != null && MiningManager.get().mine(this, MINE_PRIORITY, cell, true, InventoryManager.SwitchMode.Silent, InteractionManager.SwingMode.Packet)) {
+            Trace.log("phase breaks a {} in its own cell", mc.world.getBlockState(cell).getBlock().getName().getString());
+            clearTicks = CELL_TICKS;
+            state = State.Cell;
+            return;
+        }
+        if (plan()) {
+            state = State.Aim;
+            return;
+        }
+        if (decoration() != null) {
+            clearTicks = CLEAR_TICKS;
+            state = State.Decoration;
+            return;
+        }
+        wall = placeWall.get() && walls() == 0 ? wallSpot() : null;
+        if (wall != null) {
+            clearTicks = WALL_TICKS;
+            state = State.Wall;
+            return;
+        }
+        fail(reason());
+    }
+
+    private void fail(String message) {
+        MiningManager.get().release(this);
+        if (auto.get()) {
+            Trace.log("phase auto skipped: {}", message);
+            state = State.Idle;
+            nextAuto = Util.getMeasuringTimeMs() + AUTO_GAP;
+            return;
+        }
+        error(message);
+        toggle();
+    }
+
+    private void done() {
+        if (auto.get()) {
+            state = State.Idle;
+            nextAuto = Util.getMeasuringTimeMs() + AUTO_GAP;
+            return;
+        }
+        toggle();
+    }
+
     @EventHandler
     private void onTick(TickEvent.Pre event) {
-        if (mc.player == null) return;
+        if (mc.player == null || mc.world == null) return;
 
         RotationManager rotations = RotationManager.get();
-        if (clearTicks > 0 && !clear(rotations)) return;
+        switch (state) {
+            case Idle -> {
+                if (wantsAuto()) {
+                    retries = 0;
+                    start();
+                }
+            }
+            case Cell -> breakCell();
+            case Decoration -> {
+                if (clear(rotations)) state = State.Aim;
+            }
+            case Wall -> buildWall();
+            case Aim -> aim(rotations);
+            case Verify -> verify();
+        }
+    }
+
+    private boolean wantsAuto() {
+        if (!auto.get() || Util.getMeasuringTimeMs() < nextAuto) return false;
+        if (!mc.player.isOnGround() || !mc.player.horizontalCollision || mc.player.input.getMovementInput().lengthSquared() < 0.01) return false;
+        if (coolingDown() || pearlSlot() == -1 || mc.player.isUsingItem()) return false;
+        return mc.world.isSpaceEmpty(mc.player, mc.player.getBoundingBox().contract(0.01, 0, 0.01));
+    }
+
+    private void breakCell() {
+        MiningManager mining = MiningManager.get();
+        boolean gone = !mc.world.getBlockState(cell).isIn(BlockTags.CLIMBABLE);
+        if (gone || mining.owns(this) && mining.wasBroken() || --clearTicks <= 0 || !mining.owns(this)) {
+            mining.release(this);
+            if (!gone) Trace.log("phase could not break its cell in time, throws anyway");
+            cell = null;
+            prepare(false);
+        }
+    }
+
+    private void buildWall() {
+        if (plan()) {
+            Trace.log("phase placed its own wall");
+            state = State.Aim;
+            return;
+        }
+        if (--clearTicks <= 0) {
+            fail("Could not place a wall next to you.");
+            return;
+        }
+        InteractionManager interaction = InteractionManager.get();
+        if (!interaction.canPlace(wall) || interaction.isPending(wall)) return;
+        int obsidian = InventoryManager.get().find(stack -> stack.isOf(Items.OBSIDIAN) || stack.isOf(Items.CRYING_OBSIDIAN), 0, InventoryManager.MAIN_END);
+        if (obsidian == -1) {
+            fail("No wall next to your feet, and no obsidian to place one.");
+            return;
+        }
+        BlockHitResult hit = interaction.hit(wall, false);
+        if (hit == null || !interaction.obstructions(wall).isEmpty()) {
+            fail("No wall next to your feet, and no spot to place one.");
+            return;
+        }
+        if (!interaction.ready(wall, false, true, ROTATE_PRIORITY)) return;
+        InventoryManager.get().withItemWhileEating(obsidian, InventoryManager.SwitchMode.Silent, () -> interaction.place(wall, hit, InteractionManager.SwingMode.Packet, true, ROTATE_PRIORITY));
+    }
+
+    private void aim(RotationManager rotations) {
         rotations.request(ROTATE_PRIORITY, targetYaw, targetPitch, 180, false);
         boolean aimed = Math.abs(MathHelper.wrapDegrees(rotations.serverYaw() - targetYaw)) < 0.5 && Math.abs(rotations.serverPitch() - targetPitch) < 0.5;
         if (!aimed) {
             if (++aimTicks < AIM_TICKS) return;
-            error("Could not turn to the throw angle in time, so no pearl was thrown.");
-            toggle();
+            fail("Could not turn to the throw angle in time, so no pearl was thrown.");
             return;
         }
         if (mc.player.getEntityPos().squaredDistanceTo(planned) > 0.05 * 0.05 && !plan()) {
-            error("You moved and there is no wall to phase into now.");
-            toggle();
+            fail("You moved and there is no wall to phase into now.");
             return;
         }
 
-        slot = InventoryManager.get().find(stack -> stack.isOf(Items.ENDER_PEARL), 0, InventoryManager.MAIN_END);
+        slot = pearlSlot();
         if (slot == -1) {
-            error("No ender pearls.");
-            toggle();
+            fail("No ender pearls.");
             return;
         }
 
@@ -165,9 +333,35 @@ public class PearlPhase extends Module {
             mc.player.setYaw(yaw);
             mc.player.setPitch(pitch);
         });
-        if (!thrown) error("Couldn't switch to the pearl while eating.");
-        else Trace.log("phase pearl thrown yaw {} pitch {} from {}", targetYaw, targetPitch, mc.player.getEntityPos());
-        toggle();
+        if (!thrown) {
+            fail("Couldn't switch to the pearl while eating.");
+            return;
+        }
+        Trace.log("phase pearl thrown yaw {} pitch {} from {}", targetYaw, targetPitch, mc.player.getEntityPos());
+        thrownAt = Util.getMeasuringTimeMs();
+        verifyUntil = thrownAt + Math.max(VERIFY_MIN, 2L * LatencyManager.get().rtt() + 150);
+        state = State.Verify;
+    }
+
+    private void verify() {
+        if (!mc.world.getOtherEntities(mc.player, mc.player.getBoundingBox().expand(4), entity -> entity instanceof EnderPearlEntity pearl && pearl.age < 40 && pearl.getOwner() == mc.player).isEmpty()) {
+            Trace.log("phase pearl accepted after {}ms", Util.getMeasuringTimeMs() - thrownAt);
+            done();
+            return;
+        }
+        if (!coolingDown()) {
+            Trace.log("phase pearl refused by the server after {}ms, retry {}", Util.getMeasuringTimeMs() - thrownAt, retries);
+            if (retries++ < MAX_RETRIES) {
+                start();
+                return;
+            }
+            fail("The server refused the pearl.");
+            return;
+        }
+        if (Util.getMeasuringTimeMs() > verifyUntil) {
+            Trace.log("phase saw no pearl within {}ms", Util.getMeasuringTimeMs() - thrownAt);
+            done();
+        }
     }
 
     private boolean clear(RotationManager rotations) {
@@ -179,8 +373,7 @@ public class PearlPhase extends Module {
         }
         Entity decoration = decoration();
         if (decoration == null || clearTicks <= 0) {
-            error(decoration == null ? reason() : "Could not break the item frame or painting in the way.");
-            toggle();
+            fail(decoration == null ? reason() : "Could not break the item frame or painting in the way.");
             return false;
         }
         Box box = decoration.getBoundingBox();
@@ -191,6 +384,53 @@ public class PearlPhase extends Module {
             Trace.log("phase hits a {} in the pearl's way", decoration.getType().getUntranslatedName());
         }
         return false;
+    }
+
+    private BlockPos climbable() {
+        Box box = mc.player.getBoundingBox();
+        MiningManager mining = MiningManager.get();
+        BlockPos best = null;
+        int fastest = CELL_TICKS;
+        for (BlockPos pos : BlockPos.iterate(MathHelper.floor(box.minX), MathHelper.floor(box.minY), MathHelper.floor(box.minZ), MathHelper.floor(box.maxX - 1.0E-7), MathHelper.floor(box.maxY - 1.0E-7), MathHelper.floor(box.maxZ - 1.0E-7))) {
+            BlockState state = mc.world.getBlockState(pos);
+            if (!state.isIn(BlockTags.CLIMBABLE) || state.getHardness(mc.world, pos) < 0) continue;
+            float delta = mining.delta(state, pos, InventoryManager.get().stack(mining.bestTool(state)));
+            int ticks = delta <= 0 ? Integer.MAX_VALUE : (int) Math.ceil(1 / delta);
+            if (ticks < fastest) {
+                fastest = ticks;
+                best = pos.toImmutable();
+            }
+        }
+        return best;
+    }
+
+    private int walls() {
+        BlockPos feet = mc.player.getBlockPos();
+        int walls = 0;
+        for (Direction direction : Direction.Type.HORIZONTAL) {
+            BlockPos side = feet.offset(direction);
+            if (!mc.world.getBlockState(side).getCollisionShape(mc.world, side).isEmpty()) walls++;
+        }
+        return walls;
+    }
+
+    private BlockPos wallSpot() {
+        BlockPos feet = mc.player.getBlockPos();
+        Vec3d pos = mc.player.getEntityPos();
+        InteractionManager interaction = InteractionManager.get();
+        BlockPos best = null;
+        double closest = Double.MAX_VALUE;
+        for (Direction direction : Direction.Type.HORIZONTAL) {
+            BlockPos side = feet.offset(direction);
+            if (!interaction.canPlace(side) || !interaction.obstructions(side).isEmpty() || interaction.hit(side, false) == null) continue;
+            if (mc.player.getBoundingBox().intersects(new Box(side))) continue;
+            double gap = Math.abs((direction.getOffsetX() != 0 ? pos.x - (feet.getX() + 0.5 + direction.getOffsetX() * 0.5) : pos.z - (feet.getZ() + 0.5 + direction.getOffsetZ() * 0.5)));
+            if (gap < closest) {
+                closest = gap;
+                best = side;
+            }
+        }
+        return best;
     }
 
     private Entity decoration() {
@@ -319,7 +559,7 @@ public class PearlPhase extends Module {
         BlockPos feet = mc.player.getBlockPos();
         int walls = 0;
         int faces = 0;
-        for (net.minecraft.util.math.Direction direction : net.minecraft.util.math.Direction.Type.HORIZONTAL) {
+        for (Direction direction : Direction.Type.HORIZONTAL) {
             if (!mc.world.getBlockState(feet.offset(direction)).getCollisionShape(mc.world, feet.offset(direction)).isEmpty()) walls++;
             if (!mc.world.getBlockState(feet.up().offset(direction)).getCollisionShape(mc.world, feet.up().offset(direction)).isEmpty()) faces++;
         }
