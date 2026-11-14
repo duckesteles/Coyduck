@@ -90,15 +90,6 @@ public class NametagsPlus extends Module {
         .build()
     );
 
-    private final Setting<Double> range = sgGeneral.add(new DoubleSetting.Builder()
-        .name("range")
-        .description("Only players closer than this.")
-        .defaultValue(64)
-        .range(4, 512)
-        .sliderRange(16, 256)
-        .build()
-    );
-
     private final Setting<Double> scale = sgGeneral.add(new DoubleSetting.Builder()
         .name("scale")
         .description("Size of the tags.")
@@ -170,12 +161,11 @@ public class NametagsPlus extends Module {
     private void onRender2D(Render2DEvent event) {
         if (mc.world == null || mc.player == null) return;
         boolean shadow = Config.get().customFont.get();
-        double max = range.get() * range.get();
         boolean thirdPerson = mc.options.getPerspective() != Perspective.FIRST_PERSON;
 
         for (PlayerEntity player : mc.world.getPlayers()) {
             if (!player.isAlive() || player.isInvisible()) continue;
-            if (player == mc.player ? !self.get() || !thirdPerson : player.squaredDistanceTo(mc.player) > max) continue;
+            if (player == mc.player && (!self.get() || !thirdPerson)) continue;
 
             Utils.set(pos, player, event.tickDelta);
             pos.add(0, player.getEyeHeight(player.getPose()) + 0.5, 0);
