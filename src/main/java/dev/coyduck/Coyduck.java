@@ -52,6 +52,7 @@ import dev.coyduck.modules.HoleFill;
 import dev.coyduck.modules.KillEffects;
 import dev.coyduck.modules.NoExplosion;
 import dev.coyduck.modules.NoClimb;
+import dev.coyduck.modules.NametagsPlus;
 import dev.coyduck.modules.NoRotate;
 import dev.coyduck.modules.PacketMinePlus;
 import dev.coyduck.modules.Pusher;
@@ -147,6 +148,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new Pusher());
         Modules.get().add(new AntiPearl());
         Modules.get().add(new PacketMinePlus());
+        Modules.get().add(new NametagsPlus());
 
         Commands.add(new PilotCommand());
     }
