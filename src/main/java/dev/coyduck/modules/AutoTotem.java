@@ -60,6 +60,8 @@ public class AutoTotem extends Module {
     private static final int DANGER_HOLD = 40;
     private static final long HURT_WINDOW = 3_000;
     private static final long VERIFY_INTERVAL = 1_000;
+    private static final long POP_DANGER = 5_000;
+    private static final double DIVER_HEIGHT = 32;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -190,6 +192,7 @@ public class AutoTotem extends Module {
     private int gappleHome = NONE;
     private float lastHp = -1;
     private long lastHurtAt;
+    private long lastPopAt;
     private long emptyEatAt;
     private int previousSlot = NONE;
     private int expectedSlot = NONE;
@@ -279,7 +282,7 @@ public class AutoTotem extends Module {
         if (dangerHold > 0) dangerHold--;
         if (pending && Util.getMeasuringTimeMs() >= pendingUntil) retry();
         refill(false);
-        if (!pending && !confirmed && isTotem(mc.player.getOffHandStack()) && Util.getMeasuringTimeMs() >= nextVerify) verify();
+        if (!pending && !confirmed && !mc.player.isUsingItem() && isTotem(mc.player.getOffHandStack()) && Util.getMeasuringTimeMs() >= nextVerify) verify();
         updateMainhand();
         updateGapple();
 
@@ -326,7 +329,11 @@ public class AutoTotem extends Module {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onEntityAdded(EntityAddedEvent event) {
-        if (event.entity instanceof EndCrystalEntity && canAct()) updateMainhand();
+        if (!(event.entity instanceof EndCrystalEntity crystal) || !canAct()) return;
+        if (lethal(crystal, mc.player.getHealth() + mc.player.getAbsorptionAmount())) {
+            if (mainhand.get() == Mainhand.Smart) dangerHold = DANGER_HOLD;
+            updateMainhand();
+        }
     }
 
     @EventHandler
@@ -340,6 +347,7 @@ public class AutoTotem extends Module {
         nextVerify = 0;
         popExpectedUntil = 0;
         dangerHold = 0;
+        lastPopAt = 0;
         reserveSlot = NONE;
         previousSlot = NONE;
         expectedSlot = NONE;
@@ -357,7 +365,7 @@ public class AutoTotem extends Module {
         Trace.log("totem pop from {} main {} off {}{}", mainPopped ? "main hand" : "offhand", main.getItem(), mc.player.getOffHandStack().getItem(), ambiguous ? " ambiguous" : "");
         if (mainPopped) main.decrement(1);
         else mc.player.getOffHandStack().decrement(1);
-        if (gapple && mainPopped && (mainhand.get() == Mainhand.Off || !hotbarTotem(server))) {
+        if (gapple && mainPopped && (mainhand.get() == Mainhand.Off || !hotbarTotem(server, gappleHome))) {
             gapple = false;
             mainMissing = 0;
         }
@@ -366,20 +374,22 @@ public class AutoTotem extends Module {
 
         confirmed = false;
         popExpectedUntil = 0;
+        lastPopAt = Util.getMeasuringTimeMs();
+        if (mainhand.get() == Mainhand.Smart) dangerHold = DANGER_HOLD;
         if (closeContainers.get() && mc.player.currentScreenHandler != mc.player.playerScreenHandler) mc.player.closeHandledScreen();
 
         clearPending();
         attempts = 0;
         refill(!mainPopped);
         skipMask = 0;
-        if (!pending && !gapple) verify();
-        if (mainPopped) updateMainhand();
+        if (!pending && !gapple && !mc.player.isUsingItem()) verify();
+        updateMainhand();
     }
 
-    private boolean hotbarTotem(int except) {
+    private boolean hotbarTotem(int except, int alsoExcept) {
         InventoryManager inventory = InventoryManager.get();
         for (int i = 0; i < InventoryManager.HOTBAR_END; i++) {
-            if (i != except && isTotem(inventory.stack(i))) return true;
+            if (i != except && i != alsoExcept && isTotem(inventory.stack(i))) return true;
         }
         return false;
     }
@@ -407,6 +417,12 @@ public class AutoTotem extends Module {
     }
 
     private void onOffhandUpdate() {
+        if (pending && verifying && !gapple && !isTotem(mc.player.getOffHandStack()) && Util.getMeasuringTimeMs() - refillAt >= LatencyManager.get().rtt() * SYNC_SHARE) {
+            Trace.log("totem offhand empty while verifying, refilling now");
+            clearPending();
+            refill(false);
+            return;
+        }
         if (pending) {
             long since = Util.getMeasuringTimeMs() - pendingSince;
             if (since >= LatencyManager.get().rtt() * SYNC_SHARE) {
@@ -479,6 +495,10 @@ public class AutoTotem extends Module {
 
         int source = offhandSource();
         if (source == NONE) return;
+        if (mc.player.isUsingItem() && !isTotem(mc.player.getOffHandStack())) {
+            Trace.log("totem refill stops item use, the offhand is empty");
+            mc.interactionManager.stopUsingItem(mc.player);
+        }
 
         int syncId = mc.player.currentScreenHandler.syncId;
         InventoryManager inventory = InventoryManager.get();
@@ -578,7 +598,7 @@ public class AutoTotem extends Module {
     private int offhandSource() {
         int home = gappleHome;
         gappleHome = NONE;
-        if (home != NONE && !isTotem(mc.player.getOffHandStack()) && isTotem(InventoryManager.get().stack(home))
+        if (home != NONE && home != InventoryManager.get().serverSlot() && !isTotem(mc.player.getOffHandStack()) && isTotem(InventoryManager.get().stack(home))
             && InventoryManager.get().handlerSlot(mc.player.currentScreenHandler, home) != -1) return home;
         int source = offhandSource(true);
         return source != NONE ? source : offhandSource(false);
@@ -606,7 +626,7 @@ public class AutoTotem extends Module {
             if (i != server && i != reserveSlot && (skipMask & (1 << i)) == 0 && isTotem(inventory.stack(i))) return i;
         }
 
-        if (avoidRecent && recentSource(server)) return NONE;
+        if (avoidRecent && recentSource(server) || isGapple(mc.player.getOffHandStack())) return NONE;
         return (skipMask & (1 << server)) == 0 && isTotem(inventory.stack(server)) ? server : NONE;
     }
 
@@ -658,10 +678,14 @@ public class AutoTotem extends Module {
         boolean critical = mainhand.get() == Mainhand.Smart && dangerHold > 0 && !inventory.isEating()
             && manualTicks >= CRITICAL_GRACE && !mc.options.useKey.isPressed()
             && mc.player.getHealth() + mc.player.getAbsorptionAmount() <= health.get();
-        if ((!popped && !critical && (resumeTicks > 0 || foodTicks > 0)) || (!gapple && !isTotem(mc.player.getOffHandStack())) || pending) return;
+        if ((!popped && !critical && (resumeTicks > 0 || foodTicks > 0)) || (!gapple && !isTotem(mc.player.getOffHandStack()))) return;
 
-        int hotbar = inventory.find(AutoTotem::isTotem, 0, InventoryManager.HOTBAR_END);
+        int hotbar = NONE;
+        for (int i = 0; i < InventoryManager.HOTBAR_END && hotbar == NONE; i++) {
+            if (!(gapple && i == gappleHome) && isTotem(inventory.stack(i))) hotbar = i;
+        }
         if (hotbar == NONE) {
+            if (pending) return;
             int source = NONE;
             for (int i = InventoryManager.HOTBAR_END; i < InventoryManager.MAIN_END && source == NONE; i++) {
                 if (isTotem(inventory.stack(i)) && !recentSource(i)) source = i;
@@ -729,18 +753,36 @@ public class AutoTotem extends Module {
         if (lastHp >= 0 && hp < lastHp - 0.5f) lastHurtAt = now;
         lastHp = hp;
 
-        double range = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
-        for (Entity entity : mc.world.getEntities()) {
-            if (entity instanceof EndCrystalEntity crystal && crystal.squaredDistanceTo(mc.player) <= range && ExplosionDamage.crystal(mc.player, crystal.getEntityPos()) >= hp) return true;
+        Box area = mc.player.getBoundingBox().expand(ExplosionDamage.CRYSTAL_RANGE);
+        for (EndCrystalEntity crystal : mc.world.getEntitiesByClass(EndCrystalEntity.class, area, crystal -> true)) {
+            if (lethal(crystal, hp)) return true;
         }
+        if (now - lastPopAt < POP_DANGER) return true;
 
-        if (hp > health.get() && now - lastHurtAt >= HURT_WINDOW) return false;
+        boolean hurt = hp <= health.get() || now - lastHurtAt < HURT_WINDOW;
         double enemyRange = combatRange.get() * combatRange.get();
         for (PlayerEntity player : mc.world.getPlayers()) {
-            if (player != mc.player && player.isAlive() && !Friends.get().isFriend(player) && !ExplosionDamage.isInvulnerable(player)
-                && player.squaredDistanceTo(mc.player) <= enemyRange) return true;
+            if (player == mc.player || !player.isAlive() || Friends.get().isFriend(player) || ExplosionDamage.isInvulnerable(player)) continue;
+            if (hurt && player.squaredDistanceTo(mc.player) <= enemyRange) return true;
+            if (diver(player, enemyRange)) return true;
         }
         return false;
+    }
+
+    private boolean lethal(EndCrystalEntity crystal, float hp) {
+        double range = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
+        if (crystal.squaredDistanceTo(mc.player) > range) return false;
+        Vec3d center = crystal.getEntityPos();
+        return ExplosionDamage.upperBound(mc.player, mc.player.getEntityPos(), center) >= hp && ExplosionDamage.crystal(mc.player, center) >= hp;
+    }
+
+    private boolean diver(PlayerEntity player, double enemyRange) {
+        if (!player.getMainHandStack().isOf(Items.MACE)) return false;
+        double above = player.getY() - mc.player.getY();
+        if (above < 2 || above > DIVER_HEIGHT || player.isOnGround()) return false;
+        double dx = player.getX() - mc.player.getX();
+        double dz = player.getZ() - mc.player.getZ();
+        return dx * dx + dz * dz <= enemyRange;
     }
 
     private void disableConflicts() {
