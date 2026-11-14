@@ -4,7 +4,6 @@ import dev.coyduck.modules.ChestSearch;
 import dev.coyduck.modules.ChestSorter;
 import net.minecraft.client.gui.screen.ingame.Generic3x3ContainerScreen;
 import net.minecraft.client.gui.screen.ingame.HopperScreen;
-import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.screen.ScreenHandler;
 import org.spongepowered.asm.mixin.Final;
@@ -61,12 +60,8 @@ public abstract class HandledScreenMixin extends Screen {
         ChestSorter sorter = ChestSorter.active();
         if (sorter == null) return;
         Object self = this;
-        if (self instanceof InventoryScreen) {
-            if (sorter.inventoryButton()) coyduck$button("Sort", x + backgroundWidth - 34, () -> sorter.sortInventory(handler));
-            return;
-        }
         if (!(self instanceof GenericContainerScreen) && !(self instanceof ShulkerBoxScreen) && !(self instanceof Generic3x3ContainerScreen) && !(self instanceof HopperScreen)) return;
-        coyduck$button("Sort", x, () -> sorter.sortContainer(handler));
+        coyduck$button("Sort", x, () -> sorter.sort(handler));
         coyduck$button("Take", x + 36, () -> sorter.take(handler, coyduck$search == null ? null : coyduck$search.getText()));
         coyduck$button("Dump", x + 72, () -> sorter.dump(handler));
     }

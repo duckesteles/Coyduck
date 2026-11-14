@@ -2,6 +2,8 @@ package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
 import dev.coyduck.utils.PacketBatch;
+import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;
@@ -12,13 +14,21 @@ import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.block.ShulkerBoxBlock;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.ContainerComponent;
+import net.minecraft.component.type.ItemEnchantmentsComponent;
+import net.minecraft.component.type.PotionContentsComponent;
+import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemGroup;
+import net.minecraft.item.ItemGroups;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
-import net.minecraft.screen.PlayerScreenHandler;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.world.World;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -28,14 +38,19 @@ import java.util.List;
 
 public class ChestSorter extends Module {
     private static final int PLAYER_SLOTS = 36;
-    private static final int HOTBAR = 9;
-    private static final int INVENTORY_START = 9;
-    private static final int INVENTORY_END = 36;
+    private static final int TOTEM_SLOT = 35;
+    private static final int UNLISTED = 1_000_000;
 
     public enum Order {
-        Type,
+        Smart,
         Name,
         Count
+    }
+
+    public enum Shulkers {
+        Color,
+        Contents,
+        Name
     }
 
     private record Click(int slot, SlotActionType action) {}
@@ -44,22 +59,29 @@ public class ChestSorter extends Module {
 
     private final Setting<Order> order = sgGeneral.add(new EnumSetting.Builder<Order>()
         .name("order")
-        .description("How sorted items are ordered.")
-        .defaultValue(Order.Type)
+        .description("Smart follows the creative menu.")
+        .defaultValue(Order.Smart)
+        .build()
+    );
+
+    private final Setting<Shulkers> shulkers = sgGeneral.add(new EnumSetting.Builder<Shulkers>()
+        .name("shulkers")
+        .description("What shulker boxes are sorted by first.")
+        .defaultValue(Shulkers.Color)
         .build()
     );
 
     private final Setting<Boolean> merge = sgGeneral.add(new BoolSetting.Builder()
         .name("merge")
-        .description("Merges partial stacks before sorting.")
+        .description("Merges partial stacks first.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> dumpHotbar = sgGeneral.add(new BoolSetting.Builder()
         .name("dump-hotbar")
-        .description("Dump also empties your hotbar.")
-        .defaultValue(false)
+        .description("Dump empties the hotbar too, never slot 9.")
+        .defaultValue(true)
         .build()
     );
 
@@ -72,21 +94,14 @@ public class ChestSorter extends Module {
 
     private final Setting<Boolean> takeSearch = sgGeneral.add(new BoolSetting.Builder()
         .name("take-search")
-        .description("Take grabs only search matches while searching.")
-        .defaultValue(true)
-        .build()
-    );
-
-    private final Setting<Boolean> inventoryButton = sgGeneral.add(new BoolSetting.Builder()
-        .name("inventory-button")
-        .description("Sort button in your own inventory.")
+        .description("Take grabs only search matches.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Integer> speed = sgGeneral.add(new IntSetting.Builder()
         .name("clicks-per-tick")
-        .description("0 does everything at once.")
+        .description("0 does it all at once.")
         .defaultValue(0)
         .range(0, 40)
         .sliderRange(0, 20)
@@ -94,10 +109,12 @@ public class ChestSorter extends Module {
     );
 
     private final ArrayDeque<Click> queue = new ArrayDeque<>();
+    private final Object2IntOpenHashMap<Item> creative = new Object2IntOpenHashMap<>();
+    private World creativeWorld;
     private int queueSync = -1;
 
     public ChestSorter() {
-        super(Coyduck.CATEGORY, "chest-sorter", "Sort, take and dump buttons for chests.");
+        super(Coyduck.CATEGORY, "chest-sorter", "Sort, take and dump buttons for storage.");
     }
 
     public static ChestSorter active() {
@@ -105,22 +122,22 @@ public class ChestSorter extends Module {
         return module != null && module.isActive() ? module : null;
     }
 
-    public boolean inventoryButton() {
-        return inventoryButton.get();
-    }
-
     @Override
     public void onDeactivate() {
         queue.clear();
     }
 
-    public void sortContainer(ScreenHandler handler) {
-        sort(handler, 0, containerSize(handler));
-    }
-
-    public void sortInventory(ScreenHandler handler) {
-        if (handler instanceof PlayerScreenHandler) sort(handler, INVENTORY_START, INVENTORY_END);
-        else sort(handler, containerSize(handler), containerSize(handler) + PLAYER_SLOTS - HOTBAR);
+    public void sort(ScreenHandler handler) {
+        int size = containerSize(handler);
+        if (size < 2) return;
+        if (!handler.getCursorStack().isEmpty()) {
+            warning("Put down the item on your cursor first.");
+            return;
+        }
+        Plan plan = new Plan(handler, size);
+        if (merge.get()) plan.merge();
+        plan.arrange(comparator());
+        run(handler, plan.clicks);
     }
 
     public void take(ScreenHandler handler, String query) {
@@ -137,39 +154,16 @@ public class ChestSorter extends Module {
 
     public void dump(ScreenHandler handler) {
         int start = containerSize(handler);
-        int end = start + PLAYER_SLOTS - (dumpHotbar.get() ? 0 : HOTBAR);
+        int end = start + (dumpHotbar.get() ? PLAYER_SLOTS : PLAYER_SLOTS - 9);
         List<Item> kept = keep.get();
         List<Click> clicks = new ArrayList<>();
         for (int i = start; i < end; i++) {
+            if (i - start == TOTEM_SLOT) continue;
             ItemStack stack = handler.getSlot(i).getStack();
             if (stack.isEmpty() || kept.contains(stack.getItem())) continue;
             clicks.add(new Click(i, SlotActionType.QUICK_MOVE));
         }
         run(handler, clicks);
-    }
-
-    private void sort(ScreenHandler handler, int from, int to) {
-        if (to - from < 2) return;
-        if (!handler.getCursorStack().isEmpty()) {
-            warning("Put down the item on your cursor first.");
-            return;
-        }
-        Plan plan = new Plan(handler, from, to);
-        if (merge.get()) plan.merge();
-        plan.arrange(comparator());
-        run(handler, plan.clicks);
-    }
-
-    private Comparator<ItemStack> comparator() {
-        Comparator<ItemStack> type = Comparator.comparingInt(stack -> Registries.ITEM.getRawId(stack.getItem()));
-        Comparator<ItemStack> name = Comparator.comparing(stack -> stack.getName().getString());
-        Comparator<ItemStack> count = Comparator.comparingInt(ItemStack::getCount).reversed();
-        Comparator<ItemStack> damage = Comparator.comparingInt(ItemStack::getDamage);
-        return switch (order.get()) {
-            case Type -> type.thenComparing(name).thenComparing(count).thenComparing(damage);
-            case Name -> name.thenComparing(type).thenComparing(count).thenComparing(damage);
-            case Count -> count.thenComparing(type).thenComparing(name).thenComparing(damage);
-        };
     }
 
     private void run(ScreenHandler handler, List<Click> clicks) {
@@ -200,27 +194,132 @@ public class ChestSorter extends Module {
     }
 
     private static int containerSize(ScreenHandler handler) {
-        return handler instanceof PlayerScreenHandler ? 0 : Math.max(0, handler.slots.size() - PLAYER_SLOTS);
+        return Math.max(0, handler.slots.size() - PLAYER_SLOTS);
     }
 
     private static boolean same(ItemStack a, ItemStack b) {
         return ItemStack.areItemsAndComponentsEqual(a, b);
     }
 
+    private Comparator<ItemStack> comparator() {
+        Comparator<ItemStack> boxes = shulkerOrder();
+        Comparator<ItemStack> smart = Comparator.comparingInt(this::group)
+            .thenComparing((a, b) -> isShulker(a) && isShulker(b) ? boxes.compare(a, b) : 0)
+            .thenComparingInt(this::rank)
+            .thenComparing(ChestSorter::potion)
+            .thenComparing(ChestSorter::custom)
+            .thenComparing(Comparator.comparingInt(ChestSorter::enchantPower).reversed())
+            .thenComparingInt(ItemStack::getDamage)
+            .thenComparing(Comparator.comparingInt(ItemStack::getCount).reversed());
+        return switch (order.get()) {
+            case Smart -> smart;
+            case Name -> Comparator.comparing(ChestSorter::name).thenComparing(smart);
+            case Count -> Comparator.comparingInt(ItemStack::getCount).reversed().thenComparing(smart);
+        };
+    }
+
+    private int group(ItemStack stack) {
+        return isShulker(stack) ? rank(Items.SHULKER_BOX) : rank(stack);
+    }
+
+    private Comparator<ItemStack> shulkerOrder() {
+        Comparator<ItemStack> color = Comparator.comparingInt(this::rank);
+        Comparator<ItemStack> contents = Comparator.comparingInt(this::contentRank).thenComparing(Comparator.comparingInt(ChestSorter::contentCount).reversed());
+        Comparator<ItemStack> label = Comparator.comparing(ChestSorter::custom);
+        return switch (shulkers.get()) {
+            case Color -> color.thenComparing(contents).thenComparing(label);
+            case Contents -> contents.thenComparing(color).thenComparing(label);
+            case Name -> label.thenComparing(color).thenComparing(contents);
+        };
+    }
+
+    private int rank(ItemStack stack) {
+        return rank(stack.getItem());
+    }
+
+    private int rank(Item item) {
+        loadCreative();
+        return creative.getOrDefault(item, UNLISTED + Registries.ITEM.getRawId(item));
+    }
+
+    private void loadCreative() {
+        if (mc.world == null || mc.world == creativeWorld && !creative.isEmpty()) return;
+        creativeWorld = mc.world;
+        creative.clear();
+        ItemGroups.updateDisplayContext(mc.world.getEnabledFeatures(), false, mc.world.getRegistryManager());
+        int index = 0;
+        for (ItemGroup group : ItemGroups.getGroupsToDisplay()) {
+            if (group.getType() != ItemGroup.Type.CATEGORY) continue;
+            for (ItemStack stack : group.getDisplayStacks()) {
+                if (!creative.containsKey(stack.getItem())) creative.put(stack.getItem(), index);
+                index++;
+            }
+        }
+    }
+
+    private int contentRank(ItemStack shulker) {
+        ContainerComponent container = shulker.get(DataComponentTypes.CONTAINER);
+        if (container == null) return Integer.MAX_VALUE;
+        Object2IntOpenHashMap<Item> totals = new Object2IntOpenHashMap<>();
+        for (ItemStack inside : container.iterateNonEmpty()) totals.addTo(inside.getItem(), inside.getCount());
+        Item main = null;
+        int most = 0;
+        for (Object2IntMap.Entry<Item> entry : totals.object2IntEntrySet()) {
+            if (entry.getIntValue() > most || entry.getIntValue() == most && main != null && rank(entry.getKey()) < rank(main)) {
+                main = entry.getKey();
+                most = entry.getIntValue();
+            }
+        }
+        return main == null ? Integer.MAX_VALUE : rank(main);
+    }
+
+    private static int contentCount(ItemStack shulker) {
+        ContainerComponent container = shulker.get(DataComponentTypes.CONTAINER);
+        if (container == null) return 0;
+        int total = 0;
+        for (ItemStack inside : container.iterateNonEmpty()) total += inside.getCount();
+        return total;
+    }
+
+    private static boolean isShulker(ItemStack stack) {
+        return stack.getItem() instanceof BlockItem item && item.getBlock() instanceof ShulkerBoxBlock;
+    }
+
+    private static String potion(ItemStack stack) {
+        PotionContentsComponent contents = stack.get(DataComponentTypes.POTION_CONTENTS);
+        if (contents == null) return "";
+        return contents.potion().flatMap(entry -> entry.getKey()).map(key -> key.getValue().toString()).orElse("");
+    }
+
+    private static String custom(ItemStack stack) {
+        return stack.contains(DataComponentTypes.CUSTOM_NAME) ? name(stack) : "￿";
+    }
+
+    private static String name(ItemStack stack) {
+        return stack.getName().getString().toLowerCase();
+    }
+
+    private static int enchantPower(ItemStack stack) {
+        ItemEnchantmentsComponent enchants = stack.getEnchantments();
+        ItemEnchantmentsComponent stored = stack.get(DataComponentTypes.STORED_ENCHANTMENTS);
+        int total = 0;
+        for (Object2IntMap.Entry<?> entry : enchants.getEnchantmentEntries()) total += entry.getIntValue();
+        if (stored != null) for (Object2IntMap.Entry<?> entry : stored.getEnchantmentEntries()) total += entry.getIntValue();
+        return total;
+    }
+
     private static final class Plan {
-        private final int from;
         private final ItemStack[] slots;
         private final List<Click> clicks = new ArrayList<>();
         private ItemStack cursor = ItemStack.EMPTY;
 
-        Plan(ScreenHandler handler, int from, int to) {
-            this.from = from;
-            slots = new ItemStack[to - from];
-            for (int i = 0; i < slots.length; i++) slots[i] = handler.getSlot(from + i).getStack().copy();
+        Plan(ScreenHandler handler, int size) {
+            slots = new ItemStack[size];
+            for (int i = 0; i < size; i++) slots[i] = handler.getSlot(i).getStack().copy();
         }
 
         void click(int index) {
-            clicks.add(new Click(from + index, SlotActionType.PICKUP));
+            clicks.add(new Click(index, SlotActionType.PICKUP));
             ItemStack slot = slots[index];
             if (cursor.isEmpty()) {
                 cursor = slot;
