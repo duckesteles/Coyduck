@@ -7,6 +7,7 @@ import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
 import dev.coyduck.modules.AirMine;
 import dev.coyduck.modules.AutoTotem;
 import dev.coyduck.utils.ExplosionDamage;
+import dev.coyduck.utils.PacketBatch;
 import dev.coyduck.utils.Trace;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
@@ -169,8 +170,10 @@ public final class MiningManager {
         side = facing(pos);
         startTick = ticks;
         startTime = Util.getMeasuringTimeMs();
-        send(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK);
-        InteractionManager.get().swing(swing);
+        PacketBatch.run(() -> {
+            send(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK);
+            InteractionManager.get().swing(swing);
+        });
     }
 
     public BlockPos background() {
@@ -316,6 +319,10 @@ public final class MiningManager {
         return delta(state, at, tool, mc.player.isOnGround() || AirMine.spoofing());
     }
 
+    public float groundDelta(BlockState state, BlockPos at, ItemStack tool, boolean efficiencyCounts) {
+        return delta(state, at, tool, true, efficiencyCounts);
+    }
+
     private float delta(BlockState state, BlockPos at, ItemStack tool, boolean ground) {
         return delta(state, at, tool, ground, true);
     }
@@ -357,10 +364,10 @@ public final class MiningManager {
 
     private int bestTool(BlockState state, BlockPos at) {
         int best = -1;
-        float bestDelta = delta(state, at, mc.player.getMainHandStack());
+        float bestDelta = groundDelta(state, at, mc.player.getMainHandStack(), true);
 
         for (int i = 0; i < InventoryManager.MAIN_END; i++) {
-            float delta = delta(state, at, InventoryManager.get().stack(i));
+            float delta = groundDelta(state, at, InventoryManager.get().stack(i), true);
             if (delta > bestDelta) {
                 bestDelta = delta;
                 best = i;

@@ -462,6 +462,10 @@ public class KillAura extends Module {
             && !mc.player.hasStatusEffect(StatusEffects.SLOW_FALLING) && !inWeb();
     }
 
+    public boolean critting() {
+        return isActive() && target != null && mc.player != null && critNow();
+    }
+
     private boolean critNow() {
         return critCapable() && !mc.player.isOnGround() && mc.player.fallDistance > 0;
     }
