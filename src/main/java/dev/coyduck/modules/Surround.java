@@ -90,6 +90,7 @@ public class Surround extends Module {
     private static final long REBREAK_TIME = 1_200;
     private static final double REBREAK_RANGE = 7;
     private static final float STRONG = 600;
+    private static final long WEAK_OWN_TIME = 5_000;
     private static final long FEET_RETRY = 250;
     private static final double EDGE = 1.0E-4;
     private static final double CENTER_SPEED = 0.2;
@@ -154,6 +155,13 @@ public class Surround extends Module {
         .name("clear-feet")
         .description("Breaks scaffolding and ladders put on you, but only while nothing else is mining, so a ladder spam can't pull the pick off a city mine.")
         .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> clearWeak = sgGeneral.add(new BoolSetting.Builder()
+        .name("clear-weak")
+        .description("Breaks a weak block an enemy puts in your surround, like the packed ice, netherrack or glass an anti-feet-place uses so you can't put obsidian back, and puts your block there in the same tick. Only blocks your best tool breaks at once.")
+        .defaultValue(true)
         .build()
     );
 
@@ -343,8 +351,35 @@ public class Surround extends Module {
         budget = blocksPerTick.get();
         ticks++;
         preSent.long2LongEntrySet().removeIf(entry -> ticks - entry.getLongValue() > 20);
+        clearWeak();
         pass();
         clearFeet();
+    }
+
+    private void clearWeak() {
+        if (!clearWeak.get() || !canAct() || anchored.isEmpty() || HoleSnap.snapping() || mc.interactionManager.isBreakingBlock() || InventoryManager.get().isOffhandEating() || blockSlot() == -1) return;
+
+        MiningManager mining = MiningManager.get();
+        InteractionManager interaction = InteractionManager.get();
+        for (BlockPos pos : Targets.ring(anchored, 0)) {
+            BlockState state = mc.world.getBlockState(pos);
+            if (state.isReplaceable() || blocks.get().contains(state.getBlock()) || state.getBlock().getBlastResistance() >= STRONG || state.isOf(Blocks.COBWEB)) continue;
+            if (state.getHardness(mc.world, pos) < 0 || mining.isMining(pos) || interaction.placedByUs(pos, WEAK_OWN_TIME) || !mining.inBreakReach(pos)) continue;
+
+            int tool = mining.bestTool(state);
+            if (mining.delta(state, pos, tool == -1 ? mc.player.getMainHandStack() : InventoryManager.get().stack(tool)) < 1) continue;
+
+            BlockPos cell = pos.toImmutable();
+            Direction side = MiningManager.facing(cell);
+            Runnable hit = () -> {
+                mc.interactionManager.attackBlock(cell, side);
+                interaction.swing(InteractionManager.SwingMode.Packet);
+            };
+            if (tool == -1) hit.run();
+            else if (!InventoryManager.get().withItemWhileEating(tool, switchMode.get(), hit)) continue;
+            Trace.log("surround clears weak {} {}", cell, Registries.BLOCK.getId(state.getBlock()).getPath());
+            mining.foreignBreak();
+        }
     }
 
     private void clearFeet() {

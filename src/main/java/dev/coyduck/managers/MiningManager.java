@@ -440,6 +440,13 @@ public final class MiningManager {
         }
     }
 
+    public void foreignBreak() {
+        lastStopAt = Util.getMeasuringTimeMs();
+        if (pos == null || broken) return;
+        Trace.log("mine restart {} after a break elsewhere", pos);
+        restart();
+    }
+
     private void restart() {
         lastStop = 0;
         lastStopTick = -1;
@@ -666,7 +673,7 @@ public final class MiningManager {
         brokenSinceStop = false;
     }
 
-    private static Direction facing(BlockPos target) {
+    public static Direction facing(BlockPos target) {
         Direction best = Direction.UP;
         double bestMargin = -Double.MAX_VALUE;
         Direction open = null;

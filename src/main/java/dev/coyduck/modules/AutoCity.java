@@ -21,6 +21,7 @@ import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
+import meteordevelopment.meteorclient.settings.BlockListSetting;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
@@ -36,7 +37,7 @@ import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.AbstractFireBlock;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
-import net.minecraft.block.StainedGlassBlock;
+import net.minecraft.block.Block;
 import net.minecraft.item.BlockItem;
 import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.ItemEntity;
@@ -164,8 +165,17 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
 
     private final Setting<Boolean> antiReplace = sgGeneral.add(new BoolSetting.Builder()
         .name("anti-replace")
-        .description("When a surround gap breaks and no crystal goes into it, fills it at once with packed ice or glass from your inventory, so their surround can't put obsidian back. Re-mining obsidian takes the whole mine time again; ice breaks in one tick with a good pickaxe and is broken again when the crystal is ready.")
+        .description("When a surround gap breaks and no crystal goes into it, fills it at once with a filler block, so their surround can't put obsidian back. Re-mining obsidian takes the whole mine time again; the filler breaks in a tick or so and is broken again when the crystal is ready.")
         .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<List<Block>> fillers = sgGeneral.add(new BlockListSetting.Builder()
+        .name("fillers")
+        .description("Blocks anti-replace may put in the gap. The one in your inventory that breaks fastest with your best tool is used. Packed ice and netherrack break in one tick with an Efficiency V pickaxe, glass takes about half a second since no tool speeds it up. Plain ice turns into water outside the Nether, which stops crystals.")
+        .defaultValue(Blocks.PACKED_ICE, Blocks.NETHERRACK, Blocks.GLASS)
+        .filter(block -> block.getHardness() >= 0 && block.asItem() != Items.AIR)
+        .visible(antiReplace::get)
         .build()
     );
 
@@ -474,7 +484,8 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
     }
 
     public static boolean isFiller(BlockState state) {
-        return state.isOf(Blocks.PACKED_ICE) || state.isOf(Blocks.BLUE_ICE) || state.isOf(Blocks.GLASS) || state.isOf(Blocks.TINTED_GLASS) || state.getBlock() instanceof StainedGlassBlock;
+        AutoCity city = Modules.get().get(AutoCity.class);
+        return city != null && city.isActive() && city.antiReplace.get() && city.fillers.get().contains(state.getBlock());
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
@@ -533,8 +544,8 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
         float fastest = 1.0f / FILL_MAX_TICKS;
         for (int i = 0; i < InventoryManager.MAIN_END; i++) {
             if (!(inventory.stack(i).getItem() instanceof BlockItem item)) continue;
+            if (!fillers.get().contains(item.getBlock())) continue;
             BlockState state = item.getBlock().getDefaultState();
-            if (!isFiller(state)) continue;
             int tool = mining.bestTool(state);
             float delta = mining.delta(state, gap, tool == -1 ? inventory.stack(inventory.serverSlot()) : inventory.stack(tool));
             if (delta > fastest) {
