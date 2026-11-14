@@ -7,6 +7,7 @@ import dev.coyduck.mixin.LivingEntityAccessor;
 import dev.coyduck.mixin.PlayerLikeEntityAccessor;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.renderer.Renderer2D;
 import meteordevelopment.meteorclient.renderer.text.TextRenderer;
@@ -33,11 +34,15 @@ import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.effect.StatusEffect;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.enchantment.Enchantment;
+import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.particle.ParticleEffect;
 import net.minecraft.particle.TintedParticleEffect;
 import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.registry.tag.EnchantmentTags;
 import net.minecraft.util.Identifier;
 import org.joml.Vector3d;
 
@@ -166,6 +171,22 @@ public class NametagsPlus extends Module {
         .build()
     );
 
+    private final Setting<Boolean> enchants = sgInfo.add(new BoolSetting.Builder()
+        .name("enchants")
+        .description("Short enchantment names next to each item, God on enchanted golden apples.")
+        .defaultValue(true)
+        .visible(items::get)
+        .build()
+    );
+
+    private final Setting<Boolean> itemName = sgInfo.add(new BoolSetting.Builder()
+        .name("item-name")
+        .description("The name of the item in their main hand above the items.")
+        .defaultValue(true)
+        .visible(items::get)
+        .build()
+    );
+
     private final Setting<SettingColor> fill = sgRender.add(new ColorSetting.Builder()
         .name("fill")
         .description("Tag background.")
@@ -179,6 +200,10 @@ public class NametagsPlus extends Module {
         .defaultValue(true)
         .build()
     );
+
+    private static final Color BAR_BACKGROUND = new Color(0, 0, 0, 255);
+    private static final Color ENCHANT = new Color(235, 235, 245, 255);
+    private static final Color GOD = new Color(255, 85, 85, 255);
 
     private record Part(String text, Color color) {}
 
@@ -301,23 +326,71 @@ public class NametagsPlus extends Module {
         }
         if (shown.isEmpty()) return;
 
-        double size = 32;
-        double spacing = 2;
-        double total = shown.size() * size + (shown.size() - 1) * spacing;
-        double x = -total / 2;
-        double y = bottom - size;
         TextRenderer text = TextRenderer.get();
+        double size = 32;
+        double spacing = 4;
+        double total = shown.size() * size + (shown.size() - 1) * spacing;
+        double barGap = durability.get() ? 4 : 0;
+        double x = -total / 2;
+        double y = bottom - size - barGap;
+
+        text.begin(0.75, false, true);
+        double small = text.getHeight(shadow);
+        text.end();
+        double top = y;
+        boolean anyDurability = false;
+        for (ItemStack stack : shown) anyDurability |= durability.get() && stack.isDamageable();
+        if (anyDurability) top -= small + 1;
+
         for (ItemStack stack : shown) {
-            RenderUtils.drawItem(event.drawContext, stack, (int) x, (int) y, 2, true, null, false);
+            RenderUtils.drawItem(event.drawContext, stack, (int) x, (int) y, 2, false, null, false);
+
             if (durability.get() && stack.isDamageable()) {
                 double left = 1 - (double) stack.getDamage() / stack.getMaxDamage();
+                Color color = CoyHud.color(0xFF000000 | stack.getItemBarColor());
+                Renderer2D.COLOR.begin();
+                Renderer2D.COLOR.quad(x + 2, y + size + 1, size - 4, 3, BAR_BACKGROUND);
+                Renderer2D.COLOR.quad(x + 2, y + size + 1, (size - 4) * left, 2, color);
+                Renderer2D.COLOR.render();
                 String label = String.format(Locale.ROOT, "%d%%", Math.round(left * 100));
                 text.begin(0.75, false, true);
-                double w = text.getWidth(label, shadow);
-                text.render(label, x + (size - w) / 2, y - text.getHeight(shadow), CoyHud.color(CoyHud.health(left)), shadow);
+                text.render(label, x + (size - text.getWidth(label, shadow)) / 2, y - small - 1, color, shadow);
+                text.end();
+            }
+
+            text.begin(0.5, false, true);
+            double line = text.getHeight(shadow);
+            double ey = y;
+            if (stack.isOf(Items.ENCHANTED_GOLDEN_APPLE)) {
+                text.render("God", x, ey, GOD, shadow);
+            } else if (enchants.get()) {
+                for (Object2IntMap.Entry<RegistryEntry<Enchantment>> entry : EnchantmentHelper.getEnchantments(stack).getEnchantmentEntries()) {
+                    if (entry.getKey().isIn(EnchantmentTags.CURSE)) continue;
+                    int level = entry.getIntValue();
+                    boolean single = entry.getKey().value().getMaxLevel() == 1;
+                    String name = Utils.getEnchantSimpleName(entry.getKey(), single ? 3 : 2) + (single ? "" : level);
+                    text.render(name, x, ey, ENCHANT, shadow);
+                    ey += line;
+                }
+            }
+            text.end();
+
+            if (stack.getCount() > 1) {
+                String count = String.valueOf(stack.getCount());
+                text.begin(0.75, false, true);
+                text.render(count, x + size - text.getWidth(count, shadow), y + size - text.getHeight(shadow), CoyHud.color(CoyHud.TEXT), shadow);
                 text.end();
             }
             x += size + spacing;
+        }
+
+        ItemStack held = player.getMainHandStack();
+        if (itemName.get() && !held.isEmpty()) {
+            String name = held.getName().getString();
+            Integer rgb = held.getRarity().getFormatting().getColorValue();
+            text.begin(0.75, false, true);
+            text.render(name, -text.getWidth(name, shadow) / 2, top - text.getHeight(shadow) - 1, CoyHud.color(0xFF000000 | (rgb == null ? 0xFFFFFF : rgb)), shadow);
+            text.end();
         }
     }
 
