@@ -1,0 +1,17 @@
+{
+  "description": "Crystal PvP addon built for 6b6t: auto crystal, surround, city, anchors, mace, elytra and clean HUD.",
+  "tags": [
+    "PvP",
+    "Movement",
+    "Render",
+    "Automation",
+    "Utility",
+    "QoL",
+    "Exploit"
+  ],
+  "supported_versions": [
+    "1.21.11"
+  ],
+  "icon": "https://raw.githubusercontent.com/duckesteles/Coyduck/main/src/main/resources/assets/coyduck/icon.png",
+  "homepage": "https://github.com/duckesteles/Coyduck"
+}
