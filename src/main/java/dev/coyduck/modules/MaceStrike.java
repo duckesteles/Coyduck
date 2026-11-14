@@ -4,6 +4,10 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.BlockState;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
+import net.minecraft.world.RaycastContext;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
@@ -46,8 +50,6 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayDeque;
-import java.util.HashMap;
-import java.util.Map;
 
 public class MaceStrike extends Module {
     private static final int PRIORITY = 85;
@@ -88,6 +90,7 @@ public class MaceStrike extends Module {
     private static final long STUCK_MS = 2000;
     private static final long SKIP_MS = 5000;
     private static final float HURT_SHARE = 0.8f;
+    private static final long SHIELD_STUCK_MS = 6000;
 
     private record Rise(long time, float amount) {}
 
@@ -97,7 +100,7 @@ public class MaceStrike extends Module {
         final ArrayDeque<Rise> rises = new ArrayDeque<>();
     }
 
-    private final Map<Integer, Heals> heals = new HashMap<>();
+    private final Int2ObjectOpenHashMap<Heals> heals = new Int2ObjectOpenHashMap<>();
 
     private enum Phase {
         Idle,
@@ -284,7 +287,7 @@ public class MaceStrike extends Module {
     private PlayerEntity lastTarget;
     private int heldFrom = -1;
     private long noStrikeSince;
-    private boolean preStopped;
+    private long stuckLimit = STUCK_MS;
     private final Int2LongOpenHashMap skipped = new Int2LongOpenHashMap();
     private int owed;
     private double learnedFall = Double.NaN;
@@ -312,16 +315,20 @@ public class MaceStrike extends Module {
     @Override
     public void onDeactivate() {
         heals.clear();
+        skipped.clear();
         chasing = null;
         phase = Phase.Idle;
         owed = 0;
         target = null;
+        lastTarget = null;
+        lastTargetPos = null;
+        noStrikeSince = 0;
         giveBack();
     }
 
     public boolean hunting() {
         return isActive() && target != null && Util.getMeasuringTimeMs() >= pausedUntil
-            && (noStrikeSince == 0 || Util.getMeasuringTimeMs() - noStrikeSince < STUCK_MS);
+            && (noStrikeSince == 0 || Util.getMeasuringTimeMs() - noStrikeSince < stuckLimit);
     }
 
     public static boolean blocksMoves() {
@@ -344,11 +351,16 @@ public class MaceStrike extends Module {
         if (Util.getMeasuringTimeMs() < pausedUntil) return;
         if (!canAct() || maceSlot() == -1) {
             target = null;
+            giveBack();
             return;
         }
 
-        if (flying()) airTick();
-        else groundTick();
+        if (flying()) {
+            airTick();
+        } else {
+            giveBack();
+            groundTick();
+        }
     }
 
     private void groundTick() {
@@ -392,6 +404,7 @@ public class MaceStrike extends Module {
             return;
         }
 
+        if (target != lastTarget) noStrikeSince = 0;
         boolean low = mc.player.getHealth() + mc.player.getAbsorptionAmount() <= minHealth.get();
         if (low) {
             if (chasing != null) Trace.log("mace stops hunting {}, health is low", target.getName().getString());
@@ -421,7 +434,7 @@ public class MaceStrike extends Module {
         double goalY = chase ? Math.max(motion.y * leadTicks, CHASE_FLOOR - wanted) : 0;
         double above = reachableHover(goalX, now.y, goalZ, wanted);
         if (Double.isNaN(above)) {
-            stuck("no room above them");
+            if (stuck("no room above them")) return;
             above = wanted;
         }
         steer(new Vec3d(goalX, now.y + goalY + above, goalZ));
@@ -441,8 +454,12 @@ public class MaceStrike extends Module {
             stuck("no clear dive");
             return;
         }
+        if (target.isBlocking()) {
+            stuck("they hold up a shield", SHIELD_STUCK_MS);
+            return;
+        }
         noStrikeSince = 0;
-        if (target.isBlocking()) return;
+        stuckLimit = STUCK_MS;
         boolean burst = mode.get() == Mode.Burst;
         int diveTicks = burst ? 0 : (int) Math.ceil((mc.player.getY() - y) / step.get());
         long hitAt = Util.getMeasuringTimeMs() + diveTicks * 50L + LatencyManager.get().rtt() / 2;
@@ -453,27 +470,10 @@ public class MaceStrike extends Module {
             float raw = smashRaw(fall, charge);
             if (HurtTracker.get().effective(target, raw, hitAt) < raw * HURT_SHARE) return;
         }
-        {
-            float needed = target.getHealth() + target.getAbsorptionAmount() + REGEN_MARGIN;
-            float damage = smashDamage(fall, charge);
-            boolean go = charge > CRIT_CHARGE || damage >= needed || (!fullCharge.get() && rapidFirst(fall, charge, needed));
-            if (!go) {
-                if (!waitTraced && Trace.on()) {
-                    waitTraced = true;
-                    Trace.log("mace waits, charge {} gives {} of {} needed, counted fall {}, they heal {}/s", charge, damage, needed, fall, healRate(target));
-                }
-                Box box = Targets.box(target);
-                Vec3d eye = new Vec3d(mc.player.getX(), y + STANDING_EYE, mc.player.getZ());
-                float[] rotation = rotationTo(eye, aim(box, eye));
-                RotationManager.get().request(PRIORITY, rotation[0], rotation[1], ROTATE_SPEED, false);
-                return;
-            }
-        }
-
         Box box = Targets.box(target);
         Vec3d eye = new Vec3d(mc.player.getX(), y + STANDING_EYE, mc.player.getZ());
-        float[] rotation = rotationTo(eye, aim(box, eye));
-        RotationManager.get().request(PRIORITY, rotation[0], rotation[1], ROTATE_SPEED, false);
+        faceFrom(eye, box);
+        if (shouldWait(fall, charge)) return;
         if (!looksAt(eye, box) || !due()) return;
 
         waitTraced = false;
@@ -484,12 +484,30 @@ public class MaceStrike extends Module {
         else phase = mode.get() == Mode.Ticks ? Phase.Descend : Phase.Dive;
     }
 
+    private boolean shouldWait(double fall, float charge) {
+        float needed = target.getHealth() + target.getAbsorptionAmount() + REGEN_MARGIN;
+        float damage = smashDamage(fall, charge);
+        boolean go = charge > CRIT_CHARGE || damage >= needed || (!fullCharge.get() && rapidFirst(fall, charge, needed));
+        if (go) return false;
+        if (!waitTraced && Trace.on()) {
+            waitTraced = true;
+            Trace.log("mace waits, charge {} gives {} of {} needed, counted fall {}, they heal {}/s", charge, damage, needed, fall, healRate(target));
+        }
+        return true;
+    }
+
+    private void faceFrom(Vec3d eye, Box box) {
+        if (!rotate.get()) return;
+        float[] rotation = rotationTo(eye, aim(box, eye));
+        RotationManager.get().request(PRIORITY, rotation[0], rotation[1], ROTATE_SPEED, false);
+    }
+
     private double reachableHover(double x, double feetY, double z, double wanted) {
         Box own = mc.player.getBoundingBox();
         double half = own.getLengthX() / 2;
         double tall = own.getLengthY();
         double floor = Math.min(MIN_HOVER, wanted);
-        for (double h = wanted; h > floor; h -= HEIGHT_STEP) {
+        for (double h = wanted; h >= floor - 1.0E-6; h -= HEIGHT_STEP) {
             Box column = new Box(x - half, feetY + 2, z - half, x + half, feetY + h + tall, z + half);
             if (mc.world.isSpaceEmpty(mc.player, column)) return h;
         }
@@ -514,32 +532,33 @@ public class MaceStrike extends Module {
         double reach = range.get();
         Box victim = Targets.box(target).offset(strikeLead);
 
+        String blocked = null;
         for (double y = victim.maxY + STRIKE_GAP; y <= top; y += HEIGHT_STEP) {
-            Box path = box.stretch(0, y - mc.player.getY(), 0);
-            if (!mc.world.isSpaceEmpty(mc.player, path) || hazard(path)) {
-                if (Trace.on() && !roofTraced) Trace.log("mace skips {}, blocks between you and them", target.getName().getString());
-                roofTraced = true;
-                return Double.NaN;
-            }
-
             Vec3d standing = new Vec3d(mc.player.getX(), y + STANDING_EYE, mc.player.getZ());
             Vec3d gliding = new Vec3d(mc.player.getX(), y + GLIDING_EYE, mc.player.getZ());
-            if (victim.squaredMagnitude(standing) > reach * reach || victim.squaredMagnitude(gliding) > reach * reach) return Double.NaN;
+            if (victim.squaredMagnitude(standing) > reach * reach || victim.squaredMagnitude(gliding) > reach * reach) break;
+
+            Box path = box.stretch(0, y - mc.player.getY(), 0);
+            if (!mc.world.isSpaceEmpty(mc.player, path) || hazard(path)) {
+                blocked = "blocks between you and them";
+                continue;
+            }
             if (!clearSight(gliding, victim) && !clearSight(standing, victim)) {
-                if (Trace.on() && !roofTraced) Trace.log("mace skips {}, no clear line from the strike point", target.getName().getString());
-                roofTraced = true;
-                return Double.NaN;
+                blocked = "no clear line from the strike point";
+                continue;
             }
             roofTraced = false;
             return y;
         }
+        if (blocked != null && Trace.on() && !roofTraced) Trace.log("mace skips {}, {}", target.getName().getString(), blocked);
+        roofTraced = true;
         return Double.NaN;
     }
 
     private boolean clearSight(Vec3d eye, Box victim) {
         Vec3d point = aim(victim, eye);
-        net.minecraft.util.hit.BlockHitResult hit = mc.world.raycast(new net.minecraft.world.RaycastContext(eye, point, net.minecraft.world.RaycastContext.ShapeType.COLLIDER, net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
-        return hit.getType() == net.minecraft.util.hit.HitResult.Type.MISS;
+        BlockHitResult hit = mc.world.raycast(new RaycastContext(eye, point, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player));
+        return hit.getType() == HitResult.Type.MISS;
     }
 
     private boolean looksAt(Vec3d eye, Box box) {
@@ -588,6 +607,7 @@ public class MaceStrike extends Module {
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
         clearWorld();
+        learnedFall = Double.NaN;
     }
 
     @EventHandler
@@ -604,20 +624,34 @@ public class MaceStrike extends Module {
         lastTargetPos = null;
         learnVictim = -1;
         noStrikeSince = 0;
+        stuckLimit = STUCK_MS;
+        lastTarget = null;
+        strikeLead = Vec3d.ZERO;
+        pausedUntil = 0;
+        waitTraced = false;
+        roofTraced = false;
         heals.clear();
         skipped.clear();
     }
 
-    private void stuck(String why) {
+    private boolean stuck(String why) {
+        return stuck(why, STUCK_MS);
+    }
+
+    private boolean stuck(String why, long limit) {
         long now = Util.getMeasuringTimeMs();
         if (noStrikeSince == 0) noStrikeSince = now;
-        if (now - noStrikeSince < STUCK_MS || target == null) return;
+        stuckLimit = limit;
+        if (now - noStrikeSince < limit || target == null) return false;
         Trace.log("mace gives up on {} for {}s, {}", target.getName().getString(), SKIP_MS / 1000, why);
         skipped.put(target.getId(), now + SKIP_MS);
         noStrikeSince = 0;
+        stuckLimit = STUCK_MS;
         target = null;
         chasing = null;
         lastTargetPos = null;
+        giveBack();
+        return true;
     }
 
     private boolean hazard(Box path) {
@@ -643,10 +677,13 @@ public class MaceStrike extends Module {
         switch (phase) {
             case Lift -> {
                 phase = Phase.Idle;
-                if (!ready()) return;
+                if (!ready()) {
+                    move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, mc.player.isOnGround(), collision));
+                    return;
+                }
                 path(x, y, y + lift, z, collision);
                 path(x, y + lift, y, z, collision);
-                strike();
+                strike(false);
             }
             case Ground -> {
                 move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, true, collision));
@@ -656,7 +693,7 @@ public class MaceStrike extends Module {
                 serverY = Math.max(strikeY, serverY - step.get());
                 move(new PlayerMoveC2SPacket.PositionAndOnGround(x, serverY, z, false, collision));
                 if (serverY > strikeY) return;
-                if (ready() && inReachFrom(new Vec3d(x, serverY, z))) strike();
+                if (ready() && inReachFrom(new Vec3d(x, serverY, z))) strike(false);
                 phase = Phase.Ascend;
             }
             case Ascend -> {
@@ -675,12 +712,11 @@ public class MaceStrike extends Module {
                     move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, false, collision));
                     return;
                 }
-                preStopped = smash.get() && stopFirst.get() && mc.player.isGliding();
-                if (preStopped) glideCommand();
+                boolean stopped = smash.get() && stopFirst.get() && mc.player.isGliding();
+                if (stopped) glideCommand();
                 path(x, y, strikeY, z, collision);
-                strike();
-                if (preStopped) glideCommand();
-                preStopped = false;
+                strike(stopped);
+                if (stopped) glideCommand();
                 path(x, strikeY, y, z, collision);
                 if (stopGlide.get() && mc.player.isGliding()) {
                     mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
@@ -718,7 +754,7 @@ public class MaceStrike extends Module {
         return maceSlot() != -1 && target != null && target.isAlive() && !target.isRemoved();
     }
 
-    private void strike() {
+    private void strike(boolean preStopped) {
         PlayerEntity victim = target;
         int slot = maceSlot();
         if (victim != null && mc.player.getMainHandStack().isOf(Items.MACE)) {
@@ -750,37 +786,43 @@ public class MaceStrike extends Module {
         if (!holdMace.get()) giveBack();
     }
 
-    private float smashRaw(double fall, float charge) {
-        int slot = maceSlot();
-        ItemStack mace = slot == -1 ? mc.player.getMainHandStack() : InventoryManager.get().stack(slot);
-        double bonus = fall <= 1.5 ? 0 : fall <= 3 ? 4 * fall : fall <= 8 ? 12 + 2 * (fall - 3) : 22 + (fall - 8);
-        if (fall > 1.5) bonus += 0.5 * Utils.getEnchantmentLevel(mace, Enchantments.DENSITY) * fall;
-        float damage = (float) mc.player.getAttributeValue(EntityAttributes.ATTACK_DAMAGE) * (0.2f + charge * charge * 0.8f) + (float) bonus;
-        return charge > CRIT_CHARGE ? damage * 1.5f : damage;
-    }
-
-    private float smashDamage(double fall, float charge) {
-        int slot = maceSlot();
-        ItemStack mace = slot == -1 ? mc.player.getMainHandStack() : InventoryManager.get().stack(slot);
-        return smashDamage(fall, charge, target, (float) mc.player.getAttributeValue(EntityAttributes.ATTACK_DAMAGE), Utils.getEnchantmentLevel(mace, Enchantments.DENSITY));
-    }
-
-    private float smashDamage(double fall, float charge, PlayerEntity victim, float base, int density) {
+    private static float smashRaw(double fall, float charge, float base, int density) {
         double bonus = fall <= 1.5 ? 0 : fall <= 3 ? 4 * fall : fall <= 8 ? 12 + 2 * (fall - 3) : 22 + (fall - 8);
         if (fall > 1.5) bonus += 0.5 * density * fall;
         float damage = base * (0.2f + charge * charge * 0.8f) + (float) bonus;
-        if (charge > CRIT_CHARGE) damage *= 1.5f;
-        return DamageUtils.calculateReductions(damage, victim, mc.world.getDamageSources().playerAttack(mc.player));
+        return charge > CRIT_CHARGE ? damage * 1.5f : damage;
+    }
+
+    private float baseDamage() {
+        return (float) mc.player.getAttributeValue(EntityAttributes.ATTACK_DAMAGE);
+    }
+
+    private int density() {
+        int slot = maceSlot();
+        ItemStack mace = slot == -1 ? mc.player.getMainHandStack() : InventoryManager.get().stack(slot);
+        return Utils.getEnchantmentLevel(mace, Enchantments.DENSITY);
+    }
+
+    private float smashRaw(double fall, float charge) {
+        return smashRaw(fall, charge, baseDamage(), density());
+    }
+
+    private float smashDamage(double fall, float charge) {
+        return smashDamage(fall, charge, target, baseDamage(), density());
+    }
+
+    private float smashDamage(double fall, float charge, PlayerEntity victim, float base, int density) {
+        return DamageUtils.calculateReductions(smashRaw(fall, charge, base, density), victim, mc.world.getDamageSources().playerAttack(mc.player));
     }
 
     private boolean rapidFirst(double fall, float charge, float needed) {
         float fullTicks = Math.max(1, mc.player.getAttackCooldownProgressPerTick());
-        float rapidCharge = Math.min(1, HURT_MS / 50f / fullTicks);
+        long cycle = Math.max(HURT_MS, mode.get() == Mode.Burst ? 2L * (long) Math.ceil(Math.max(fall, MIN_DROP) / step.get()) * 50L : HURT_MS);
+        float rapidCharge = Math.min(1, cycle / 50f / fullTicks);
         float rapid = Math.max(0.1f, smashDamage(fall, rapidCharge));
         float full = Math.max(0.1f, smashDamage(fall, 1));
         float perMs = healRate(target) / 1000f;
 
-        long cycle = Math.max(HURT_MS, mode.get() == Mode.Burst ? 2L * (long) Math.ceil(Math.max(fall, MIN_DROP) / step.get()) * 50L : HURT_MS);
         double rapidHits = Math.ceil(needed / rapid);
         rapidHits = Math.ceil((needed + perMs * (rapidHits - 1) * cycle) / rapid);
         if (rapidHits > MAX_RAPID_HITS) return false;
@@ -793,7 +835,7 @@ public class MaceStrike extends Module {
         long fullTime = waitFull + (long) (fullHits - 1) * fullGap;
 
         boolean rapidWins = rapidTime <= fullTime;
-        if (rapidWins && Trace.on()) Trace.log("mace hits at once, {} hits of {} every {}ms beat waiting {}ms for {}, they heal {}/s", (int) rapidHits, rapid, HURT_MS, waitFull, full, perMs * 1000);
+        if (rapidWins && Trace.on()) Trace.log("mace hits at once, {} hits of {} every {}ms beat waiting {}ms for {}, they heal {}/s", (int) rapidHits, rapid, cycle, waitFull, full, perMs * 1000);
         return rapidWins;
     }
 
@@ -864,16 +906,21 @@ public class MaceStrike extends Module {
     private void takeMace() {
         if (!holdMace.get() || AutoTotem.wantsMainTotem()) return;
         int slot = maceSlot();
+        if (slot < 0 || slot >= InventoryManager.HOTBAR_END) slot = maceSlot(InventoryManager.HOTBAR_END);
         int selected = InventoryManager.get().selectedSlot();
-        if (slot < 0 || slot >= InventoryManager.HOTBAR_END || slot == selected) return;
+        if (slot < 0 || slot == selected) return;
         if (InventoryManager.get().select(slot) && heldFrom == -1) heldFrom = selected;
     }
 
     private void giveBack() {
         if (heldFrom == -1 || mc.player == null) return;
+        if (!mc.player.getMainHandStack().isOf(Items.MACE)) {
+            heldFrom = -1;
+            return;
+        }
+        if (AutoTotem.wantsMainTotem() || mc.player.isUsingItem()) return;
         int back = heldFrom;
         heldFrom = -1;
-        if (AutoTotem.wantsMainTotem() || mc.player.getMainHandStack().isOf(Items.TOTEM_OF_UNDYING)) return;
         InventoryManager.get().select(back);
     }
 
@@ -902,10 +949,14 @@ public class MaceStrike extends Module {
     }
 
     private int maceSlot() {
+        return maceSlot(InventoryManager.MAIN_END);
+    }
+
+    private int maceSlot(int end) {
         InventoryManager inventory = InventoryManager.get();
         int best = -1;
         int bestScore = -1;
-        for (int i = 0; i < InventoryManager.MAIN_END; i++) {
+        for (int i = 0; i < end; i++) {
             ItemStack stack = inventory.stack(i);
             if (!stack.isOf(Items.MACE)) continue;
             int score = Utils.getEnchantmentLevel(stack, Enchantments.DENSITY) * 4 + Utils.getEnchantmentLevel(stack, Enchantments.BREACH) * 3 + (i < InventoryManager.HOTBAR_END ? 1 : 0);
