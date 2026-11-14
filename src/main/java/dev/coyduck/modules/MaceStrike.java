@@ -16,6 +16,7 @@ import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.RotationManager;
+import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Trace;
 import dev.coyduck.utils.Targets;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
@@ -61,7 +62,6 @@ public class MaceStrike extends Module {
     private static final double GLIDING_EYE = 0.4;
     private static final double STRIKE_GAP = 0.25;
     private static final double OVER_RANGE = 1.0;
-    private static final double LEAD_TICKS = 2;
     private static final double HOVER_SLACK = 0.75;
     private static final float CRIT_CHARGE = 0.9f;
     private static final double STILL_SPEED = 0.08;
@@ -91,6 +91,7 @@ public class MaceStrike extends Module {
     private static final long SKIP_MS = 5000;
     private static final float HURT_SHARE = 0.8f;
     private static final long SHIELD_STUCK_MS = 6000;
+    private static final long HUNT_MS = 8000;
 
     private record Rise(long time, float amount) {}
 
@@ -286,6 +287,10 @@ public class MaceStrike extends Module {
     private Vec3d lastTargetPos;
     private PlayerEntity lastTarget;
     private int heldFrom = -1;
+    private int heldSlot = -1;
+    private long huntSince;
+    private int maceAge = -1;
+    private int maceCached = -1;
     private long noStrikeSince;
     private long stuckLimit = STUCK_MS;
     private final Int2LongOpenHashMap skipped = new Int2LongOpenHashMap();
@@ -323,6 +328,8 @@ public class MaceStrike extends Module {
         lastTarget = null;
         lastTargetPos = null;
         noStrikeSince = 0;
+        stuckLimit = STUCK_MS;
+        learnVictim = -1;
         giveBack();
     }
 
@@ -404,7 +411,14 @@ public class MaceStrike extends Module {
             return;
         }
 
-        if (target != lastTarget) noStrikeSince = 0;
+        long time = Util.getMeasuringTimeMs();
+        if (target != lastTarget) {
+            noStrikeSince = 0;
+            stuckLimit = STUCK_MS;
+            huntSince = time;
+        }
+        if (!skipped.isEmpty()) skipped.int2LongEntrySet().removeIf(entry -> entry.getLongValue() <= time);
+        if (time - Math.max(huntSince, lastStrike) > HUNT_MS && giveUp("no hit for " + HUNT_MS / 1000 + "s")) return;
         boolean low = mc.player.getHealth() + mc.player.getAbsorptionAmount() <= minHealth.get();
         if (low) {
             if (chasing != null) Trace.log("mace stops hunting {}, health is low", target.getName().getString());
@@ -435,7 +449,7 @@ public class MaceStrike extends Module {
         double above = reachableHover(goalX, now.y, goalZ, wanted);
         if (Double.isNaN(above)) {
             if (stuck("no room above them")) return;
-            above = wanted;
+            above = Math.min(MIN_HOVER, wanted);
         }
         steer(new Vec3d(goalX, now.y + goalY + above, goalZ));
 
@@ -468,7 +482,7 @@ public class MaceStrike extends Module {
         double fall = Math.min(burst ? drop : Math.min(drop, step.get()) + 1, countedFall());
         if (HurtTracker.get().releaseTime(target) > Util.getMeasuringTimeMs() + diveTicks * 50L) {
             float raw = smashRaw(fall, charge);
-            if (HurtTracker.get().effective(target, raw, hitAt) < raw * HURT_SHARE) return;
+            if (HurtTracker.get().effective(target, raw, hitAt) < ExplosionDamage.mitigate(target, raw) * HURT_SHARE) return;
         }
         Box box = Targets.box(target);
         Vec3d eye = new Vec3d(mc.player.getX(), y + STANDING_EYE, mc.player.getZ());
@@ -620,6 +634,8 @@ public class MaceStrike extends Module {
         owed = 0;
         target = null;
         heldFrom = -1;
+        heldSlot = -1;
+        maceAge = -1;
         chasing = null;
         lastTargetPos = null;
         learnVictim = -1;
@@ -643,6 +659,12 @@ public class MaceStrike extends Module {
         if (noStrikeSince == 0) noStrikeSince = now;
         stuckLimit = limit;
         if (now - noStrikeSince < limit || target == null) return false;
+        return giveUp(why);
+    }
+
+    private boolean giveUp(String why) {
+        if (target == null) return false;
+        long now = Util.getMeasuringTimeMs();
         Trace.log("mace gives up on {} for {}s, {}", target.getName().getString(), SKIP_MS / 1000, why);
         skipped.put(target.getId(), now + SKIP_MS);
         noStrikeSince = 0;
@@ -756,7 +778,7 @@ public class MaceStrike extends Module {
 
     private void strike(boolean preStopped) {
         PlayerEntity victim = target;
-        int slot = maceSlot();
+        int slot = maceSlot(InventoryManager.MAIN_END);
         if (victim != null && mc.player.getMainHandStack().isOf(Items.MACE)) {
             learnVictim = victim.getId();
             learnHealth = victim.getHealth() + victim.getAbsorptionAmount();
@@ -909,16 +931,20 @@ public class MaceStrike extends Module {
         if (slot < 0 || slot >= InventoryManager.HOTBAR_END) slot = maceSlot(InventoryManager.HOTBAR_END);
         int selected = InventoryManager.get().selectedSlot();
         if (slot < 0 || slot == selected) return;
-        if (InventoryManager.get().select(slot) && heldFrom == -1) heldFrom = selected;
+        if (!InventoryManager.get().select(slot)) return;
+        if (heldFrom == -1) heldFrom = selected;
+        heldSlot = slot;
     }
 
     private void giveBack() {
         if (heldFrom == -1 || mc.player == null) return;
-        if (!mc.player.getMainHandStack().isOf(Items.MACE)) {
+        boolean totem = AutoTotem.wantsMainTotem() || mc.player.getMainHandStack().isOf(Items.TOTEM_OF_UNDYING);
+        if (InventoryManager.get().selectedSlot() != heldSlot) {
+            if (totem) return;
             heldFrom = -1;
             return;
         }
-        if (AutoTotem.wantsMainTotem() || mc.player.isUsingItem()) return;
+        if (totem || mc.player.isUsingItem()) return;
         int back = heldFrom;
         heldFrom = -1;
         InventoryManager.get().select(back);
@@ -949,7 +975,10 @@ public class MaceStrike extends Module {
     }
 
     private int maceSlot() {
-        return maceSlot(InventoryManager.MAIN_END);
+        if (mc.player != null && mc.player.age == maceAge) return maceCached;
+        maceAge = mc.player == null ? -1 : mc.player.age;
+        maceCached = maceSlot(InventoryManager.MAIN_END);
+        return maceCached;
     }
 
     private int maceSlot(int end) {
