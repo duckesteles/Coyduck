@@ -2,16 +2,19 @@ package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InventoryManager;
+import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.utils.DuckRender;
 import dev.coyduck.utils.BlockOverlay;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
 import dev.coyduck.utils.Trace;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -27,6 +30,7 @@ import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.block.AbstractFireBlock;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.ExperienceOrbEntity;
@@ -41,9 +45,9 @@ import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 public class AutoCity extends Module implements MiningManager.StopGate {
@@ -56,6 +60,18 @@ public class AutoCity extends Module implements MiningManager.StopGate {
     private static final long SWITCH_COOLDOWN = 1000;
     private static final float FACE_PENALTY = 1.5f;
     private static final float SUPPORT_PENALTY = 1;
+    private static final long LOST_GRACE = 750;
+    private static final long REFILL_BAN = 5000;
+    private static final long WORTHLESS_LIMIT = 500;
+    private static final long HOLD_STALE = 1000;
+    private static final float BURROW_PREEMPT = 0.7f;
+    private static final float HOLD_TOLERANCE = 1;
+    private static final int TOUCHED_UPDATES = 2;
+    private static final int OTHER_TARGETS = 3;
+    private static final int OTHER_TARGET_TICKS = 4;
+    private static final int VALID = 0;
+    private static final int LEFT_HOLE = 1;
+    private static final int BROKEN_OFF = 2;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgRender = settings.createGroup("Render");
@@ -196,6 +212,8 @@ public class AutoCity extends Module implements MiningManager.StopGate {
     private final Color sideShade = new Color();
     private final Color lineShade = new Color();
 
+    private final Long2LongOpenHashMap banned = new Long2LongOpenHashMap();
+
     private PlayerEntity target;
     private BlockPos current;
     private BlockPos currentSupport;
@@ -204,9 +222,14 @@ public class AutoCity extends Module implements MiningManager.StopGate {
     private long switchedAt;
     private long stopHeldSince;
     private long holdUntil;
+    private long lostSince;
+    private long worthlessSince;
     private int ticks;
     private int updatedTick = -1;
+    private int touchedUpdates;
+    private int otherTick = -1;
     private boolean pending;
+    private boolean supportWallBroken;
 
     public AutoCity() {
         super(Coyduck.CATEGORY, "auto-city+", "Mines the target's surround or burrow and breaks it again whenever it is replaced.");
@@ -229,13 +252,31 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         reset();
     }
 
+    @EventHandler
+    private void onWorldReset(WorldResetEvent event) {
+        reset();
+    }
+
     private void reset() {
         target = null;
+        drop();
+        currentScore = 0;
+        switchedAt = 0;
+        lostSince = 0;
+        updatedTick = -1;
+        pending = false;
+        banned.clear();
+    }
+
+    private void drop() {
         current = null;
         currentSupport = null;
+        openSince = 0;
         stopHeldSince = 0;
         holdUntil = 0;
-        pending = false;
+        worthlessSince = 0;
+        lostSince = 0;
+        supportWallBroken = false;
     }
 
     @Override
@@ -246,6 +287,11 @@ public class AutoCity extends Module implements MiningManager.StopGate {
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         ticks++;
+        touchedUpdates = 0;
+        if (!banned.isEmpty()) {
+            long now = Util.getMeasuringTimeMs();
+            banned.long2LongEntrySet().removeIf(entry -> entry.getLongValue() <= now);
+        }
         update();
     }
 
@@ -266,10 +312,16 @@ public class AutoCity extends Module implements MiningManager.StopGate {
             }
             default -> false;
         };
-        if (!relevant) return;
+        if (!relevant && !touched[0]) return;
 
-        if (touched[0] || updatedTick != ticks) update();
-        else pending = true;
+        if (touched[0] && touchedUpdates < TOUCHED_UPDATES) {
+            touchedUpdates++;
+            update();
+        } else if (updatedTick != ticks) {
+            update();
+        } else {
+            pending = true;
+        }
     }
 
     private boolean ours(BlockPos pos) {
@@ -305,41 +357,67 @@ public class AutoCity extends Module implements MiningManager.StopGate {
     private void update() {
         updatedTick = ticks;
         pending = false;
-        if (InventoryManager.get().isOffhandEating()) return;
-        if (mc.player == null || mc.world == null || !mc.player.isAlive()) return;
+        if (mc.player == null || mc.world == null || !mc.player.isAlive() || InventoryManager.get().isOffhandEating()) return;
 
         MiningManager mining = MiningManager.get();
+        long time = Util.getMeasuringTimeMs();
         target = Targets.find(targetRange.get(), current != null ? target : null);
 
-        if (target == null || target.isGliding() || (needCrystals.get() && !hasAmmo())) {
-            if (current != null) Trace.log("city idle {}", target == null ? "no target" : target.isGliding() ? "target is gliding" : "no ammo");
+        boolean noAmmo = needCrystals.get() && !hasAmmo();
+        if (target == null || target.isGliding() || noAmmo) {
+            if (!noAmmo && graceful(time)) return;
+            if (current != null) Trace.log("city idle {}", target == null ? "no target" : noAmmo ? "no ammo" : "target is gliding");
             mining.release(this);
-            current = null;
+            drop();
             return;
         }
 
         Box box = Targets.box(target);
         LongSet columns = Targets.columns(box);
 
-        if (current != null && !stillValid(current, columns)) {
+        int validity = current == null ? VALID : validity(current, box, columns);
+        if (validity == VALID) {
+            lostSince = 0;
+        } else if (validity == BROKEN_OFF || !graceful(time)) {
             Trace.log("city drop {} no longer valid", current);
-            current = null;
+            drop();
         }
-        if (current == null || !mc.world.getBlockState(current).isReplaceable()) openSince = 0;
-        else if (openSince == 0) openSince = Util.getMeasuringTimeMs();
+        boolean open = current != null && (mc.world.getBlockState(current).isReplaceable() || webbed(current));
+        if (!open) openSince = 0;
+        else if (openSince == 0) openSince = time;
 
         List<Choice> choices = choose(box, columns);
+        if (choices.isEmpty() && current == null && ticks % OTHER_TARGET_TICKS == 0 && otherTick != ticks) {
+            otherTick = ticks;
+            choices = otherTarget();
+        }
         Choice best = choices.isEmpty() ? null : choices.getFirst();
         Choice now = find(choices, current);
+        boolean solid = current != null && mining.owns(this) && mining.isMining(current) && !mining.wasBroken() && Targets.isMinable(current);
+        if (now == null && solid && lostSince == 0) {
+            float kept = gapValue(current, box);
+            if (kept >= minDamage.get()) now = new Choice(current, kept, currentSupport);
+        }
         if (now != null) currentScore = now.score;
-        String reason = best == null ? null : current == null ? "new" : shouldSwitch(best, now);
+
+        boolean worthless = solid && now == null && lostSince == 0;
+        if (!worthless) worthlessSince = 0;
+        else if (worthlessSince == 0) worthlessSince = time;
+        boolean expired = worthless && time - worthlessSince >= WORTHLESS_LIMIT;
+        if (expired && best == null) {
+            Trace.log("city drop {} no longer worth it, nothing better", current);
+            mining.release(this);
+            drop();
+            return;
+        }
+
+        String reason = best == null ? null : current == null ? "new" : expired && !best.pos.equals(current) ? "current no longer worth it" : shouldSwitch(best, now);
         if (reason != null) {
             Trace.log("city target {} -> {} score {} -> {} {} target {}", current, best.pos, now == null ? null : now.score, best.score, reason, target.getName().getString());
-            if (current != null) switchedAt = Util.getMeasuringTimeMs();
-            stopHeldSince = 0;
-            holdUntil = 0;
+            boolean had = current != null;
+            drop();
+            if (had) switchedAt = time;
             current = best.pos;
-            openSince = 0;
             currentScore = best.score;
             currentSupport = best.support;
         }
@@ -351,7 +429,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
 
         if (!rebreak.get() && mining.owns(this) && mining.isMining(current) && mining.wasBroken()) {
             mining.release(this);
-            current = null;
+            drop();
             return;
         }
 
@@ -368,13 +446,41 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         mining.mine(this, PRIORITY, current, true, switchMode.get(), swing.get());
     }
 
+    private boolean graceful(long now) {
+        MiningManager mining = MiningManager.get();
+        if (current == null || !mining.owns(this) || !mining.isMining(current) || mining.wasBroken()) return false;
+        if (lostSince == 0) lostSince = now;
+        return now - lostSince < LOST_GRACE;
+    }
+
+    private List<Choice> otherTarget() {
+        PlayerEntity first = target;
+        List<PlayerEntity> others = new ArrayList<>();
+        for (PlayerEntity player : mc.world.getPlayers()) {
+            if (player != first && Targets.valid(player, targetRange.get()) && !player.isGliding()) others.add(player);
+        }
+        others.sort(Comparator.comparingDouble(player -> player.squaredDistanceTo(mc.player)));
+
+        for (int i = 0; i < others.size() && i < OTHER_TARGETS; i++) {
+            target = others.get(i);
+            Box box = Targets.box(target);
+            List<Choice> choices = choose(box, Targets.columns(box));
+            if (!choices.isEmpty()) {
+                Trace.log("city skips {}, nothing to open, takes {}", first.getName().getString(), target.getName().getString());
+                return choices;
+            }
+        }
+        target = first;
+        return List.of();
+    }
+
     @Override
     public boolean allowStop(BlockPos pos) {
         boolean allow = stopAllowed(pos);
         long now = Util.getMeasuringTimeMs();
         if (!allow && stopHeldSince == 0) {
             stopHeldSince = now;
-            Trace.log("city hold stop {} target hurt for {}ms", pos, Math.max(0, HurtTracker.get().releaseTime(target) - now));
+            Trace.log("city hold stop {} target hurt for {}ms", pos, target == null ? 0 : Math.max(0, HurtTracker.get().releaseTime(target) - now));
         } else if (allow && stopHeldSince != 0) {
             Trace.log("city release stop {} after {}ms", pos, now - stopHeldSince);
             stopHeldSince = 0;
@@ -384,32 +490,50 @@ public class AutoCity extends Module implements MiningManager.StopGate {
     }
 
     private boolean stopAllowed(BlockPos pos) {
-        if (target == null || !pos.equals(current) || currentScore >= BURROW_SCORE) return true;
+        if (!pos.equals(current) || currentScore >= BURROW_SCORE) return true;
+        if (target == null) return false;
         AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
         if (autoCrystal == null || !autoCrystal.isActive() || !InteractionManager.get().hasCrystals()) return true;
-        if (!worthOpening(pos)) return false;
-        if (!hurtSync.get()) return true;
+        if (hurtSync.get() && hurtHolds(pos)) return false;
+        return worthOpening(pos);
+    }
 
+    private boolean hurtHolds(BlockPos pos) {
         long now = Util.getMeasuringTimeMs();
+        if (holdUntil != 0 && now >= holdUntil + HOLD_STALE) holdUntil = 0;
+        if (holdUntil != 0) return now < holdUntil;
+
         long release = HurtTracker.get().releaseTime(target);
-        if (release <= now) return true;
-        if (holdUntil == 0) holdUntil = release;
-        return now >= holdUntil;
+        if (release <= now || cheapWindow(pos, now)) return false;
+        holdUntil = release;
+        return true;
+    }
+
+    private boolean cheapWindow(BlockPos pos, long now) {
+        Box box = Targets.box(target);
+        float raw = ExplosionDamage.rawBound(target, Targets.feet(box), Targets.crystalCenter(pos.down()), ExplosionDamage.CRYSTAL_POWER);
+        if (raw <= 0) return true;
+        long arrival = now + LatencyManager.get().rtt() / 2;
+        return HurtTracker.get().effective(target, raw, arrival) >= ExplosionDamage.mitigate(target, raw) - HOLD_TOLERANCE;
     }
 
     private boolean worthOpening(BlockPos pos) {
         if (!mc.world.getBlockState(pos).isReplaceable() && MiningManager.get().wasBroken()) return true;
         Box box = Targets.box(target);
-        BlockPos support = currentSupport != null && !Targets.isBase(mc.world.getBlockState(currentSupport)) ? currentSupport : null;
         boolean roof = cev.get() && Targets.columns(box).contains(pos.down(2).asLong());
         if (roof && !roofCrystal(pos)) {
             if (Trace.on() && stopHeldSince == 0) Trace.log("city waits on {}, no crystal on the roof yet", pos);
             return false;
         }
-        float damage = roof ? cevDamage(pos, box, Targets.feet(box)) : gapDamage(pos, box, Targets.feet(box), support);
+        float damage = roof ? cevDamage(pos, box, Targets.feet(box)) : gapValue(pos, box);
         if (damage >= minDamage.get() || damage >= target.getHealth() + target.getAbsorptionAmount()) return true;
         if (Trace.on() && stopHeldSince == 0) Trace.log("city waits on {}, the gap would only allow {} damage now", pos, damage);
         return false;
+    }
+
+    private float gapValue(BlockPos pos, Box box) {
+        BlockPos support = currentSupport != null && !Targets.isBase(mc.world.getBlockState(currentSupport)) ? currentSupport : null;
+        return gapDamage(pos, box, Targets.feet(box), support);
     }
 
     private String shouldSwitch(Choice best, Choice now) {
@@ -421,11 +545,15 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         if (!onCurrent && (currentSupport == null || !mining.isMining(currentSupport))) return "mining elsewhere";
         if (onCurrent && mining.wasBroken()) {
             if (currentScore >= BURROW_SCORE) return best.score > SWITCH_GAIN ? "burrow open" : null;
-            if (best.score >= BURROW_SCORE) return "burrow";
-            return stuckOpen() && best.score > SWITCH_GAIN ? "open gap unused" : null;
+            boolean unused = stuckOpen();
+            if (best.score >= BURROW_SCORE) return unused || gapValue(current, Targets.box(target)) < minDamage.get() ? "burrow" : null;
+            return unused && best.score > SWITCH_GAIN ? "open gap unused" : null;
         }
-        if (best.score >= BURROW_SCORE && currentScore < BURROW_SCORE) return "burrow";
-        if (Util.getMeasuringTimeMs() - switchedAt < SWITCH_COOLDOWN) return null;
+
+        if (lostSince != 0) return null;
+        long time = Util.getMeasuringTimeMs();
+        if (best.score >= BURROW_SCORE && currentScore < BURROW_SCORE && (now == null || mining.progress() < BURROW_PREEMPT)) return "burrow";
+        if (time - switchedAt < SWITCH_COOLDOWN) return null;
         float score = now == null ? 0 : now.score;
         return mining.progress() < SWITCH_PROGRESS && best.score > score + SWITCH_GAIN ? "better" : null;
     }
@@ -439,28 +567,33 @@ public class AutoCity extends Module implements MiningManager.StopGate {
     }
 
     private boolean stuckOpen() {
-        if (openSince == 0 || Util.getMeasuringTimeMs() - openSince < OPEN_LIMIT) return false;
+        if (openSince == 0) return false;
+        BlockState state = mc.world.getBlockState(current);
+        if (state.isReplaceable() && !state.isAir() && !(state.getBlock() instanceof AbstractFireBlock)) return true;
+        if (Util.getMeasuringTimeMs() - openSince < OPEN_LIMIT) return false;
         Box cell = new Box(current.getX(), current.getY(), current.getZ(), current.getX() + 1, current.getY() + 2, current.getZ() + 1);
         return mc.world.getOtherEntities(null, cell, entity -> entity instanceof EndCrystalEntity && CrystalTracker.get().isAlive(entity)).isEmpty();
     }
 
-    private boolean stillValid(BlockPos pos, LongSet columns) {
-        if (!MiningManager.get().inRange(pos) || Targets.ownRing().contains(pos) || mine(pos)) return false;
+    private int validity(BlockPos pos, Box box, LongSet columns) {
+        MiningManager mining = MiningManager.get();
+        if (!mining.inRange(pos) || Targets.ownRing().contains(pos) || ownFace().contains(pos) || mine(pos)) return BROKEN_OFF;
+
+        boolean owned = mining.owns(this) && mining.isMining(pos);
+        if (webbed(pos)) return rebreak.get() && owned && mining.wasBroken() ? VALID : BROKEN_OFF;
+        if (!Targets.isMinable(pos) && !(rebreak.get() && owned)) return BROKEN_OFF;
 
         boolean partOfHole = columns.contains(pos.asLong()) || Targets.ring(columns, 0).contains(pos) || Targets.ring(columns, 1).contains(pos)
             || cev.get() && columns.contains(pos.down(2).asLong());
-        if (!partOfHole) return false;
-
-        if (webbed(pos)) return false;
-        if (Targets.isMinable(pos)) return true;
-        return rebreak.get() && MiningManager.get().owns(this) && MiningManager.get().isMining(pos);
+        if (partOfHole) return VALID;
+        return owned && !mining.wasBroken() && Targets.isMinable(pos) && gapDamage(pos, box, Targets.feet(box), null) >= minDamage.get() ? VALID : LEFT_HOLE;
     }
 
     private boolean hasAmmo() {
         if (InteractionManager.get().hasCrystals()) return true;
 
         AutoAnchor anchor = Modules.get().get(AutoAnchor.class);
-        if (anchor == null || !anchor.isActive() || mc.world.getRegistryKey() == World.NETHER) return false;
+        if (anchor == null || !anchor.isActive() || anchor.anchorsWork()) return false;
         InventoryManager inventory = InventoryManager.get();
         return inventory.find(stack -> stack.isOf(Items.RESPAWN_ANCHOR), 0, InventoryManager.MAIN_END) != -1
             && inventory.find(stack -> stack.isOf(Items.GLOWSTONE), 0, InventoryManager.MAIN_END) != -1;
@@ -474,6 +607,22 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         return mc.world.getBlockState(pos).isOf(Blocks.COBWEB);
     }
 
+    private List<BlockPos> ownFace() {
+        return Targets.ring(Targets.columns(mc.player.getBoundingBox()), 1);
+    }
+
+    private boolean candidate(BlockPos pos, List<BlockPos> own, BlockPos background, MiningManager mining) {
+        return !pos.equals(background) && !banned.containsKey(pos.asLong()) && Targets.isMinable(pos) && !webbed(pos)
+            && !own.contains(pos) && !mine(pos) && mining.inRange(pos);
+    }
+
+    private float bestDelta(BlockState state, BlockPos pos) {
+        MiningManager mining = MiningManager.get();
+        float best = mining.groundDelta(state, pos, mc.player.getMainHandStack(), true);
+        for (int i = 0; i < InventoryManager.MAIN_END; i++) best = Math.max(best, mining.groundDelta(state, pos, InventoryManager.get().stack(i), true));
+        return best;
+    }
+
     private record Choice(BlockPos pos, float score, BlockPos support) {}
 
     private List<Choice> choose(Box box, LongSet columns) {
@@ -485,18 +634,17 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         if (burrow.get()) {
             for (long key : columns) {
                 BlockPos pos = BlockPos.fromLong(key);
-                if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || own.contains(pos) || mine(pos) || !mining.inRange(pos) || !Targets.isBurrowedIn(box, pos)) continue;
-                if (mc.world.getBlockState(pos).isOf(Blocks.BEDROCK)) continue;
+                if (!candidate(pos, own, background, mining) || !Targets.isBurrowedIn(box, pos)) continue;
+                BlockState state = mc.world.getBlockState(pos);
+                if (state.isOf(Blocks.BEDROCK)) continue;
 
-                choices.add(new Choice(pos, BURROW_SCORE + mining.delta(mc.world.getBlockState(pos), pos, mc.player.getMainHandStack()), null));
+                choices.add(new Choice(pos, BURROW_SCORE + bestDelta(state, pos), null));
             }
         }
 
         Vec3d feet = Targets.feet(box);
-        List<BlockPos> ring = Targets.ring(columns, 0);
-
-        for (BlockPos pos : ring) {
-            if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || !mining.inRange(pos) || own.contains(pos) || mine(pos)) continue;
+        for (BlockPos pos : Targets.ring(columns, 0)) {
+            if (!candidate(pos, own, background, mining)) continue;
 
             BlockPos support = null;
             float damage = gapDamage(pos, box, feet, null);
@@ -510,9 +658,9 @@ public class AutoCity extends Module implements MiningManager.StopGate {
             choices.add(new Choice(pos, damage, support));
         }
 
+        List<BlockPos> face = ownFace();
         for (BlockPos pos : Targets.ring(columns, 1)) {
-            if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || !mining.inRange(pos) || own.contains(pos) || mine(pos)) continue;
-            if (mc.world.getBlockState(pos).isOf(Blocks.BEDROCK)) continue;
+            if (!candidate(pos, own, background, mining) || face.contains(pos) || mc.world.getBlockState(pos).isOf(Blocks.BEDROCK)) continue;
             float damage = gapDamage(pos, box, feet, null);
             if (damage < minDamage.get()) continue;
             choices.add(new Choice(pos, damage - FACE_PENALTY, null));
@@ -521,7 +669,7 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         if (cev.get()) {
             for (long key : columns) {
                 BlockPos pos = BlockPos.fromLong(key).up(2);
-                if (pos.equals(background) || !Targets.isMinable(pos) || webbed(pos) || !mining.inRange(pos) || own.contains(pos) || mine(pos)) continue;
+                if (!candidate(pos, own, background, mining) || face.contains(pos)) continue;
                 if (!mc.world.getBlockState(pos).isOf(Blocks.OBSIDIAN) || !mc.world.getBlockState(pos.up()).isAir() || roofBlocked(pos)) continue;
                 float damage = cevDamage(pos, box, feet);
                 if (damage < minDamage.get()) continue;
@@ -572,13 +720,22 @@ public class AutoCity extends Module implements MiningManager.StopGate {
         if (Targets.isBase(state)) return true;
 
         MiningManager mining = MiningManager.get();
+        boolean wallOpen = mc.world.getBlockState(current).isReplaceable();
         if (!state.isReplaceable()) {
-            BlockPos target = MiningManager.exposed(support) || mc.world.getBlockState(current).isReplaceable() ? support : current;
-            mining.mine(this, PRIORITY, target, true, switchMode.get(), swing.get());
+            if (wallOpen) {
+                supportWallBroken = true;
+            } else if (supportWallBroken) {
+                Trace.log("city {} was refilled before its support {} could be mined, skips it", current, support);
+                banned.put(current.asLong(), Util.getMeasuringTimeMs() + REFILL_BAN);
+                drop();
+                return false;
+            }
+            BlockPos next = MiningManager.exposed(support) || wallOpen ? support : current;
+            mining.mine(this, PRIORITY, next, true, switchMode.get(), swing.get());
             return false;
         }
 
-        if (!mc.world.getBlockState(current).isReplaceable() && !mining.mine(this, PRIORITY, current, true, switchMode.get(), swing.get())) return false;
+        if (!wallOpen && !mining.mine(this, PRIORITY, current, true, switchMode.get(), swing.get())) return false;
 
         InteractionManager interaction = InteractionManager.get();
         int slot = InventoryManager.get().find(stack -> stack.isOf(Items.OBSIDIAN), 0, InventoryManager.MAIN_END);

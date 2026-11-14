@@ -1053,7 +1053,7 @@ public class AutoAnchor extends Module {
         return new Box(pos).squaredMagnitude(mc.player.getEyePos()) <= placeRange.get() * placeRange.get() && InteractionManager.centerReach(pos);
     }
 
-    private boolean anchorsWork() {
+    public boolean anchorsWork() {
         if (mc.world.getRegistryKey() == World.NETHER || mc.world.getDimensionEntry().matchesKey(DimensionTypes.THE_NETHER)) return true;
         return Boolean.TRUE.equals(mc.world.getEnvironmentAttributes().getAttributeValue(EnvironmentAttributes.RESPAWN_ANCHOR_WORKS_GAMEPLAY, mc.player.getBlockPos()));
     }

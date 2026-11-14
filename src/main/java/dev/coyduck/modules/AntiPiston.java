@@ -268,7 +268,6 @@ public class AntiPiston extends Module {
 
     @EventHandler
     private void onWorldReset(WorldResetEvent event) {
-        MiningManager.get().release(this);
         reset();
     }
 
