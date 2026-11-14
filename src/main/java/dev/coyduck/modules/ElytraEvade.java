@@ -218,7 +218,7 @@ public class ElytraEvade extends Module {
     private ClientWorld world;
 
     public ElytraEvade() {
-        super(Coyduck.CATEGORY, "elytra-evade", "While you fly with elytra-fly+, keeps hopping between spots around you that are safest from players who could crystal you, web you or dive at you with a mace or spear. Enemies are judged where they will really be once your packets land, the whole way to a spot is checked, webs and web reach are kept clear of, and a way it cannot fly is dropped for a moment so you never sit still under threat. Stays near where trouble started, yields when you steer, stays out of mace-strike's way while it hunts and does nothing while nobody is a danger, so you can leave it on.");
+        super(Coyduck.CATEGORY, "elytra-evade", "Dodges threats while you fly.");
     }
 
     @Override

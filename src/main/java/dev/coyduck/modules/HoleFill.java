@@ -111,7 +111,7 @@ public class HoleFill extends Module {
     private PlayerEntity target;
 
     public HoleFill() {
-        super(Coyduck.CATEGORY, "hole-fill", "Fills the holes near where an enemy out in the open is heading, so they have nowhere safe to go.");
+        super(Coyduck.CATEGORY, "hole-fill", "Fills holes near enemies.");
     }
 
     @Override

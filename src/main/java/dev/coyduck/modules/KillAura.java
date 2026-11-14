@@ -173,7 +173,7 @@ public class KillAura extends Module {
     private int critWait;
 
     public KillAura() {
-        super(Coyduck.CATEGORY, "kill-aura+", "Takes your sword, or your hardest hitting item when you have no sword, into your hand and hits players in reach once the attack is charged.");
+        super(Coyduck.CATEGORY, "kill-aura+", "Hits players in reach.");
     }
 
     @Override

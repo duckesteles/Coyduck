@@ -70,7 +70,7 @@ public class KillEffects extends Module {
     }
 
     public KillEffects() {
-        super(Coyduck.CATEGORY, "kill-effects", "Strikes lightning where an enemy dies, plays a sound and counts your kill streak. Only you see and hear it.");
+        super(Coyduck.CATEGORY, "kill-effects", "Lightning and a sound on kills.");
     }
 
     @EventHandler(priority = EventPriority.HIGH)

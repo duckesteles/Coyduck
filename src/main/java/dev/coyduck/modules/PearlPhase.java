@@ -127,7 +127,7 @@ public class PearlPhase extends Module {
     private Vec3d planned;
 
     public PearlPhase() {
-        super(Coyduck.CATEGORY, "pearl-phase", "Throws a pearl at your feet so you land half inside the walls next to you. Also works while crawling in a one block high gap, scoring landings for the crawling body and trying flatter throws. Toggle it when you want to phase.");
+        super(Coyduck.CATEGORY, "pearl-phase", "Phases you into walls with a pearl.");
     }
 
     @Override

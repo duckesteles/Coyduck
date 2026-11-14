@@ -69,7 +69,7 @@ public class Regear extends Module {
     );
 
     public Regear() {
-        super(Coyduck.CATEGORY, "regear", "Fills your inventory from an open shulker, ender chest or chest into the layout of a saved kit. Slot 9 always stays a totem.");
+        super(Coyduck.CATEGORY, "regear", "Refills your kit from a container.");
     }
 
     public boolean save(String name) {

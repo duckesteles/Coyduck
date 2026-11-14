@@ -27,7 +27,7 @@ import java.util.Locale;
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 public class PlayersHud extends HudElement {
-    public static final HudElementInfo<PlayersHud> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-players", "Players you can see, closest first, with their heads.", PlayersHud::new);
+    public static final HudElementInfo<PlayersHud> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-players", "Nearby players.", PlayersHud::new);
 
     public enum Show {
         Everyone,

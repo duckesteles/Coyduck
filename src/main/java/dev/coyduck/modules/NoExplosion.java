@@ -36,7 +36,7 @@ public class NoExplosion extends Module {
     );
 
     public NoExplosion() {
-        super(Coyduck.CATEGORY, "no-explosion", "Hides crystal explosion particles without a resource pack. The sound and knockback stay.");
+        super(Coyduck.CATEGORY, "no-explosion", "Hides explosion particles.");
     }
 
     public static boolean hidesSmoke() {

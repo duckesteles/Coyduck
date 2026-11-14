@@ -187,7 +187,7 @@ public class SelfTrap extends Module {
     private boolean running;
 
     public SelfTrap() {
-        super(Coyduck.CATEGORY, "self-trap+", "Boxes you in: the block under your feet, the four sides at your feet and head, and the block above your head.");
+        super(Coyduck.CATEGORY, "self-trap+", "Traps yourself in obsidian.");
     }
 
     @Override

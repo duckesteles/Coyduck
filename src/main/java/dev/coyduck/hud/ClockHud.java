@@ -21,7 +21,7 @@ import java.util.Locale;
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 public class ClockHud extends HudElement {
-    public static final HudElementInfo<ClockHud> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-clock", "Real time and date in any time zone, with your session length.", ClockHud::new);
+    public static final HudElementInfo<ClockHud> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-clock", "Real time clock.", ClockHud::new);
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final CoyHud.Background background = new CoyHud.Background(settings);

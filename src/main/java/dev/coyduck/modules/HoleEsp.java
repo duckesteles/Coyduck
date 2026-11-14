@@ -148,7 +148,7 @@ public class HoleEsp extends Module {
     private boolean anchorsWork;
 
     public HoleEsp() {
-        super(Coyduck.CATEGORY, "hole-esp+", "Shows safe holes as glass boxes that rise in and fade out smoothly.");
+        super(Coyduck.CATEGORY, "hole-esp+", "Shows safe holes.");
     }
 
     @Override

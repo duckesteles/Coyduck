@@ -14,7 +14,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.util.Identifier;
 
 public class Watermark extends HudElement {
-    public static final HudElementInfo<Watermark> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-watermark", "Coyduck name, version and mascot.", Watermark::new);
+    public static final HudElementInfo<Watermark> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-watermark", "Coyduck name and mascot.", Watermark::new);
 
     private static final Identifier MASCOT = Identifier.of("coyduck", "textures/mascot.png");
     private static final String VERSION = FabricLoader.getInstance().getModContainer("coyduck")

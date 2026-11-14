@@ -108,7 +108,7 @@ public class PacketMinePlus extends Module implements MiningManager.HidesMining,
     private long brokenAt;
 
     public PacketMinePlus() {
-        super(Coyduck.CATEGORY, "packet-mine+", "Your own block clicks go through Coyduck's mining: the right reach, tool holding, hidden mining, rebreak and crystal timing.");
+        super(Coyduck.CATEGORY, "packet-mine+", "Packet mines the blocks you click.");
     }
 
     @Override

@@ -71,7 +71,7 @@ public class PhaseEsp extends Module {
     private final Color line = new Color();
 
     public PhaseEsp() {
-        super(Coyduck.CATEGORY, "phase-esp", "Colors the walls next to your feet you can phase into, by how safe they are.");
+        super(Coyduck.CATEGORY, "phase-esp", "Shows walls you can phase into.");
     }
 
     @EventHandler

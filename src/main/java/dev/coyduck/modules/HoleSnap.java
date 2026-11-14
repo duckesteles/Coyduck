@@ -193,7 +193,7 @@ public class HoleSnap extends Module {
     private long startedAt;
 
     public HoleSnap() {
-        super(Coyduck.CATEGORY, "hole-snap", "Moves you into the nearest hole, then turns itself off.");
+        super(Coyduck.CATEGORY, "hole-snap", "Moves you into the nearest hole.");
     }
 
     public static boolean snapping() {

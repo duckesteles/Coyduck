@@ -45,7 +45,7 @@ public class PopCounter extends Module {
     );
 
     public PopCounter() {
-        super(Coyduck.CATEGORY, "pop-counter", "Counts every totem your enemies pop in chat, and how many they popped when they die.");
+        super(Coyduck.CATEGORY, "pop-counter", "Counts enemy totem pops.");
     }
 
     public static int pops(PlayerEntity player) {

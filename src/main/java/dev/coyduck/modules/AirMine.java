@@ -55,7 +55,7 @@ public class AirMine extends Module {
     private int windTick;
 
     public AirMine() {
-        super(Coyduck.CATEGORY, "air-mine", "Mines at ground speed while you fly or fall, by telling the server you are on the ground only for the moment a block breaks.");
+        super(Coyduck.CATEGORY, "air-mine", "Mines at full speed in the air.");
         instance = this;
     }
 

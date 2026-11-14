@@ -54,7 +54,7 @@ public class BreakEsp extends Module {
     private long last;
 
     public BreakEsp() {
-        super(Coyduck.CATEGORY, "break-esp+", "Shows blocks being mined with a box that grows smoothly with the progress.");
+        super(Coyduck.CATEGORY, "break-esp+", "Shows blocks being mined.");
     }
 
     @Override

@@ -84,7 +84,7 @@ public class AutoXp extends Module {
     private boolean mending;
 
     public AutoXp() {
-        super(Coyduck.CATEGORY, "auto-xp", "Throws experience bottles at your feet to mend your armor once it wears down. Turns your head only when nothing more important needs it.");
+        super(Coyduck.CATEGORY, "auto-xp", "Mends your armor with XP bottles.");
     }
 
     @Override

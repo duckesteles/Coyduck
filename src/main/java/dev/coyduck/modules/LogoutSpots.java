@@ -91,7 +91,7 @@ public class LogoutSpots extends Module {
     private final Color background = new Color();
 
     public LogoutSpots() {
-        super(Coyduck.CATEGORY, "logout-spots+", "Marks where players near you logged out, with their health, pops and how long ago.");
+        super(Coyduck.CATEGORY, "logout-spots+", "Marks where players logged out.");
     }
 
     @Override

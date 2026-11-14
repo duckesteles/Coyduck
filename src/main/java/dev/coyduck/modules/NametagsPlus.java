@@ -140,7 +140,7 @@ public class NametagsPlus extends Module {
     private final ItemStack[] shown = new ItemStack[ITEMS.length];
 
     public NametagsPlus() {
-        super(Coyduck.CATEGORY, "nametags+", "Clean player tags: name, health and ping, a bar while they eat, their armor and held items with durability bars, and the Coyduck mascot for other Coyduck users.");
+        super(Coyduck.CATEGORY, "nametags+", "Clean player nametags.");
     }
 
     public static boolean announces() {

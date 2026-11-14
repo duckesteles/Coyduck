@@ -22,7 +22,7 @@ import java.util.Locale;
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 public class InfoHud extends HudElement {
-    public static final HudElementInfo<InfoHud> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-info", "FPS, ping, TPS, speed and coordinates in one panel.", InfoHud::new);
+    public static final HudElementInfo<InfoHud> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-info", "FPS, ping, TPS, speed and coordinates.", InfoHud::new);
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final CoyHud.Background background = new CoyHud.Background(settings);

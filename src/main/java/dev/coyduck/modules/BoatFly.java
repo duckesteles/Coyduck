@@ -197,7 +197,7 @@ public class BoatFly extends Module {
     private String status;
 
     public BoatFly() {
-        super(Coyduck.CATEGORY, "boat-fly+", "Flies the boat you steer. Jump goes up and sneak goes down without getting off the boat, and with phase on it passes through floors, ceilings and walls. Learns how fast the server lets it go. Travel takes it to a set height, then to a set place, for going far away while you are AFK.");
+        super(Coyduck.CATEGORY, "boat-fly+", "Flies your boat.");
     }
 
     public static boolean keepSeat() {

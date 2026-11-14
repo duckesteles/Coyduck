@@ -88,7 +88,7 @@ public class Burrow extends Module {
     private boolean warned;
 
     public Burrow() {
-        super(Coyduck.CATEGORY, "burrow+", "Experimental: puts a block where you stand and tries to get the server to set you back inside it. Toggle it to burrow once, or turn on keep to burrow again every time the block is broken.");
+        super(Coyduck.CATEGORY, "burrow+", "Burrows you into a block.");
     }
 
     @Override

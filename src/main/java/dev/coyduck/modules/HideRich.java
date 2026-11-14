@@ -45,7 +45,7 @@ public class HideRich extends Module {
     }
 
     public HideRich() {
-        super(Coyduck.CATEGORY, "hide-rich", "Shows players with a paid rank like everyone else in chat. Only player messages are touched.");
+        super(Coyduck.CATEGORY, "hide-rich", "Hides paid ranks in chat.");
     }
 
     @Override

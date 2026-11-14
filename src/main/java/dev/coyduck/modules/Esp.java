@@ -111,7 +111,7 @@ public class Esp extends Module implements ShaderGlow.Source {
     private static boolean cullingChecked;
 
     public Esp() {
-        super(Coyduck.CATEGORY, "esp+", "Shows players through blocks with their real model, skin, armour and movement, and optionally a shader outline around them.");
+        super(Coyduck.CATEGORY, "esp+", "Shows players through walls.");
     }
 
     public static boolean shows(int id) {

@@ -79,7 +79,7 @@ public class CrystalChams extends Module {
     private boolean lines;
 
     public CrystalChams() {
-        super(Coyduck.CATEGORY, "crystal-chams", "Draws end crystals as spinning wireframe cubes with see-through faces.");
+        super(Coyduck.CATEGORY, "crystal-chams", "Wireframe end crystals.");
         for (int i = 0; i < corners.length; i++) corners[i] = new Vector3f();
     }
 

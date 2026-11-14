@@ -43,7 +43,7 @@ public class ChestSearch extends Module {
     );
 
     public ChestSearch() {
-        super(Coyduck.CATEGORY, "chest-search", "Adds a search bar to chests, shulkers and ender chests that highlights matching items, including what is inside shulker boxes.");
+        super(Coyduck.CATEGORY, "chest-search", "Search bar for chests.");
     }
 
     public static ChestSearch active() {

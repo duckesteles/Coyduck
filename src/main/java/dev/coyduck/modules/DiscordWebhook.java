@@ -102,7 +102,7 @@ public class DiscordWebhook extends Module {
     private boolean lowSent;
 
     public DiscordWebhook() {
-        super(Coyduck.CATEGORY, "discord-webhook", "Sends alerts to a Discord channel while you are away: players coming into view, disconnects, pops, deaths, low health and whispers. Never sends coordinates.");
+        super(Coyduck.CATEGORY, "discord-webhook", "Sends alerts to Discord.");
     }
 
     @Override

@@ -169,7 +169,7 @@ public class AutoTrap extends Module {
     private boolean entityBlocked;
 
     public AutoTrap() {
-        super(Coyduck.CATEGORY, "auto-trap+", "Traps the target from above and around the head without closing your own crystal spots.");
+        super(Coyduck.CATEGORY, "auto-trap+", "Traps enemies in obsidian.");
     }
 
     @Override

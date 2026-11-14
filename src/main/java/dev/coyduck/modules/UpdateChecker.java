@@ -40,7 +40,7 @@ public class UpdateChecker extends Module {
     private Text pending;
 
     public UpdateChecker() {
-        super(Coyduck.CATEGORY, "update-checker", "Asks GitHub for a newer Coyduck release when the game starts and shows it like an advancement, with a link in chat.");
+        super(Coyduck.CATEGORY, "update-checker", "Checks for Coyduck updates.");
         runInMainMenu = true;
         MeteorClient.EVENT_BUS.subscribe(new FirstRun());
     }

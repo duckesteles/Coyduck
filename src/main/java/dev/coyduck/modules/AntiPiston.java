@@ -249,7 +249,7 @@ public class AntiPiston extends Module {
     private boolean running;
 
     public AntiPiston() {
-        super(Coyduck.CATEGORY, "anti-piston", "Stops piston crystals and piston pushes: breaks the crystal before it is pushed, mines the piston or its redstone and blocks the spot the piston would push into.");
+        super(Coyduck.CATEGORY, "anti-piston", "Stops piston crystals and pushes.");
         reset();
     }
 

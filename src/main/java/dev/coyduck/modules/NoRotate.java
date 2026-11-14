@@ -6,7 +6,7 @@ import meteordevelopment.meteorclient.systems.modules.Modules;
 
 public class NoRotate extends Module {
     public NoRotate() {
-        super(Coyduck.CATEGORY, "no-rotate+", "Keeps your view where you look when the server turns your head, from a setback or a rotation packet, for example while you are inside blocks.");
+        super(Coyduck.CATEGORY, "no-rotate+", "Keeps your view when the server turns it.");
     }
 
     public static boolean on() {

@@ -341,7 +341,7 @@ public class AutoAnchor extends Module {
     private boolean rejectedFriend;
 
     public AutoAnchor() {
-        super(Coyduck.CATEGORY, "auto-anchor", "Places, charges and sets off respawn anchors in one go, where crystals cannot reach.");
+        super(Coyduck.CATEGORY, "auto-anchor", "Places and blows up respawn anchors.");
     }
 
     @Override

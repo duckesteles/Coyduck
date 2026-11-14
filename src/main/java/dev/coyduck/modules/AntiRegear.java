@@ -66,7 +66,7 @@ public class AntiRegear extends Module {
     private int ticks;
 
     public AntiRegear() {
-        super(Coyduck.CATEGORY, "anti-regear", "Breaks the shulker boxes enemies place next to them to regear, never the ones you placed.");
+        super(Coyduck.CATEGORY, "anti-regear", "Breaks enemy regear shulkers.");
     }
 
     @Override

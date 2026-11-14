@@ -290,7 +290,7 @@ public class ElytraPilot extends Module {
     private int cullTick;
 
     public ElytraPilot() {
-        super(Coyduck.CATEGORY, "elytra-pilot", "Flies to a destination with elytra-fly+, routes through the nether with Baritone's pathfinder, and lands to mend the elytra on the way. Start it with .pilot x z");
+        super(Coyduck.CATEGORY, "elytra-pilot", "Flies you to coordinates.");
     }
 
     public void spiral(int step) {

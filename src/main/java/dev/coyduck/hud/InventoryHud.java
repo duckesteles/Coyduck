@@ -12,7 +12,7 @@ import net.minecraft.item.ItemStack;
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 public class InventoryHud extends HudElement {
-    public static final HudElementInfo<InventoryHud> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-inventory", "Your inventory in a flat panel.", InventoryHud::new);
+    public static final HudElementInfo<InventoryHud> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-inventory", "Your inventory.", InventoryHud::new);
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 

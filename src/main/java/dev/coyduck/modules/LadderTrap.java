@@ -106,7 +106,7 @@ public class LadderTrap extends Module {
     private final Long2LongOpenHashMap rejectedAt = new Long2LongOpenHashMap();
 
     public LadderTrap() {
-        super(Coyduck.CATEGORY, "ladder-trap", "Puts a ladder or scaffolding in the cell the target stands in, so they climb instead of moving and float up out of their hole.");
+        super(Coyduck.CATEGORY, "ladder-trap", "Traps targets with ladders.");
     }
 
     @Override

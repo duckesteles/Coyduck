@@ -542,7 +542,7 @@ public class AutoCrystal extends Module {
     private final Long2LongOpenHashMap clearing = new Long2LongOpenHashMap();
 
     public AutoCrystal() {
-        super(Coyduck.CATEGORY, "auto-crystal", "Places and breaks crystals at any ping.");
+        super(Coyduck.CATEGORY, "auto-crystal", "Places and breaks crystals.");
     }
 
     @Override

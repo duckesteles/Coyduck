@@ -22,7 +22,7 @@ import java.util.List;
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 public class ItemsHud extends HudElement {
-    public static final HudElementInfo<ItemsHud> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-items", "How many totems, crystals and other fight items you have left.", ItemsHud::new);
+    public static final HudElementInfo<ItemsHud> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-items", "Counts of your fight items.", ItemsHud::new);
 
     public enum Layout {
         Horizontal,

@@ -499,7 +499,7 @@ public class ElytraFly extends Module {
     private final Afterwards afterwards = new Afterwards();
 
     public ElytraFly() {
-        super(Coyduck.CATEGORY, "elytra-fly+", "Flies with an elytra, speeding up the longer you hold a key, lands softly and picks the flight back up after water or lava.");
+        super(Coyduck.CATEGORY, "elytra-fly+", "Fast elytra flight.");
     }
 
     @Override

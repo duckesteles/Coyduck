@@ -57,7 +57,7 @@ public class AutoLogin extends Module {
     private String sessionHost;
 
     public AutoLogin() {
-        super(Coyduck.CATEGORY, "auto-login", "Types /login with your password when a server you listed asks for it in the first minute after you join. Messages from other players never trigger it.");
+        super(Coyduck.CATEGORY, "auto-login", "Logs you in on listed servers.");
     }
 
     @Override

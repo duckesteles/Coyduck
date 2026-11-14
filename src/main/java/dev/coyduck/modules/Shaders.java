@@ -138,7 +138,7 @@ public class Shaders extends Module implements ShaderGlow.Source {
     );
 
     public Shaders() {
-        super(Coyduck.CATEGORY, "shaders+", "One color for everything: a glow on players, crystals and held items, and all Coyduck renders.");
+        super(Coyduck.CATEGORY, "shaders+", "Glow on players and crystals.");
     }
 
     public static Shaders active() {

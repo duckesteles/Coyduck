@@ -111,7 +111,7 @@ public class SpeedPlus extends Module {
     private String reason;
 
     public SpeedPlus() {
-        super(Coyduck.CATEGORY, "speed+", "Meteor's strafe and vanilla speed that pauses in webs, liquids, low blocks and after pull backs instead of being pulled back.");
+        super(Coyduck.CATEGORY, "speed+", "Strafe speed that avoids setbacks.");
     }
 
     @Override

@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Map;
 
 public class ModuleList extends HudElement {
-    public static final HudElementInfo<ModuleList> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-modules", "Enabled modules in a compact list.", ModuleList::new);
+    public static final HudElementInfo<ModuleList> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-modules", "Active modules.", ModuleList::new);
 
     public enum Sort {
         Length,

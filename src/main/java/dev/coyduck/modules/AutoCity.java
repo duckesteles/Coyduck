@@ -268,7 +268,7 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
     private long crystalSeenAt;
 
     public AutoCity() {
-        super(Coyduck.CATEGORY, "auto-city+", "Mines the target's surround or burrow and breaks it again whenever it is replaced.");
+        super(Coyduck.CATEGORY, "auto-city+", "Mines enemy surrounds.");
     }
 
     @Override

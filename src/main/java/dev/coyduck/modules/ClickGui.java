@@ -167,7 +167,7 @@ public class ClickGui extends Module {
     }
 
     public ClickGui() {
-        super(Coyduck.CATEGORY, "click-gui+", "Replaces the module menu with clean see-through columns and gives the other menus the same look.");
+        super(Coyduck.CATEGORY, "click-gui+", "Clean module menu.");
     }
 
     public boolean opensSettingsWindow() {

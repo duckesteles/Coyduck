@@ -39,7 +39,7 @@ public class NoClimb extends Module {
     );
 
     public NoClimb() {
-        super(Coyduck.CATEGORY, "no-climb", "Ladders, scaffolding and cobwebs placed on you don't catch you: no climbing, no hanging, no web slowdown.");
+        super(Coyduck.CATEGORY, "no-climb", "Ignores ladders, scaffolding and webs.");
         instance = this;
     }
 

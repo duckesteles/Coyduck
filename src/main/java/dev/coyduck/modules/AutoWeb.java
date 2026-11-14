@@ -118,7 +118,7 @@ public class AutoWeb extends Module {
     private LongSet lastCells = new LongOpenHashSet();
 
     public AutoWeb() {
-        super(Coyduck.CATEGORY, "auto-web+", "Webs the cells the target stands in and is about to step into.");
+        super(Coyduck.CATEGORY, "auto-web+", "Webs enemies.");
     }
 
     @Override

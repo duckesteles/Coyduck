@@ -141,7 +141,7 @@ public class AutoEz extends Module {
     private record Pending(String name, long at, int pops) {}
 
     public AutoEz() {
-        super(Coyduck.CATEGORY, "auto-ez", "Sends a good game message for players you kill, as a whisper to them or in public chat with their name.");
+        super(Coyduck.CATEGORY, "auto-ez", "Sends a message when you get a kill.");
     }
 
     @Override

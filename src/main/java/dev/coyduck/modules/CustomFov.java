@@ -47,7 +47,7 @@ public class CustomFov extends Module {
     );
 
     public CustomFov() {
-        super(Coyduck.CATEGORY, "custom-fov", "Sets any field of view, separately for the world and your hand.");
+        super(Coyduck.CATEGORY, "custom-fov", "Custom field of view.");
     }
 
     private static CustomFov active() {

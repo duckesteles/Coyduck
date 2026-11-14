@@ -203,7 +203,7 @@ public class AutoTotem extends Module {
     private boolean warned;
 
     public AutoTotem() {
-        super(Coyduck.CATEGORY, "auto-totem+", "Keeps a totem in your offhand at any ping, under any screen.");
+        super(Coyduck.CATEGORY, "auto-totem+", "Keeps a totem in your offhand.");
     }
 
     public static boolean canAffordPop() {

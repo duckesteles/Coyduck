@@ -318,7 +318,7 @@ public class Surround extends Module {
     private boolean running;
 
     public Surround() {
-        super(Coyduck.CATEGORY, "surround+", "Surrounds your feet with obsidian and keeps it up against any break.");
+        super(Coyduck.CATEGORY, "surround+", "Surrounds your feet with obsidian.");
     }
 
     private long feetSeen;
