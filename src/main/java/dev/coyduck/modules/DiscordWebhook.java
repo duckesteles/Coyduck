@@ -2,6 +2,8 @@ package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.managers.FightTracker;
+import dev.coyduck.managers.PopTracker;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.game.ReceiveMessageEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -23,6 +25,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.Set;
@@ -33,6 +36,13 @@ public class DiscordWebhook extends Module {
     private static final long SEND_GAP = 2_000;
     private static final int MAX_QUEUE = 20;
     private static final Pattern COORDS = Pattern.compile("-?\\d{3,}[ ,]+-?\\d{1,3}[ ,]+-?\\d{3,}|-?\\d{3,}[ ,]+-?\\d{3,}");
+    private static final int GREEN = 0x57F287;
+    private static final int RED = 0xED4245;
+    private static final int YELLOW = 0xFEE75C;
+    private static final int ORANGE = 0xF0883E;
+    private static final int PURPLE = 0x9B6BDF;
+    private static final int BLUE = 0x5865F2;
+    private static final int GREY = 0x99AAB5;
     private static final HttpClient CLIENT = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -49,6 +59,27 @@ public class DiscordWebhook extends Module {
         .name("mention")
         .description("Prefix for important alerts, like <@your id>.")
         .defaultValue("")
+        .build()
+    );
+
+    private final Setting<Boolean> embeds = sgGeneral.add(new BoolSetting.Builder()
+        .name("embeds")
+        .description("Sends colored cards instead of plain text.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> kills = sgEvents.add(new BoolSetting.Builder()
+        .name("kills")
+        .description("You kill someone.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> enemyPops = sgEvents.add(new BoolSetting.Builder()
+        .name("enemy-pops")
+        .description("Someone you fight pops a totem.")
+        .defaultValue(false)
         .build()
     );
 
@@ -96,7 +127,9 @@ public class DiscordWebhook extends Module {
         .build()
     );
 
-    private final ArrayDeque<String> queue = new ArrayDeque<>();
+    private record Alert(boolean important, String title, String text, int color, long at) {}
+
+    private final ArrayDeque<Alert> queue = new ArrayDeque<>();
     private final Set<UUID> inView = new HashSet<>();
     private long nextSend;
     private boolean lowSent;
@@ -121,7 +154,7 @@ public class DiscordWebhook extends Module {
                 for (PlayerEntity player : mc.world.getPlayers()) {
                     if (player == mc.player || Friends.get().isFriend(player)) continue;
                     now.add(player.getUuid());
-                    if (!inView.contains(player.getUuid())) send(true, player.getName().getString() + " came into view.");
+                    if (!inView.contains(player.getUuid())) send(true, "Player in view", player.getName().getString() + " came into view.", BLUE);
                 }
                 inView.clear();
                 inView.addAll(now);
@@ -130,7 +163,7 @@ public class DiscordWebhook extends Module {
             float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
             if (threshold > 0 && health <= threshold && mc.player.isAlive() && !lowSent) {
                 lowSent = true;
-                send(true, "Low health: " + Math.round(health) + ".");
+                send(true, "Low health", "Your health is " + Math.round(health) + ".", ORANGE);
             } else if (health > threshold + 4) {
                 lowSent = false;
             }
@@ -141,9 +174,19 @@ public class DiscordWebhook extends Module {
     @EventHandler
     private void onPacket(PacketApplyEvent.Pre event) {
         if (!(event.packet instanceof EntityStatusS2CPacket packet) || mc.world == null || mc.player == null) return;
-        if (packet.getEntity(mc.world) != mc.player) return;
-        if (packet.getStatus() == EntityStatuses.USE_TOTEM_OF_UNDYING && pops.get()) send(true, "You popped a totem.");
-        if (packet.getStatus() == EntityStatuses.PLAY_DEATH_SOUND_OR_ADD_PROJECTILE_HIT_PARTICLES && death.get()) send(true, "You died.");
+        boolean pop = packet.getStatus() == EntityStatuses.USE_TOTEM_OF_UNDYING;
+        boolean died = packet.getStatus() == EntityStatuses.PLAY_DEATH_SOUND_OR_ADD_PROJECTILE_HIT_PARTICLES;
+        if (!pop && !died || !(packet.getEntity(mc.world) instanceof PlayerEntity player)) return;
+        if (player == mc.player) {
+            if (pop && pops.get()) send(true, "Totem popped", "You popped a totem.", YELLOW);
+            if (died && death.get()) send(true, "Death", "You died.", RED);
+            return;
+        }
+        if (Friends.get().isFriend(player) || !FightTracker.get().engaged(player)) return;
+        String name = player.getName().getString();
+        int count = PopTracker.get().pops(player);
+        if (pop && enemyPops.get()) send(false, "Enemy pop", name + " popped " + times(Math.max(1, count)) + ".", PURPLE);
+        if (died && kills.get()) send(false, "Kill", "You killed " + name + (count > 0 ? " after " + times(count) + "." : "."), GREEN);
     }
 
     @EventHandler
@@ -151,43 +194,58 @@ public class DiscordWebhook extends Module {
         if (!whispers.get()) return;
         String text = event.getMessage().getString();
         String lower = text.toLowerCase();
-        if (lower.contains("whispers to you") || lower.contains("whispers:") || lower.contains("-> me") || lower.contains("-> you")) send(true, "Whisper: " + text);
+        if (lower.contains("whispers to you") || lower.contains("whispers:") || lower.contains("-> me") || lower.contains("-> you")) send(true, "Whisper", text, GREY);
     }
 
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
         inView.clear();
         if (!disconnect.get()) return;
-        send(true, "Disconnected.");
+        send(true, "Disconnected", "You left the server.", GREY);
         while (queue.size() > 1) queue.poll();
         nextSend = 0;
         flush();
     }
 
-    private void send(boolean important, String text) {
+    private static String times(int count) {
+        return count == 1 ? "1 totem" : count + " totems";
+    }
+
+    private void send(boolean important, String title, String text, int color) {
         if (url.get().isBlank() || queue.size() >= MAX_QUEUE) return;
-        String clean = COORDS.matcher(text).replaceAll("[hidden]");
-        String prefix = important && !mention.get().isBlank() ? mention.get() + " " : "";
-        queue.add(prefix + clean);
+        queue.add(new Alert(important, title, COORDS.matcher(text).replaceAll("[hidden]"), color, System.currentTimeMillis()));
     }
 
     private void flush() {
         long now = Util.getMeasuringTimeMs();
         if (queue.isEmpty() || now < nextSend) return;
         nextSend = now + SEND_GAP;
-        String content = queue.poll();
-        String body = "{\"content\":\"" + escape(content.length() > 1900 ? content.substring(0, 1900) : content) + "\"}";
+        Alert alert = queue.poll();
         try {
             HttpRequest request = HttpRequest.newBuilder(URI.create(url.get().trim()))
                 .timeout(Duration.ofSeconds(10))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .POST(HttpRequest.BodyPublishers.ofString(body(alert)))
                 .build();
             CLIENT.sendAsync(request, HttpResponse.BodyHandlers.discarding());
         } catch (IllegalArgumentException exception) {
             warning("The webhook url is not valid.");
             queue.clear();
         }
+    }
+
+    private String body(Alert alert) {
+        String ping = alert.important && !mention.get().isBlank() ? mention.get().trim() : "";
+        String text = alert.text.length() > 1900 ? alert.text.substring(0, 1900) : alert.text;
+        if (!embeds.get()) return "{\"content\":\"" + escape(ping.isEmpty() ? text : ping + " " + text) + "\"}";
+        String server = mc.getCurrentServerEntry() != null ? mc.getCurrentServerEntry().address : "";
+        String footer = server.isEmpty() ? "Coyduck" : "Coyduck · " + server;
+        return "{\"content\":\"" + escape(ping) + "\",\"embeds\":[{"
+            + "\"title\":\"" + escape(alert.title) + "\","
+            + "\"description\":\"" + escape(text) + "\","
+            + "\"color\":" + alert.color + ","
+            + "\"footer\":{\"text\":\"" + escape(footer) + "\"},"
+            + "\"timestamp\":\"" + Instant.ofEpochMilli(alert.at) + "\"}]}";
     }
 
     private static String escape(String text) {

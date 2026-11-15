@@ -10,6 +10,7 @@ import dev.coyduck.hud.ItemsHud;
 import dev.coyduck.hud.ModuleList;
 import dev.coyduck.hud.PlayersHud;
 import dev.coyduck.hud.Watermark;
+import dev.coyduck.managers.FightTracker;
 import dev.coyduck.managers.ConfigSaver;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
@@ -110,6 +111,7 @@ public class Coyduck extends MeteorAddon {
         MeteorClient.EVENT_BUS.subscribe(RotationManager.get());
         MeteorClient.EVENT_BUS.subscribe(MiningManager.get());
         MeteorClient.EVENT_BUS.subscribe(PopTracker.get());
+        MeteorClient.EVENT_BUS.subscribe(FightTracker.get());
 
         Modules.get().add(new AutoTotem());
         Modules.get().add(new Surround());

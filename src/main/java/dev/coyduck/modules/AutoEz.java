@@ -2,11 +2,10 @@ package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.managers.FightTracker;
 import dev.coyduck.managers.PopTracker;
 import meteordevelopment.meteorclient.events.game.GameLeftEvent;
-import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
-import meteordevelopment.meteorclient.mixininterface.IPlayerInteractEntityC2SPacket;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
@@ -16,30 +15,17 @@ import meteordevelopment.meteorclient.settings.StringSetting;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.block.Blocks;
-import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityStatuses;
-import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.packet.c2s.play.PlayerInteractBlockC2SPacket;
-import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket;
 import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
-import net.minecraft.util.Hand;
 import net.minecraft.util.Util;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class AutoEz extends Module {
     private static final String SMALL_CAPS = "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘqʀꜱᴛᴜᴠᴡxʏᴢ";
-    private static final long ENGAGED_MS = 15_000;
-    private static final double EXPLOSION_REACH = 12;
     private static final int CHAT_LIMIT = 256;
     private static final long CHAT_GAP = 1_500;
     private static final int MAX_PENDING = 5;
@@ -133,7 +119,6 @@ public class AutoEz extends Module {
         .build()
     );
 
-    private final Map<UUID, Long> engaged = new HashMap<>();
     private final List<Pending> pending = new ArrayList<>();
     private int last = -1;
     private long nextSendAt;
@@ -150,23 +135,8 @@ public class AutoEz extends Module {
     }
 
     private void reset() {
-        engaged.clear();
         pending.clear();
         nextSendAt = 0;
-    }
-
-    @EventHandler
-    private void onSend(PacketEvent.Send event) {
-        if (mc.world == null || mc.player == null) return;
-
-        if (event.packet instanceof PlayerInteractEntityC2SPacket packet && isAttack(packet)) {
-            Entity target = ((IPlayerInteractEntityC2SPacket) packet).meteor$getEntity();
-            if (target instanceof PlayerEntity player) engage(player);
-            else if (target instanceof EndCrystalEntity crystal) engageNear(crystal.getEntityPos());
-        } else if (event.packet instanceof PlayerInteractBlockC2SPacket packet) {
-            BlockPos pos = packet.getBlockHitResult().getBlockPos();
-            if (mc.world.getBlockState(pos).isOf(Blocks.RESPAWN_ANCHOR)) engageNear(Vec3d.ofCenter(pos));
-        }
     }
 
     @EventHandler
@@ -176,23 +146,21 @@ public class AutoEz extends Module {
         if (!pop && packet.getStatus() != EntityStatuses.PLAY_DEATH_SOUND_OR_ADD_PROJECTILE_HIT_PARTICLES) return;
         if (!(packet.getEntity(mc.world) instanceof PlayerEntity player) || player == mc.player || Friends.get().isFriend(player)) return;
 
+        boolean fought = FightTracker.get().engaged(player);
         if (pop) {
-            Long at = engaged.get(player.getUuid());
-            if (!onPop.get() || at == null || Util.getMeasuringTimeMs() - at > ENGAGED_MS || pending.size() >= MAX_PENDING) return;
+            if (!onPop.get() || !fought || pending.size() >= MAX_PENDING) return;
             pending.removeIf(entry -> entry.pops > 0 && entry.name.equals(player.getName().getString()));
             pending.add(new Pending(player.getName().getString(), Util.getMeasuringTimeMs() + delay.get() * 50L, Math.max(1, PopTracker.get().pops(player))));
             return;
         }
-        Long at = engaged.remove(player.getUuid());
         pending.removeIf(entry -> entry.pops > 0 && entry.name.equals(player.getName().getString()));
-        if (at == null || Util.getMeasuringTimeMs() - at > ENGAGED_MS || pending.size() >= MAX_PENDING) return;
+        if (!fought || pending.size() >= MAX_PENDING) return;
         pending.add(new Pending(player.getName().getString(), Util.getMeasuringTimeMs() + delay.get() * 50L, 0));
     }
 
     @EventHandler
     private void onTick(TickEvent.Post event) {
         long now = Util.getMeasuringTimeMs();
-        if (!engaged.isEmpty()) engaged.values().removeIf(at -> now - at > ENGAGED_MS);
         if (pending.isEmpty() || mc.getNetworkHandler() == null || now < nextSendAt) return;
 
         Pending first = pending.getFirst();
@@ -205,35 +173,6 @@ public class AutoEz extends Module {
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
         reset();
-    }
-
-    private static boolean isAttack(PlayerInteractEntityC2SPacket packet) {
-        boolean[] attack = {false};
-        packet.handle(new PlayerInteractEntityC2SPacket.Handler() {
-            @Override
-            public void interact(Hand hand) {
-            }
-
-            @Override
-            public void interactAt(Hand hand, Vec3d pos) {
-            }
-
-            @Override
-            public void attack() {
-                attack[0] = true;
-            }
-        });
-        return attack[0];
-    }
-
-    private void engage(PlayerEntity player) {
-        if (player != mc.player && !Friends.get().isFriend(player)) engaged.put(player.getUuid(), Util.getMeasuringTimeMs());
-    }
-
-    private void engageNear(Vec3d center) {
-        for (PlayerEntity player : mc.world.getPlayers()) {
-            if (player.squaredDistanceTo(center) <= EXPLOSION_REACH * EXPLOSION_REACH) engage(player);
-        }
     }
 
     private void send(String name, int pops) {
