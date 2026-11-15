@@ -238,7 +238,7 @@ public final class Recorder {
     private void header() {
         raw("HDR Coyduck Logger " + FabricLoader.getInstance().getModContainer("coyduck-logger").map(m -> m.getMetadata().getVersion().getFriendlyString()).orElse("?")
             + " on Minecraft " + SharedConstants.getGameVersion().name());
-        raw("HDR server brand " + (mc.getNetworkHandler() == null || mc.getNetworkHandler().getBrand() == null ? "?" : mc.getNetworkHandler().getBrand()));
+        raw("HDR server brand " + brand());
         raw("HDR privacy: positions are written only inside fight windows, relative to where the window opened (W lines). A window closes after "
             + (int) MAX_SPAN + " blocks of travel, a far teleport or a respawn, and after any window ends the next cannot open for " + COOLDOWN_MS / 1000 + "s, so windows cannot be chained into a route. Teleports outside windows are written without distances. Any other number of 1000 or more is replaced by ?.");
         raw("HDR player " + (mc.player == null ? "?" : mc.player.getName().getString()) + ", server " + server() + ", dimension " + dimension);
@@ -252,6 +252,12 @@ public final class Recorder {
         raw("HDR mods " + String.join(" ", mods));
         raw("HDR tags: W window, > sent by this client, < received, E another player, S state every second, F fight summary");
         raw("HDR outcomes: '< place REFUSED' when the server undid a block, '> crystal place got no crystal', '< boom' damage per explosion, '< SETBACK' for server pull-backs, '< broke' and '> stop ... did not break' for mining, '< offhand totem' refill time after a pop");
+    }
+
+    private String brand() {
+        String brand = mc.getNetworkHandler() == null ? null : mc.getNetworkHandler().getBrand();
+        if (brand == null) return "?";
+        return PUBLIC_SERVERS.contains(server()) ? brand : "hidden on private servers";
     }
 
     private String server() {
@@ -482,7 +488,10 @@ public final class Recorder {
         Vec3d last = lastPos.put(id, pos);
         if (last != null) {
             double moved = pos.distanceTo(last);
-            if (moved > (player.isGliding() ? GLIDE_JUMP : JUMP)) {
+            if (moved > MAX_SPAN) {
+                count("jumps by " + name);
+                line("E jump " + name + " far");
+            } else if (moved > (player.isGliding() ? GLIDE_JUMP : JUMP)) {
                 count("jumps by " + name);
                 line("E jump " + name + " " + Describe.vec(pos.subtract(last)) + " (" + Describe.num(moved) + " blocks) to " + rel(pos));
             }
