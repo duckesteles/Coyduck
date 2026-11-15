@@ -545,9 +545,10 @@ public class AutoAnchor extends Module {
         while (it.hasNext()) {
             var entry = it.next();
             if (now < entry.getLongValue()) continue;
+            long key = entry.getLongKey();
             it.remove();
-            BlockPos pos = BlockPos.fromLong(entry.getLongKey());
-            used.remove(entry.getLongKey());
+            BlockPos pos = BlockPos.fromLong(key);
+            used.remove(key);
             miss("no explosion came from " + pos + (charges(mc.world.getBlockState(pos)) > 0 ? ", the anchor is still charged" : ""));
         }
     }
