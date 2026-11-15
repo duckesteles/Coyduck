@@ -66,6 +66,37 @@ def old_textures(out):
         shutil.copyfile(OLD / source, target)
 
 
+TEXTURES = "assets/minecraft/textures"
+
+
+def save(out, path, image):
+    target = out / TEXTURES / path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    image.save(target)
+
+
+def clear(size=(16, 16)):
+    return Image.new("RGBA", size, (0, 0, 0, 0))
+
+
+def clear_overlays(out):
+    for path in ("misc/pumpkinblur.png", "misc/powder_snow_outline.png", "misc/underwater.png"):
+        size = Image.open(VANILLA / "textures" / path).size
+        save(out, path, clear(size))
+    size = Image.open(VANILLA / "textures/misc/vignette.png").size
+    save(out, "misc/vignette.png", Image.new("RGBA", size, (0, 0, 0, 255)))
+
+
+def scaffolding(out):
+    top = Image.open(VANILLA / "textures/block/scaffolding_top.png").convert("RGBA")
+    pixels = top.load()
+    for y in range(16):
+        for x in range(16):
+            if 1 < x < 14 and 1 < y < 14:
+                pixels[x, y] = (0, 0, 0, 0)
+    save(out, "block/scaffolding_top.png", top)
+
+
 def generate(out):
     if out.exists():
         shutil.rmtree(out)
@@ -74,6 +105,8 @@ def generate(out):
     no_smoke(out)
     no_fire_overlay(out)
     old_textures(out)
+    clear_overlays(out)
+    scaffolding(out)
     return states
 
 
