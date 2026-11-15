@@ -64,7 +64,7 @@ public class KillAura extends Module {
     private static final double PREFILTER = 3.0;
     private static final float CRIT_PROGRESS = 0.9f;
     private static final float HURT_WORTH = 0.6f;
-    private static final int CRIT_WAIT = 10;
+    private static final int CRIT_WAIT = 4;
     private static final float LEAD_TICKS = 2.5f;
     private static final long LEAD_TIME = 100;
     private static final float CHOICE_EPSILON = 1.0E-3f;
@@ -84,7 +84,7 @@ public class KillAura extends Module {
     private final Setting<Double> range = sgGeneral.add(new DoubleSetting.Builder()
         .name("range")
         .description("Reach to the closest point of the target's hitbox.")
-        .defaultValue(3.0)
+        .defaultValue(3.5)
         .range(1, 6)
         .sliderRange(1, 6)
         .build()
