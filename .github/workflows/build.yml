@@ -15,6 +15,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
@@ -31,9 +32,18 @@ jobs:
           path: build/libs/*.jar
 
       - if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          previous=$(git tag --list 'v*' --sort=v:refname | grep -x -B1 "$GITHUB_REF_NAME" | head -n 1)
+          if [ "$previous" = "$GITHUB_REF_NAME" ]; then
+            link="https://github.com/$GITHUB_REPOSITORY/commits/$GITHUB_REF_NAME"
+          else
+            link="https://github.com/$GITHUB_REPOSITORY/compare/$previous...$GITHUB_REF_NAME"
+          fi
+          printf 'Minecraft 1.21.11\n\nFull Changelog: %s\n' "$link" > release-notes.md
+
+      - if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ github.ref_name }}
-          body: Minecraft 1.21.11
-          generate_release_notes: true
+          body_path: release-notes.md
           files: build/libs/*.jar
