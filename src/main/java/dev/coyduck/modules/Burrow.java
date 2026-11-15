@@ -1,12 +1,16 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.managers.CrystalTracker;
+import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
+import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.RotationManager;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.utils.BlockRules;
+import dev.coyduck.utils.ExplosionDamage;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
@@ -18,7 +22,9 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
 import dev.coyduck.utils.Trace;
 import net.minecraft.block.BlockState;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityPose;
+import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
@@ -29,11 +35,16 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 
+import java.util.List;
+
 public class Burrow extends Module {
     private static final double[] JUMP = {0.42, 0.7532, 1.0013, 1.1661};
     private static final long REFILL_WINDOW = 1_500;
     private static final int MAX_FAILS = 2;
     private static final long FAIL_PAUSE = 5_000;
+    private static final float LOW_HEALTH = 12;
+    private static final float POP_MARGIN = 1.5f;
+    private static final float SHIELD_MARGIN = 0.5f;
 
     public enum Block {
         Obsidian(Items.OBSIDIAN),
@@ -159,6 +170,12 @@ public class Burrow extends Module {
         lastTry = Util.getMeasuringTimeMs();
         BlockPos feet = mc.player.getBlockPos();
         BlockState inFeet = mc.world.getBlockState(feet);
+        if (!inFeet.isReplaceable() && softBlock(feet, inFeet)) {
+            mc.interactionManager.attackBlock(feet, Direction.UP);
+            MiningManager.get().foreignBreak();
+            Trace.log("burrow breaks the {} in its cell", inFeet.getBlock().getName().getString());
+            inFeet = mc.world.getBlockState(feet);
+        }
         if (!inFeet.isReplaceable()) {
             if (verbose) error(inFeet.getCollisionShape(mc.world, feet).isEmpty() ? "Something without collision is in your feet block, break it first." : "Already burrowed.");
             return;
@@ -183,9 +200,22 @@ public class Burrow extends Module {
             if (verbose) error("Not enough room above you for the jump and the rubberband.");
             return;
         }
-        if (!InteractionManager.get().obstructions(feet).stream().allMatch(entity -> entity == mc.player)) {
-            if (verbose) error("Something is standing in your feet block.");
-            return;
+        List<Entity> inCell = InteractionManager.get().obstructions(feet);
+        inCell.removeIf(entity -> entity == mc.player || entity instanceof EndCrystalEntity && CrystalTracker.get().isDead(entity));
+        for (Entity entity : inCell) {
+            if (!(entity instanceof EndCrystalEntity crystal)) {
+                if (verbose) error("Something is standing in your feet block.");
+                return;
+            }
+            if (!safeToBreak(crystal)) {
+                if (verbose) error("A crystal in your feet block would hurt you too much to break now.");
+                return;
+            }
+        }
+        for (Entity entity : inCell) {
+            if (!InteractionManager.get().attack(entity, InventoryManager.SwitchMode.Silent, InteractionManager.SwingMode.Packet)) return;
+            CrystalTracker.get().explodeAt(entity.getEntityPos());
+            Trace.log("burrow breaks a crystal in its cell");
         }
 
         InventoryManager inventory = InventoryManager.get();
@@ -224,5 +254,23 @@ public class Burrow extends Module {
         warned = false;
         Trace.log("burrow sent at {}", feet);
         if (verbose) info("Sent. If you end up on top of the block instead of inside it, burrowing does not work at this spot or on this server.");
+    }
+
+    private boolean softBlock(BlockPos pos, BlockState state) {
+        if (!state.getCollisionShape(mc.world, pos).isEmpty() || state.getHardness(mc.world, pos) < 0 || mc.interactionManager.isBreakingBlock()) return false;
+        MiningManager mining = MiningManager.get();
+        return (mining.pos() == null || mining.wasBroken()) && state.calcBlockBreakingDelta(mc.player, mc.world, pos) >= 1;
+    }
+
+    private boolean safeToBreak(EndCrystalEntity crystal) {
+        float raw = ExplosionDamage.crystalRaw(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), crystal.getEntityPos(), mc.world);
+        long arrival = Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2;
+        float health = AutoTotem.popInFlight() ? 1.0f : mc.player.getHealth() + mc.player.getAbsorptionAmount();
+        boolean worst = mc.player.isInsideWall() || health <= LOW_HEALTH;
+        float bound = worst ? Math.max(raw, ExplosionDamage.rawBound(mc.player, mc.player.getEntityPos(), crystal.getEntityPos(), ExplosionDamage.CRYSTAL_POWER)) : raw;
+        float full = ExplosionDamage.mitigate(mc.player, bound);
+        float effective = HurtTracker.get().effectiveOnSelf(bound, arrival);
+        if (effective >= health - POP_MARGIN) return false;
+        return full < health - POP_MARGIN || effective + SHIELD_MARGIN < full;
     }
 }
