@@ -111,7 +111,7 @@ public class Esp extends Module implements ShaderGlow.Source {
     private static boolean cullingChecked;
 
     public Esp() {
-        super(Coyduck.CATEGORY, "esp+", "Shows players through walls. Turn off entity culling if players vanish.");
+        super(Coyduck.CATEGORY, "esp+", "Shows players through walls.");
     }
 
     public static boolean shows(int id) {
