@@ -1702,7 +1702,7 @@ public class AutoCrystal extends Module {
                     if (ox * ox + oy * oy + oz * oz > reach * reach) continue;
                     if (!isBase(mc.world.getBlockState(base)) || !inPlaceRange(base) || !breakable(base)) continue;
                     BlockPos fixed = base.toImmutable();
-                    if (!mc.world.isAir(fixed.up()) || CrystalTracker.get().placingOverlaps(fixed) || CrystalTracker.get().isBlacklisted(fixed) || blocked(fixed)) continue;
+                    if (!(mc.world.isAir(fixed.up()) || InteractionManager.extinguishable(fixed.up())) || CrystalTracker.get().placingOverlaps(fixed) || CrystalTracker.get().isBlacklisted(fixed) || blocked(fixed)) continue;
                     if (overlapsOwnCells(fixed)) continue;
                     candidates.add(fixed);
                 }

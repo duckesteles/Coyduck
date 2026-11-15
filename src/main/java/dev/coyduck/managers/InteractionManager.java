@@ -20,6 +20,7 @@ import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
+import net.minecraft.block.AbstractFireBlock;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.component.DataComponentTypes;
@@ -300,8 +301,22 @@ public final class InteractionManager {
         return placeCrystal(base, mode, swing, after, false);
     }
 
+    public static boolean extinguishable(BlockPos above) {
+        if (!(mc.world.getBlockState(above).getBlock() instanceof AbstractFireBlock)) return false;
+        MiningManager mining = MiningManager.get();
+        return (mining.pos() == null || mining.wasBroken()) && mining.inBreakReach(above) && !mc.interactionManager.isBreakingBlock();
+    }
+
+    private void extinguish(BlockPos above) {
+        if (!extinguishable(above)) return;
+        mc.interactionManager.attackBlock(above, Direction.UP);
+        MiningManager.get().foreignBreak();
+        Trace.log("crystal base fire put out at {}", above);
+    }
+
     public boolean placeCrystal(BlockPos base, InventoryManager.SwitchMode mode, SwingMode swing, Runnable after, boolean whileEating) {
         BlockHitResult hit = new BlockHitResult(crystalAim(base), crystalFace(base), base, false);
+        extinguish(base.up());
 
         if (mc.player.getOffHandStack().isOf(Items.END_CRYSTAL)) {
             boolean[] done = {false};
