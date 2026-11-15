@@ -267,7 +267,7 @@ public class AutoTrap extends Module {
         for (int pass = 0; pass < 2; pass++) {
             for (BlockPos pos : cells) {
                 if (interaction.wasRejected(pos) != (pass == 1)) continue;
-                BlockHitResult hit = interaction.hit(pos, airplace.get());
+                BlockHitResult hit = hitFor(pos);
                 if (hit == null) continue;
                 ready.add(pos);
                 hits.add(hit);
@@ -297,7 +297,7 @@ public class AutoTrap extends Module {
         InteractionManager interaction = InteractionManager.get();
         if (!placeable(pos)) return false;
 
-        BlockHitResult hit = known != null ? known : interaction.hit(pos, airplace.get());
+        BlockHitResult hit = known != null ? known : hitFor(pos);
         if (hit == null) return false;
 
         if (!interaction.place(pos, hit, swing.get(), rotate.get(), InteractionManager.TRAP_PRIORITY)) {
@@ -307,6 +307,13 @@ public class AutoTrap extends Module {
         rendered.put(pos.asLong(), Util.getMeasuringTimeMs());
         budget--;
         return true;
+    }
+
+    private BlockHitResult hitFor(BlockPos pos) {
+        InteractionManager interaction = InteractionManager.get();
+        BlockHitResult hit = interaction.hit(pos, airplace.get());
+        if (hit == null || !hit.getBlockPos().equals(pos) || !interaction.wasRejected(pos)) return hit;
+        return interaction.hit(pos, false);
     }
 
     private List<BlockPos> positions(Box box, LongSet columns) {
