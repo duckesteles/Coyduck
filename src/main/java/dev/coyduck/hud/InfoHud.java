@@ -34,14 +34,14 @@ public class InfoHud extends HudElement {
     private final Setting<Boolean> coords = add("coords", "Your coordinates, with the other dimension's next to them.");
     private final Setting<Integer> hideBeyond = sgGeneral.add(new IntSetting.Builder()
         .name("hide-coords-beyond")
-        .description("Hides your coordinates while you are further than this from 0 0, so screenshots and streams don't give away a base. 0 never hides them.")
+        .description("Hides coords beyond this distance from 0 0. 0 is off.")
         .defaultValue(0)
         .range(0, 30_000_000)
         .sliderRange(0, 100_000)
         .visible(coords::get)
         .build()
     );
-    private final Setting<Boolean> facing = add("facing", "The direction you are looking at, with the axis it runs along.", false);
+    private final Setting<Boolean> facing = add("facing", "Your facing direction and its axis.", false);
     private final Setting<Boolean> biome = add("biome", "The biome you are in.", false);
     private final Setting<Boolean> dimension = add("dimension", "The dimension you are in.", false);
     private final Setting<Boolean> day = add("day", "The in-game day and time.", false);

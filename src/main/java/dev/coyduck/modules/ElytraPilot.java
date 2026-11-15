@@ -108,14 +108,14 @@ public class ElytraPilot extends Module {
 
     private final Setting<Boolean> mend = sgGeneral.add(new BoolSetting.Builder()
         .name("mend")
-        .description("Lands on safe ground when the elytra wears down, throws experience bottles until it is fully repaired, then flies on.")
+        .description("Lands to mend the elytra with experience bottles.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Double> mendAt = sgGeneral.add(new DoubleSetting.Builder()
         .name("mend-at")
-        .description("Durability percent of the worn elytra at which it lands to mend.")
+        .description("Elytra durability percent that triggers mending.")
         .defaultValue(10)
         .range(2, 60)
         .sliderRange(2, 60)
@@ -125,21 +125,21 @@ public class ElytraPilot extends Module {
 
     private final Setting<Boolean> spare = sgGeneral.add(new BoolSetting.Builder()
         .name("spare-elytra")
-        .description("Puts on a fresher elytra from the inventory instead of landing, when there is one.")
+        .description("Swaps to a spare elytra instead of landing.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> walk = sgGeneral.add(new BoolSetting.Builder()
         .name("baritone-finish")
-        .description("After landing, lets Baritone walk the last blocks to the exact destination.")
+        .description("Walks the last blocks with Baritone after landing.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> eat = sgGeneral.add(new BoolSetting.Builder()
         .name("eat")
-        .description("Eats a golden apple from the hotbar when your health drops, enchanted ones first, so the regeneration fills it back up.")
+        .description("Eats golden apples on low health.")
         .defaultValue(true)
         .build()
     );
@@ -156,28 +156,28 @@ public class ElytraPilot extends Module {
 
     private final Setting<Boolean> warnPlayers = sgGeneral.add(new BoolSetting.Builder()
         .name("warn-players")
-        .description("Warns when another player comes close while you are landed and mending.")
+        .description("Warns of nearby players while mending.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> logOnPlayer = sgGeneral.add(new BoolSetting.Builder()
         .name("log-out-on-player")
-        .description("Disconnects when a player who is not a friend shows up while it flies, for long unattended trips.")
+        .description("Disconnects when a non-friend shows up mid-flight.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<Boolean> logOnElytra = sgGeneral.add(new BoolSetting.Builder()
         .name("log-out-on-elytra")
-        .description("Disconnects when the elytra is about to break and there is no spare and no mending.")
+        .description("Disconnects if the elytra nears breaking with no fix.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<Integer> overworldY = sgFlight.add(new IntSetting.Builder()
         .name("overworld-y")
-        .description("Cruising height in the overworld. It climbs higher when the terrain ahead needs it.")
+        .description("Cruising height in the overworld.")
         .defaultValue(200)
         .range(-60, 318)
         .sliderRange(64, 318)
@@ -186,7 +186,7 @@ public class ElytraPilot extends Module {
 
     private final Setting<Integer> endY = sgFlight.add(new IntSetting.Builder()
         .name("end-y")
-        .description("Cruising height in the end, so you never sink into the void between islands.")
+        .description("Cruising height in the end.")
         .defaultValue(100)
         .range(0, 254)
         .sliderRange(40, 254)
@@ -204,7 +204,7 @@ public class ElytraPilot extends Module {
 
     private final Setting<Double> landSpeed = sgFlight.add(new DoubleSetting.Builder()
         .name("land-speed")
-        .description("Blocks per tick for the last blocks of a landing. Slow enough that the server keeps resetting fall distance.")
+        .description("Final landing speed in blocks per tick.")
         .defaultValue(0.35)
         .range(0.05, 0.45)
         .sliderRange(0.05, 0.45)

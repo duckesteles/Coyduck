@@ -95,14 +95,14 @@ public class AntiPiston extends Module {
 
     private final Setting<Boolean> breakCrystals = sgGeneral.add(new BoolSetting.Builder()
         .name("break-crystals")
-        .description("Breaks a crystal a piston is about to push into you, judged where the push will leave it, as long as the break does not pop you. While the piston is not powered yet and can be mined quickly, only breaks it when that costs little, since mining the piston is free.")
+        .description("Breaks crystals a piston would push into you.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> popIfPushed = sgGeneral.add(new BoolSetting.Builder()
         .name("pop-if-pushed")
-        .description("Also breaks such a crystal when it pops you, but only if the piston is already pushing, the pushed crystal would pop you anyway and Auto Totem+ has confirmed your offhand totem with a spare left.")
+        .description("Also breaks them if it pops you and a spare totem is left.")
         .defaultValue(true)
         .visible(breakCrystals::get)
         .build()
@@ -110,21 +110,21 @@ public class AntiPiston extends Module {
 
     private final Setting<Boolean> mine = sgGeneral.add(new BoolSetting.Builder()
         .name("mine")
-        .description("Mines the piston or the redstone powering it, whichever breaks sooner, once it really threatens you: a crystal in front of it, power on it, a push that can move you, or a web in the way of blocking it. Takes the pick over from lower priority mining such as Auto City+ while it does.")
+        .description("Mines threatening pistons or their redstone.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> place = sgGeneral.add(new BoolSetting.Builder()
         .name("place")
-        .description("Places a block where the piston would push, and where a crystal it broke sat, so the push cannot happen.")
+        .description("Places a block where the piston would push.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> preBlock = sgGeneral.add(new BoolSetting.Builder()
         .name("pre-block")
-        .description("Also blocks pistons that are not doing anything yet but aim at a spot a crystal could be pushed from into you. One block ends the setup before it starts; off saves blocks and only answers once a crystal, power or a push shows up.")
+        .description("Also blocks idle pistons aimed at you.")
         .defaultValue(true)
         .visible(place::get)
         .build()
@@ -132,7 +132,7 @@ public class AntiPiston extends Module {
 
     private final Setting<List<Block>> blocks = sgGeneral.add(new BlockListSetting.Builder()
         .name("blocks")
-        .description("Blocks to place, in order of preference. Only blocks that pistons cannot move and crystals cannot blow up are allowed.")
+        .description("Blocks to place, in order of preference.")
         .defaultValue(Blocks.CRYING_OBSIDIAN, Blocks.OBSIDIAN, Blocks.ENDER_CHEST)
         .filter(block -> block.getBlastResistance() >= 600 && immovable(block))
         .visible(place::get)
@@ -141,7 +141,7 @@ public class AntiPiston extends Module {
 
     private final Setting<Integer> blocksPerTick = sgGeneral.add(new IntSetting.Builder()
         .name("blocks-per-tick")
-        .description("Most blocks placed in one tick, packet reactions included. With rotate on, one per tick.")
+        .description("Most blocks per tick. One with rotate on.")
         .defaultValue(4)
         .range(1, 8)
         .sliderRange(1, 8)
@@ -159,14 +159,14 @@ public class AntiPiston extends Module {
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("Silent selects the item's hotbar slot for a moment and sends no inventory clicks; an item in your inventory is first moved into an empty hotbar slot once. InvSwap swaps the item into your hand and back with inventory clicks, which some servers answer by resending the whole inventory. While you eat, InvSwap is always used. Your offhand totem is never touched.")
+        .description("Silent uses the hotbar, InvSwap uses inventory clicks.")
         .defaultValue(InventoryManager.SwitchMode.Silent)
         .build()
     );
 
     private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
         .name("rotate")
-        .description("Turns your head toward each block or crystal first and acts only once the server sees you looking at it. Slower, but for servers whose anticheat checks where you look.")
+        .description("Looks at each block or crystal first. Slower.")
         .defaultValue(false)
         .build()
     );
@@ -180,7 +180,7 @@ public class AntiPiston extends Module {
 
     private final Setting<Boolean> render = sgRender.add(new BoolSetting.Builder()
         .name("render")
-        .description("Highlights threatening pistons and the blocks placed against them.")
+        .description("Highlights threatening pistons and placed blocks.")
         .defaultValue(true)
         .build()
     );

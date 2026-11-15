@@ -82,7 +82,7 @@ public class PlayersHud extends HudElement {
 
     private final Setting<Boolean> bots = sgGeneral.add(new BoolSetting.Builder()
         .name("hide-bots")
-        .description("Leaves out players missing from the tab list, which are usually fake.")
+        .description("Leaves out players missing from the tab list.")
         .defaultValue(true)
         .build()
     );

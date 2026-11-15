@@ -83,7 +83,7 @@ public class KillAura extends Module {
 
     private final Setting<Double> range = sgGeneral.add(new DoubleSetting.Builder()
         .name("range")
-        .description("Reach from your eyes to the closest point of the target's hitbox. Vanilla is 3.0 and the server enforces it.")
+        .description("Reach to the closest point of the target's hitbox.")
         .defaultValue(3.0)
         .range(1, 6)
         .sliderRange(1, 6)
@@ -92,7 +92,7 @@ public class KillAura extends Module {
 
     private final Setting<Double> cooldown = sgGeneral.add(new DoubleSetting.Builder()
         .name("cooldown")
-        .description("Attack charge needed before hitting. 1.0 waits for a full charge with whatever weapon the server sees you holding.")
+        .description("Attack charge needed before hitting.")
         .defaultValue(1.0)
         .range(0, 1)
         .sliderRange(0, 1)
@@ -101,28 +101,28 @@ public class KillAura extends Module {
 
     private final Setting<Boolean> autoSwitch = sgGeneral.add(new BoolSetting.Builder()
         .name("auto-switch")
-        .description("Takes your sword into your hand, or the item that hits hardest when you have no sword. It leaves a main hand totem alone while Auto Totem+ wants it there. Your offhand is never touched.")
+        .description("Switches to your sword or hardest-hitting item.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> crits = sgGeneral.add(new BoolSetting.Builder()
         .name("crits")
-        .description("While you are rising from a jump, holds the hit until you start falling so it lands as a critical. Never fakes a jump.")
+        .description("Holds hits until a jump falls so they crit.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> packetCrits = sgGeneral.add(new BoolSetting.Builder()
         .name("packet-crits")
-        .description("Turns hits made standing on the ground into crits with two tiny position packets, below what the anticheat counts as a jump.")
+        .description("Crits on the ground with tiny position packets.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<Boolean> swingAnimation = sgGeneral.add(new BoolSetting.Builder()
         .name("swing-animation")
-        .description("Shows the hand swing. The swing packet is sent with every hit either way.")
+        .description("Shows the hand swing.")
         .defaultValue(true)
         .build()
     );
@@ -143,14 +143,14 @@ public class KillAura extends Module {
 
     private final Setting<Boolean> pauseCrystal = sgGeneral.add(new BoolSetting.Builder()
         .name("pause-crystal")
-        .description("Pauses while auto-crystal is placing or breaking so crystals stay first.")
+        .description("Pauses while auto-crystal is placing or breaking.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Priority> priority = sgTargets.add(new EnumSetting.Builder<Priority>()
         .name("priority")
-        .description("Which target is hit first after the auto-crystal target and targets that can take damage right now.")
+        .description("Tiebreak for which target is hit first.")
         .defaultValue(Priority.Health)
         .build()
     );

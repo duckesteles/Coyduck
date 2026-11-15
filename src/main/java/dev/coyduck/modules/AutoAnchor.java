@@ -148,7 +148,7 @@ public class AutoAnchor extends Module {
 
     private final Setting<Double> placeRange = sgGeneral.add(new DoubleSetting.Builder()
         .name("place-range")
-        .description("Range from your eyes to the block an anchor is placed in. 6b6t's anti-cheat lets a few places past 4.5 through, then cancels them for the rest of the session.")
+        .description("Place range from your eyes, in blocks.")
         .defaultValue(4.5)
         .range(1, 5.5)
         .sliderRange(1, 5.5)
@@ -157,7 +157,7 @@ public class AutoAnchor extends Module {
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("Silent selects the item's hotbar slot for a moment and sends no inventory clicks; an item in your inventory is first moved into an empty hotbar slot once. InvSwap swaps the item into your hand and back with inventory clicks, which some servers answer by resending the whole inventory. While you eat, InvSwap is always used. Your offhand totem is never touched.")
+        .description("Silent uses hotbar slots, InvSwap uses inventory clicks.")
         .defaultValue(InventoryManager.SwitchMode.Silent)
         .build()
     );
@@ -171,21 +171,21 @@ public class AutoAnchor extends Module {
 
     private final Setting<Boolean> hurtSync = sgGeneral.add(new BoolSetting.Builder()
         .name("hurt-sync")
-        .description("Holds the anchor until the target's damage immunity ends, so no anchor is spent on a hit that deals nothing.")
+        .description("Waits for the target's damage immunity to end.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> predict = sgGeneral.add(new BoolSetting.Builder()
         .name("predict")
-        .description("Aims at where targets will be when your packets reach the server.")
+        .description("Aims where targets will be when packets arrive.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> defend = sgGeneral.add(new BoolSetting.Builder()
         .name("defend")
-        .description("Sets off a charged anchor near you while your own damage immunity makes the blast almost harmless, so it is wasted instead of hitting you later.")
+        .description("Sets off charged anchors near you while you are immune.")
         .defaultValue(true)
         .build()
     );
@@ -199,7 +199,7 @@ public class AutoAnchor extends Module {
 
     private final Setting<Boolean> pauseEating = sgGeneral.add(new BoolSetting.Builder()
         .name("pause-eating")
-        .description("Pauses while you eat. When off, the anchor and glowstone are swapped into your main hand and back even while you eat, which can cut the eating. Your offhand totem is never touched.")
+        .description("Pauses while you eat.")
         .defaultValue(false)
         .build()
     );
@@ -213,7 +213,7 @@ public class AutoAnchor extends Module {
 
     private final Setting<Boolean> showStatus = sgGeneral.add(new BoolSetting.Builder()
         .name("show-status")
-        .description("Shows in the module list why the last anchor was or was not used.")
+        .description("Shows why the last anchor was or wasn't used.")
         .defaultValue(true)
         .build()
     );
@@ -229,7 +229,7 @@ public class AutoAnchor extends Module {
 
     private final Setting<Double> maxSelfDamage = sgDamage.add(new DoubleSetting.Builder()
         .name("max-self-damage")
-        .description("Most damage an anchor may deal to you. An anchor that would pop or kill you is never used.")
+        .description("Most damage an anchor may deal to you.")
         .defaultValue(8)
         .range(0, 36)
         .sliderRange(0, 36)
@@ -238,7 +238,7 @@ public class AutoAnchor extends Module {
 
     private final Setting<Double> minHealth = sgDamage.add(new DoubleSetting.Builder()
         .name("min-health")
-        .description("Least health plus absorption you keep after an anchor's damage to you, counted with your own damage immunity. Anchors that would leave you lower are not used, so your own anchors never set you up for the next hit. Anchors that can't hurt you, and anchors that finish the target, are always allowed.")
+        .description("Least health you keep after an anchor's self damage.")
         .defaultValue(12)
         .range(0, 36)
         .sliderRange(0, 20)
@@ -247,7 +247,7 @@ public class AutoAnchor extends Module {
 
     private final Setting<Double> facePlaceHealth = sgDamage.add(new DoubleSetting.Builder()
         .name("face-place-health")
-        .description("Uses face place damage once the target's health is at or below this.")
+        .description("Face places at or below this target health.")
         .defaultValue(10)
         .range(0, 36)
         .sliderRange(0, 36)
@@ -265,7 +265,7 @@ public class AutoAnchor extends Module {
 
     private final Setting<Boolean> rotate = sgRotate.add(new BoolSetting.Builder()
         .name("rotate")
-        .description("Looks at every anchor before using it. Using anchors fails about twice as often on 6b6t without this.")
+        .description("Looks at every anchor before using it.")
         .defaultValue(true)
         .build()
     );

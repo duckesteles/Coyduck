@@ -111,7 +111,7 @@ public class Surround extends Module {
 
     private final Setting<List<Block>> blocks = sgGeneral.add(new BlockListSetting.Builder()
         .name("blocks")
-        .description("Blocks to surround with, in order of preference. Crying obsidian first, since crystals cannot be placed on it.")
+        .description("Blocks to use, in order of preference.")
         .defaultValue(Blocks.CRYING_OBSIDIAN, Blocks.OBSIDIAN, Blocks.ENDER_CHEST)
         .filter(block -> block.getBlastResistance() >= 600)
         .build()
@@ -119,7 +119,7 @@ public class Surround extends Module {
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("Silent selects the item's hotbar slot for a moment and sends no inventory clicks; an item in your inventory is first moved into an empty hotbar slot once. InvSwap swaps the item into your hand and back with inventory clicks, which some servers answer by resending the whole inventory. While you eat, InvSwap is always used. Your offhand totem is never touched.")
+        .description("Silent uses hotbar slots, InvSwap uses inventory clicks.")
         .defaultValue(InventoryManager.SwitchMode.Silent)
         .build()
     );
@@ -133,7 +133,7 @@ public class Surround extends Module {
 
     private final Setting<Integer> blocksPerTick = sgGeneral.add(new IntSetting.Builder()
         .name("blocks-per-tick")
-        .description("Most blocks placed in one tick, including reactions between ticks.")
+        .description("Most blocks placed per tick.")
         .defaultValue(10)
         .range(1, 30)
         .sliderRange(1, 30)
@@ -142,7 +142,7 @@ public class Surround extends Module {
 
     private final Setting<Boolean> extend = sgGeneral.add(new BoolSetting.Builder()
         .name("extend")
-        .description("Surrounds every block you stand on. Off pulls you to the middle of your block and surrounds just that one.")
+        .description("Covers every block you stand on; off centers you.")
         .defaultValue(true)
         .build()
     );
@@ -156,28 +156,28 @@ public class Surround extends Module {
 
     private final Setting<Boolean> clearFeet = sgGeneral.add(new BoolSetting.Builder()
         .name("clear-feet")
-        .description("Breaks scaffolding and ladders put on you, but only while nothing else is mining, so a ladder spam can't pull the pick off a city mine.")
+        .description("Breaks scaffolding and ladders put on you.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<Boolean> clearWeak = sgGeneral.add(new BoolSetting.Builder()
         .name("clear-weak")
-        .description("Breaks a weak block an enemy puts in your surround, like the packed ice, netherrack or glass an anti-feet-place uses so you can't put obsidian back, and puts your block there in the same tick. Only blocks your best tool breaks at once.")
+        .description("Replaces weak blocks enemies put in your surround.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> predict = sgGeneral.add(new BoolSetting.Builder()
         .name("predict")
-        .description("Sends the block again every tick while an enemy is about to break a surround block, so it lands right after the break instead of a full ping later.")
+        .description("Resends blocks while an enemy breaks your surround.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
         .name("rotate")
-        .description("Turns your head toward each block before placing it and places only once the server sees you looking at it. Slower, but for servers whose anticheat checks where you look. Visible faces are always preferred.")
+        .description("Looks at each block before placing it.")
         .defaultValue(false)
         .build()
     );
@@ -191,21 +191,21 @@ public class Surround extends Module {
 
     private final Setting<Disable> disable = sgGeneral.add(new EnumSetting.Builder<Disable>()
         .name("disable")
-        .description("Leave turns the module off once you walk out of the hole. Jumping and knockback never do.")
+        .description("Leave turns the module off once you walk out of the hole.")
         .defaultValue(Disable.Leave)
         .build()
     );
 
     private final Setting<Boolean> breakCrystals = sgProtect.add(new BoolSetting.Builder()
         .name("break-crystals")
-        .description("Breaks crystals that sit where a surround block belongs, then places the block in the same tick.")
+        .description("Breaks crystals where surround blocks belong.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> allowPop = sgProtect.add(new BoolSetting.Builder()
         .name("allow-pop")
-        .description("Also breaks a crystal in your surround that pops you, once Auto Totem+ has confirmed your offhand totem and you still have a spare. The enemy would explode it anyway, this way you pick the moment and close the gap.")
+        .description("Also breaks popping crystals if you have a spare totem.")
         .defaultValue(false)
         .visible(breakCrystals::get)
         .build()
@@ -213,7 +213,7 @@ public class Surround extends Module {
 
     private final Setting<Boolean> antiCev = sgProtect.add(new BoolSetting.Builder()
         .name("anti-cev")
-        .description("Breaks a crystal sitting on the block over your head or at your head level while an enemy mines that block, so it goes off while the block still shields you instead of when it breaks.")
+        .description("Breaks crystals near your head before their block breaks.")
         .defaultValue(true)
         .visible(breakCrystals::get)
         .build()
@@ -221,14 +221,14 @@ public class Surround extends Module {
 
     private final Setting<Boolean> blocker = sgProtect.add(new BoolSetting.Builder()
         .name("blocker")
-        .description("Covers a surround block that is being mined or was just broken.")
+        .description("Covers surround blocks being mined or just broken.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> blockerTop = sgProtect.add(new BoolSetting.Builder()
         .name("blocker-top")
-        .description("Also covers the top of that block, so no crystal can be placed on it.")
+        .description("Also covers the top of that block.")
         .defaultValue(true)
         .visible(blocker::get)
         .build()
@@ -236,14 +236,14 @@ public class Surround extends Module {
 
     private final Setting<Boolean> face = sgProtect.add(new BoolSetting.Builder()
         .name("face")
-        .description("Covers the cells at head level around you once a crystal there could pop you or your health is low, so you cannot be face placed.")
+        .description("Covers head level cells against face places.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Double> faceHealth = sgProtect.add(new DoubleSetting.Builder()
         .name("face-health")
-        .description("Health and absorption at or below which every dangerous head level cell is covered.")
+        .description("Covers all head level cells at or below this health.")
         .defaultValue(36)
         .range(0, 36)
         .sliderRange(0, 36)
@@ -253,7 +253,7 @@ public class Surround extends Module {
 
     private final Setting<Boolean> maceRoof = sgProtect.add(new BoolSetting.Builder()
         .name("mace-roof")
-        .description("Closes the cell above your head and the head level ring while an enemy holding a mace or flying with an elytra is above you, or an anvil is falling on you, so nothing can hit you from above.")
+        .description("Closes you in against maces, elytras and anvils above.")
         .defaultValue(true)
         .build()
     );
@@ -291,7 +291,7 @@ public class Surround extends Module {
 
     private final Setting<Boolean> showOpen = sgRender.add(new BoolSetting.Builder()
         .name("show-open")
-        .description("Marks every surround cell the server does not really hold yet: empty, waiting for the server to confirm your block, just denied, or holding a weak block. A block you see inside a marked cell may not be there.")
+        .description("Marks surround cells the server doesn't hold yet.")
         .defaultValue(true)
         .build()
     );

@@ -39,7 +39,7 @@ public class PopCounter extends Module {
 
     private final Setting<Boolean> replace = sgGeneral.add(new BoolSetting.Builder()
         .name("replace")
-        .description("Updates one chat line per player instead of writing a new line for every pop.")
+        .description("Updates one chat line per player.")
         .defaultValue(true)
         .build()
     );

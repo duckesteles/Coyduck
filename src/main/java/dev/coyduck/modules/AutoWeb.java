@@ -63,14 +63,14 @@ public class AutoWeb extends Module {
 
     private final Setting<Mode> mode = sgGeneral.add(new EnumSetting.Builder<Mode>()
         .name("mode")
-        .description("Smart only webs targets that are out of a hole, where a web actually slows them. Always webs them anywhere.")
+        .description("Smart webs only targets out of a hole.")
         .defaultValue(Mode.Always)
         .build()
     );
 
     private final Setting<Boolean> predict = sgGeneral.add(new BoolSetting.Builder()
         .name("predict")
-        .description("Also webs where the target will be when your packet reaches the server.")
+        .description("Also webs the target's predicted position.")
         .defaultValue(true)
         .build()
     );
@@ -86,21 +86,21 @@ public class AutoWeb extends Module {
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("Silent selects the item's hotbar slot for a moment and sends no inventory clicks; an item in your inventory is first moved into an empty hotbar slot once. InvSwap swaps the item into your hand and back with inventory clicks, which some servers answer by resending the whole inventory. While you eat, InvSwap is always used. Your offhand totem is never touched.")
+        .description("How the web gets into your hand.")
         .defaultValue(InventoryManager.SwitchMode.Silent)
         .build()
     );
 
     private final Setting<Boolean> airplace = sgGeneral.add(new BoolSetting.Builder()
         .name("airplace")
-        .description("Places webs without a neighbouring block to click on, for targets in the air.")
+        .description("Places webs without a block to click on.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
         .name("rotate")
-        .description("Turns your head toward each block before placing it and places only once the server sees you looking at it. Slower, but for servers whose anticheat checks where you look. Visible faces are always preferred.")
+        .description("Faces each block before placing it.")
         .defaultValue(true)
         .build()
     );

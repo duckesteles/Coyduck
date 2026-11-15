@@ -48,7 +48,7 @@ public class AutoEz extends Module {
 
     private final Setting<List<String>> messages = sgGeneral.add(new StringListSetting.Builder()
         .name("messages")
-        .description("Picked at random for every kill. {name} becomes the player's name. In public chat the name is added after the message when it has no {name}.")
+        .description("Random kill messages, {name} is the player.")
         .defaultValue(List.of(
             "gg",
             "gg wp",
@@ -60,7 +60,7 @@ public class AutoEz extends Module {
 
     private final Setting<Boolean> whisper = sgGeneral.add(new BoolSetting.Builder()
         .name("whisper")
-        .description("Whispers the message to the player you killed. Turning it on turns public-chat off, turning it off turns public-chat on.")
+        .description("Whispers the message to the player you killed.")
         .defaultValue(true)
         .onChanged(on -> {
             if (this.publicChat != null && on == this.publicChat.get()) this.publicChat.set(!on);
@@ -70,7 +70,7 @@ public class AutoEz extends Module {
 
     private final Setting<Boolean> publicChat = sgGeneral.add(new BoolSetting.Builder()
         .name("public-chat")
-        .description("Writes the message with the player's name in public chat instead of whispering. Turning it on turns whisper off, turning it off turns whisper on.")
+        .description("Sends the message in public chat instead.")
         .defaultValue(false)
         .onChanged(on -> {
             if (on == this.whisper.get()) this.whisper.set(!on);
@@ -111,14 +111,14 @@ public class AutoEz extends Module {
 
     private final Setting<Boolean> onPop = sgGeneral.add(new BoolSetting.Builder()
         .name("on-pop")
-        .description("Also sends a message when a player you are fighting pops a totem.")
+        .description("Also sends a message on enemy totem pops.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<List<String>> popMessages = sgGeneral.add(new StringListSetting.Builder()
         .name("pop-messages")
-        .description("Picked at random for every pop. {name} is the player, {pops} how many they popped.")
+        .description("Random pop messages, {name} and {pops} filled in.")
         .defaultValue(List.of("{pops} down {name}", "pop {pops}"))
         .visible(onPop::get)
         .build()

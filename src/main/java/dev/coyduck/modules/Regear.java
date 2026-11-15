@@ -32,7 +32,7 @@ public class Regear extends Module {
 
     private final Setting<String> kit = sgGeneral.add(new StringSetting.Builder()
         .name("kit")
-        .description("Name of the kit to fill from containers. Save one with .kit save <name>.")
+        .description("Kit to fill. Save one with .kit save <name>.")
         .defaultValue("pvp")
         .build()
     );
@@ -48,21 +48,21 @@ public class Regear extends Module {
 
     private final Setting<Boolean> still = sgGeneral.add(new BoolSetting.Builder()
         .name("only-standing-still")
-        .description("Waits while you move, since the server drops inventory clicks made while moving.")
+        .description("Waits while you move.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> close = sgGeneral.add(new BoolSetting.Builder()
         .name("close-when-done")
-        .description("Closes the container once the kit is full or the container has nothing left for it.")
+        .description("Closes the container when done.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<List<String>> kits = sgGeneral.add(new StringListSetting.Builder()
         .name("saved-kits")
-        .description("Kits saved with .kit save. Each entry is name followed by the item of every slot.")
+        .description("Kits saved with .kit save.")
         .defaultValue(List.of())
         .visible(() -> false)
         .build()

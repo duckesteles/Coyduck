@@ -98,35 +98,35 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
 
     private final Setting<Boolean> cev = sgGeneral.add(new BoolSetting.Builder()
         .name("cev")
-        .description("Also mines the block over the head of a target with a roof. AutoCrystal puts a crystal on that block just before it breaks and blows it up as it breaks, right on their head.")
+        .description("Also mines the block over a roofed target's head.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<Boolean> burrow = sgGeneral.add(new BoolSetting.Builder()
         .name("burrow")
-        .description("Mines the block a target is burrowed in before anything else.")
+        .description("Mines a burrowed target's block first.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> rebreak = sgGeneral.add(new BoolSetting.Builder()
         .name("rebreak")
-        .description("Breaks the block again the moment it is replaced, without mining it again.")
+        .description("Breaks a replaced block again without re-mining.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> hurtSync = sgGeneral.add(new BoolSetting.Builder()
         .name("hurt-sync")
-        .description("Holds the break of a gap, and every rebreak, until the target's hurt time is over, so the crystal auto-crystal puts in the gap on the same tick deals full damage.")
+        .description("Waits for the target's hurt time before breaking.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Double> minDamage = sgGeneral.add(new DoubleSetting.Builder()
         .name("min-damage")
-        .description("Least crystal damage the opened gap must allow on the target.")
+        .description("Minimum crystal damage to the target.")
         .defaultValue(4)
         .range(0, 36)
         .sliderRange(0, 36)
@@ -144,7 +144,7 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
 
     private final Setting<Boolean> doubleMine = sgGeneral.add(new BoolSetting.Builder()
         .name("double-mine")
-        .description("Mines the second best block in the background while mining the best one, so two gaps open in about the time of one. Briefly holds the pickaxe for the background break. Grim's fast-break check cancels the background finish, so it does not work on 6b6t.")
+        .description("Mines a second block in the background.")
         .defaultValue(false)
         .build()
     );
@@ -158,14 +158,14 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
 
     private final Setting<Boolean> placeSupport = sgGeneral.add(new BoolSetting.Builder()
         .name("support")
-        .description("When the block under a gap is not obsidian, mines it and places obsidian there first, so a crystal fits in the gap.")
+        .description("Swaps a non-obsidian block under the gap for obsidian.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> antiReplace = sgGeneral.add(new BoolSetting.Builder()
         .name("anti-replace")
-        .description("When a surround gap breaks and no crystal goes into it, fills it at once with a filler block, so their surround can't put obsidian back. Re-mining obsidian takes the whole mine time again; the filler breaks in a tick or so and is broken again when the crystal is ready.")
+        .description("Plugs an unused gap with a filler block.")
         .defaultValue(true)
         .build()
     );
@@ -185,14 +185,14 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
 
     private final Setting<Boolean> needCrystals = sgGeneral.add(new BoolSetting.Builder()
         .name("need-crystals")
-        .description("Only mines while you have crystals to use the gap with, or anchors and glowstone while auto-anchor is on outside the nether.")
+        .description("Only mines while you have crystals or anchors.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("How the pickaxe is put in your hand for the final break.")
+        .description("How the pickaxe gets into your hand.")
         .defaultValue(InventoryManager.SwitchMode.Silent)
         .build()
     );
@@ -221,7 +221,7 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
 
     private final Setting<Boolean> progressColor = sgRender.add(new BoolSetting.Builder()
         .name("progress-color")
-        .description("Colors the mining box from red to green as the block nears breaking, instead of the fixed colors.")
+        .description("Fades the mining box from red to green.")
         .defaultValue(true)
         .visible(render::get)
         .build()

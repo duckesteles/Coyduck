@@ -70,7 +70,7 @@ public class PearlPhase extends Module {
 
     private final Setting<Double> depth = sgGeneral.add(new DoubleSetting.Builder()
         .name("depth")
-        .description("Preferred depth into each wall. Any overlap already stops crystals being placed in that cell. Without eye-in-wall, walls at eye height only allow a sliver so you never suffocate.")
+        .description("Preferred depth into each wall in blocks.")
         .defaultValue(0.22)
         .range(0.05, 0.28)
         .sliderRange(0.05, 0.28)
@@ -79,35 +79,35 @@ public class PearlPhase extends Module {
 
     private final Setting<Boolean> eyeInWall = sgGeneral.add(new BoolSetting.Builder()
         .name("eye-in-wall")
-        .description("Allows landings that put your eyes in a wall, so it also phases from a closed 1x1 hole. You take 1 suffocation damage every half second there, like the players you fight; gapples cover it.")
+        .description("Allows landing with your eyes in a wall.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> corner = sgGeneral.add(new BoolSetting.Builder()
         .name("prefer-corner")
-        .description("Goes into two walls at once where it can, which covers you from more sides.")
+        .description("Phases into two walls at once when possible.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> clearCell = sgGeneral.add(new BoolSetting.Builder()
         .name("clear-cell")
-        .description("Breaks a ladder, scaffolding or vine in your own cell before throwing. 6b6t refused every pearl we threw while standing in an enemy's ladder.")
+        .description("Breaks climbables in your cell before throwing.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> placeWall = sgGeneral.add(new BoolSetting.Builder()
         .name("place-wall")
-        .description("With no wall next to your feet, places one obsidian beside you first and phases into it.")
+        .description("Places obsidian to phase into if no wall is beside you.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> auto = sgGeneral.add(new BoolSetting.Builder()
         .name("auto")
-        .description("Stays on and phases by itself whenever you walk into a wall on the ground with a pearl ready.")
+        .description("Phases by itself when you walk into a wall.")
         .defaultValue(false)
         .build()
     );

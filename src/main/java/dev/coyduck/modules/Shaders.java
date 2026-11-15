@@ -25,7 +25,7 @@ public class Shaders extends Module implements ShaderGlow.Source {
 
     private final Setting<SettingColor> color = sgGeneral.add(new ColorSetting.Builder()
         .name("color")
-        .description("Color of the shader on players, crystals and held items, and of every Coyduck render.")
+        .description("Shader color, also used by Coyduck renders.")
         .defaultValue(new SettingColor(130, 202, 255, 255))
         .build()
     );
@@ -46,7 +46,7 @@ public class Shaders extends Module implements ShaderGlow.Source {
 
     private final Setting<Boolean> pearls = sgGeneral.add(new BoolSetting.Builder()
         .name("pearls")
-        .description("Puts the shader on flying ender pearls, so you can follow enemy pearls through walls.")
+        .description("Puts the shader on flying ender pearls.")
         .defaultValue(true)
         .build()
     );
@@ -60,7 +60,7 @@ public class Shaders extends Module implements ShaderGlow.Source {
 
     private final Setting<Boolean> allRenders = sgGeneral.add(new BoolSetting.Builder()
         .name("all-renders")
-        .description("Uses the color for hole, break, crystal and block renders too. The red to green mining box keeps its colors.")
+        .description("Uses the color for other Coyduck renders too.")
         .defaultValue(true)
         .build()
     );
@@ -109,7 +109,7 @@ public class Shaders extends Module implements ShaderGlow.Source {
 
     private final Setting<Integer> time = sgAtmosphere.add(new IntSetting.Builder()
         .name("time")
-        .description("The time of day to show. 6000 is noon and 18000 is midnight.")
+        .description("Time of day in ticks, 6000 is noon.")
         .defaultValue(20000)
         .range(0, 24000)
         .sliderRange(0, 24000)

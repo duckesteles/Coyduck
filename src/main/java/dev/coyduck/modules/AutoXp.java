@@ -33,7 +33,7 @@ public class AutoXp extends Module {
 
     private final Setting<Integer> start = sgGeneral.add(new IntSetting.Builder()
         .name("start")
-        .description("Starts mending once a mending armor piece drops below this durability percent.")
+        .description("Starts mending below this durability percent.")
         .defaultValue(70)
         .range(1, 99)
         .sliderRange(10, 95)
@@ -42,7 +42,7 @@ public class AutoXp extends Module {
 
     private final Setting<Integer> stop = sgGeneral.add(new IntSetting.Builder()
         .name("stop")
-        .description("Keeps mending until every mending armor piece reaches this durability percent.")
+        .description("Mends until all pieces reach this durability percent.")
         .defaultValue(98)
         .range(2, 100)
         .sliderRange(50, 100)
@@ -51,7 +51,7 @@ public class AutoXp extends Module {
 
     private final Setting<Integer> perTick = sgGeneral.add(new IntSetting.Builder()
         .name("bottles-per-tick")
-        .description("Bottles thrown each tick while mending. None go out while the experience already thrown covers the repair.")
+        .description("Bottles thrown each tick while mending.")
         .defaultValue(2)
         .range(1, 5)
         .sliderRange(1, 5)
@@ -67,7 +67,7 @@ public class AutoXp extends Module {
 
     private final Setting<Double> enemyRange = sgGeneral.add(new DoubleSetting.Builder()
         .name("enemy-range")
-        .description("Waits while an enemy is closer than this. 0 mends during fights too.")
+        .description("Waits while an enemy is this close. 0 turns it off.")
         .defaultValue(0)
         .range(0, 12)
         .sliderRange(0, 12)

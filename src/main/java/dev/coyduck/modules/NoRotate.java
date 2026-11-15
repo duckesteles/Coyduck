@@ -20,7 +20,7 @@ public class NoRotate extends Module {
 
     private final Setting<Boolean> inBlocks = sgGeneral.add(new BoolSetting.Builder()
         .name("in-blocks")
-        .description("Sends no move packets while you stand still inside a block, so the server stops pulling you back.")
+        .description("Sends no moves while standing still in a block.")
         .defaultValue(true)
         .build()
     );

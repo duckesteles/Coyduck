@@ -50,7 +50,7 @@ public class ClickGui extends Module {
 
     public final Setting<SettingColor> accent = sgGeneral.add(new ColorSetting.Builder()
         .name("accent")
-        .description("Color of enabled modules, sliders, checkboxes and the Coyduck HUD.")
+        .description("Accent color of the menu and HUD.")
         .defaultValue(new SettingColor(123, 98, 170, 255))
         .build()
     );
@@ -64,7 +64,7 @@ public class ClickGui extends Module {
 
     private final Setting<Boolean> matchScreens = sgGeneral.add(new BoolSetting.Builder()
         .name("match-other-screens")
-        .description("Gives settings, config, HUD and the other tabs the same look while this is on.")
+        .description("Gives the other Meteor tabs the same look.")
         .defaultValue(true)
         .onChanged(value -> {
             if (isActive()) apply();
@@ -74,14 +74,14 @@ public class ClickGui extends Module {
 
     private final Setting<Boolean> settingsWindow = sgGeneral.add(new BoolSetting.Builder()
         .name("settings-window")
-        .description("Right clicking a module opens Meteor's own settings screen instead of the Coyduck settings window.")
+        .description("Right click opens Meteor's settings screen instead.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<GuiFont> font = sgGeneral.add(new EnumSetting.Builder<GuiFont>()
         .name("font")
-        .description("Font of the Coyduck module menu. Meteor's own menus and the HUD keep the font chosen in Meteor.")
+        .description("Font of the Coyduck module menu.")
         .defaultValue(GuiFont.NotoSans)
         .onChanged(value -> {
             if (isActive()) apply();
@@ -91,21 +91,21 @@ public class ClickGui extends Module {
 
     private final Setting<Boolean> splitCoyduck = sgGeneral.add(new BoolSetting.Builder()
         .name("split-coyduck")
-        .description("Sorts Coyduck modules into Combat, Exploit, Player, Movement, Render, World and Misc panels like Meteor's own.")
+        .description("Sorts modules into category panels like Meteor.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<Boolean> pages = sgPages.add(new BoolSetting.Builder()
         .name("pages")
-        .description("Gives every addon its own page. Switch pages with the left and right arrow keys.")
+        .description("Gives every addon its own page; switch with arrow keys.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<List<String>> pageOrder = sgPages.add(new StringListSetting.Builder()
         .name("page-order")
-        .description("Which addon gets which page, first line first. Meteor Client and Coyduck are the addon names. Addons not listed get the pages after these.")
+        .description("Page order of addons, first line first.")
         .defaultValue(List.of("Meteor Client", "Coyduck"))
         .visible(pages::get)
         .build()

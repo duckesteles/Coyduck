@@ -28,7 +28,7 @@ public class ClockHud extends HudElement {
 
     private final Setting<Double> size = sgGeneral.add(new DoubleSetting.Builder()
         .name("size")
-        .description("Size of the card. Whole numbers stay the sharpest.")
+        .description("Size of the card.")
         .defaultValue(1)
         .range(0.5, 4)
         .sliderRange(0.5, 3)
@@ -46,7 +46,7 @@ public class ClockHud extends HudElement {
 
     private final Setting<String> zone = sgGeneral.add(new StringSetting.Builder()
         .name("time-zone")
-        .description("Empty uses your computer's time zone. Otherwise a zone like Europe/Istanbul, America/New_York, UTC or GMT+3.")
+        .description("Time zone like UTC or GMT+3; empty uses yours.")
         .defaultValue("")
         .build()
     );
@@ -88,7 +88,7 @@ public class ClockHud extends HudElement {
 
     private final Setting<Boolean> greeting = sgGeneral.add(new BoolSetting.Builder()
         .name("show-greeting")
-        .description("Says good morning, afternoon, evening or night with your name.")
+        .description("Greets you by name for the time of day.")
         .defaultValue(false)
         .build()
     );

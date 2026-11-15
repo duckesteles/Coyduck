@@ -56,7 +56,7 @@ public class KillEffects extends Module {
 
     private final Setting<Boolean> streak = sgGeneral.add(new BoolSetting.Builder()
         .name("streak")
-        .description("Counts kills since your last death and shows it next to the module name.")
+        .description("Shows kills since your last death.")
         .defaultValue(true)
         .build()
     );

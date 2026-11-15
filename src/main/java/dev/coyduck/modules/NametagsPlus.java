@@ -47,7 +47,7 @@ public class NametagsPlus extends Module {
 
     private final Setting<Boolean> announce = sgGeneral.add(new BoolSetting.Builder()
         .name("announce")
-        .description("Lets other Coyduck users know you use it too, so they see the mascot on your tag. Works even with this module off.")
+        .description("Shows other Coyduck users you use it too.")
         .defaultValue(true)
         .onChanged(on -> {
             if (mc.player != null) mc.options.sendClientSettings();
@@ -57,7 +57,7 @@ public class NametagsPlus extends Module {
 
     private final Setting<Boolean> mascot = sgGeneral.add(new BoolSetting.Builder()
         .name("mascot")
-        .description("Shows the Coyduck mascot on the tags of players using Coyduck.")
+        .description("Shows the mascot on Coyduck users' tags.")
         .defaultValue(true)
         .build()
     );
@@ -78,14 +78,14 @@ public class NametagsPlus extends Module {
 
     private final Setting<Boolean> eating = sgGeneral.add(new BoolSetting.Builder()
         .name("eating")
-        .description("A bar inside the tag filling up while they eat, so you see a gapple coming.")
+        .description("A bar that fills up while they eat.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> items = sgGeneral.add(new BoolSetting.Builder()
         .name("items")
-        .description("Their armor and held items above the tag, with a durability bar under each.")
+        .description("Their armor and held items with durability bars.")
         .defaultValue(true)
         .build()
     );
@@ -108,7 +108,7 @@ public class NametagsPlus extends Module {
 
     private final Setting<Boolean> background = sgGeneral.add(new BoolSetting.Builder()
         .name("background")
-        .description("Draws a box behind the tag. Off keeps it see-through with shadowed text.")
+        .description("Draws a box behind the tag.")
         .defaultValue(false)
         .build()
     );

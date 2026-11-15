@@ -19,7 +19,7 @@ public class NoClimb extends Module {
 
     private final Setting<Boolean> ladders = sgGeneral.add(new BoolSetting.Builder()
         .name("ladders")
-        .description("Ladders, vines and other climbable plants don't hold or lift you; you walk and fall through them.")
+        .description("Ladders, vines and climbable plants don't hold you.")
         .defaultValue(true)
         .build()
     );
@@ -33,7 +33,7 @@ public class NoClimb extends Module {
 
     private final Setting<Boolean> webs = sgGeneral.add(new BoolSetting.Builder()
         .name("webs")
-        .description("Cobwebs don't slow you down. The server checks web slowdown and sets you back, so it is off by default.")
+        .description("Cobwebs don't slow you down.")
         .defaultValue(false)
         .build()
     );

@@ -124,7 +124,7 @@ public class MaceStrike extends Module {
 
     private final Setting<Double> range = sgGeneral.add(new DoubleSetting.Builder()
         .name("range")
-        .description("Reach from your eyes to the closest point of the target's hitbox at the moment of the hit.")
+        .description("Reach to the target's hitbox in blocks.")
         .defaultValue(3.0)
         .range(1, 6)
         .sliderRange(1, 6)
@@ -133,7 +133,7 @@ public class MaceStrike extends Module {
 
     private final Setting<Double> height = sgGeneral.add(new DoubleSetting.Builder()
         .name("height")
-        .description("On foot: how far up the server is told you went before the hit. The fall back down is what the mace smash counts. Lowered on its own when blocks are above you.")
+        .description("Height of the faked on-foot jump in blocks.")
         .defaultValue(8.0)
         .range(MIN_DROP, 9.5)
         .sliderRange(MIN_DROP, 9.5)
@@ -142,21 +142,21 @@ public class MaceStrike extends Module {
 
     private final Setting<Mode> mode = sgGeneral.add(new EnumSetting.Builder<Mode>()
         .name("mode")
-        .description("Burst sends the whole dive inside one tick with a tick end after each move, so the server counts the full fall for the smash, then skips your next ticks to keep the packet rate even. Ticks sends one move per tick; the server then only counts the last step of the fall while you glide.")
+        .description("Burst sends the dive in one tick, Ticks one move per tick.")
         .defaultValue(Mode.Burst)
         .build()
     );
 
     private final Setting<Boolean> onFoot = sgGeneral.add(new BoolSetting.Builder()
         .name("on-foot")
-        .description("Also strikes while you stand, by faking a jump up and the fall back down. Every on-foot strike got a setback on 6b6t so far.")
+        .description("Also strikes while standing with a faked jump.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<Double> step = sgGeneral.add(new DoubleSetting.Builder()
         .name("step")
-        .description("Longest move in one packet. The trip down and back is cut into moves of at most this length.")
+        .description("Longest move per packet in blocks.")
         .defaultValue(2.0)
         .range(0.5, 10)
         .sliderRange(0.5, 5)
@@ -165,7 +165,7 @@ public class MaceStrike extends Module {
 
     private final Setting<Integer> interval = sgGeneral.add(new IntSetting.Builder()
         .name("interval")
-        .description("Extra milliseconds between smashes. Dives already wait until you are back at full height and the target's hurt time is over, so 0 is fastest without wasted hits.")
+        .description("Extra milliseconds between smashes.")
         .defaultValue(0)
         .range(0, 3000)
         .sliderRange(0, 2000)
@@ -174,21 +174,21 @@ public class MaceStrike extends Module {
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("How the mace gets into your hand for the hit. Your hand goes back right after.")
+        .description("How the mace gets into your hand.")
         .defaultValue(InventoryManager.SwitchMode.Silent)
         .build()
     );
 
     private final Setting<Boolean> smash = sgGeneral.add(new BoolSetting.Builder()
         .name("smash")
-        .description("Stops the glide right before the hit and starts it again right after, inside the same tick. A mace only smashes when you are not gliding, and the next move is a glide again.")
+        .description("Stops gliding for the hit, then glides again.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> stopFirst = sgGeneral.add(new BoolSetting.Builder()
         .name("stop-first")
-        .description("Experimental. Stops the glide before the dive instead of right before the hit, so the 6b6t anticheat counts the drop as a fall. It may pull you back instead, test it.")
+        .description("Experimental. Stops gliding before the dive instead.")
         .defaultValue(false)
         .visible(smash::get)
         .build()
@@ -196,14 +196,14 @@ public class MaceStrike extends Module {
 
     private final Setting<Boolean> holdMace = sgGeneral.add(new BoolSetting.Builder()
         .name("hold-mace")
-        .description("Keeps a hotbar mace in hand while you follow a target so it charges. Each dive waits until the charged hit would pop the target, or until the mace is charged enough for a critical hit. Auto Totem+ still gets the main hand when it wants a totem there. Your slot comes back when there is no target.")
+        .description("Keeps a hotbar mace in hand so it charges.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> fullCharge = sgGeneral.add(new BoolSetting.Builder()
         .name("full-charge")
-        .description("Always waits for a full charge (about 1.7 seconds after the mace is in hand) before a smash. Off: from the target's health, absorption, armor, enchantments and the fall the server really counted on earlier hits, it picks whichever pops sooner: a smash every time the hurt time ends at whatever charge (most smash damage comes from the fall and ignores the charge), or fewer charged critical smashes.")
+        .description("Always waits for a full charge before smashing.")
         .defaultValue(false)
         .visible(holdMace::get)
         .build()
@@ -211,7 +211,7 @@ public class MaceStrike extends Module {
 
     private final Setting<Double> assumedFall = sgGeneral.add(new DoubleSetting.Builder()
         .name("assumed-fall")
-        .description("Fall the server is assumed to count before any hit has been measured. After every smash the real health loss replaces it.")
+        .description("Fall in blocks assumed until a hit is measured.")
         .defaultValue(3.0)
         .range(0, 30)
         .sliderRange(0, 30)
@@ -220,7 +220,7 @@ public class MaceStrike extends Module {
 
     private final Setting<Double> minHealth = sgGeneral.add(new DoubleSetting.Builder()
         .name("min-health")
-        .description("At or below this much health plus absorption it stops diving and lets go of the mace, so Auto Totem+ can put a totem in your main hand.")
+        .description("Lets go of the mace at or below this health.")
         .defaultValue(10)
         .range(0, 36)
         .sliderRange(0, 36)
@@ -236,14 +236,14 @@ public class MaceStrike extends Module {
 
     private final Setting<Boolean> follow = sgAir.add(new BoolSetting.Builder()
         .name("follow")
-        .description("While you fly with elytra-fly+, steers you over the target and keeps you there, then dives for the hit and comes back up.")
+        .description("Hovers over the target with elytra-fly+ and dives.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Double> hover = sgAir.add(new DoubleSetting.Builder()
         .name("hover")
-        .description("How far above the target's feet you stay while following. Every extra block of fall adds about 5 damage to a charged smash, and the dive still fits in the time the mace needs to charge.")
+        .description("Hover height above the target in blocks.")
         .defaultValue(16.0)
         .range(5, 30)
         .sliderRange(5, 30)
@@ -253,7 +253,7 @@ public class MaceStrike extends Module {
 
     private final Setting<Double> chaseHover = sgAir.add(new DoubleSetting.Builder()
         .name("chase-hover")
-        .description("Height kept above a target that flies with an elytra. One that hangs in place gets the full hover and a long dive instead. A moving flyer gets chased and cut off ahead of its path, and hit with short drops from just above, while a target on the ground or in a hole gets the steady hover from high up.")
+        .description("Hover height above a flying target in blocks.")
         .defaultValue(4)
         .range(2.5, 12)
         .sliderRange(2.5, 12)
@@ -273,7 +273,7 @@ public class MaceStrike extends Module {
 
     private final Setting<Boolean> stopGlide = sgAir.add(new BoolSetting.Builder()
         .name("stop-glide")
-        .description("Tells the server you touched ground one tick before the dive. Stopping the glide got setbacks on 6b6t, so it is off by default.")
+        .description("Fakes ground contact one tick before the dive.")
         .defaultValue(false)
         .visible(follow::get)
         .build()

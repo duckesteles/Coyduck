@@ -60,7 +60,7 @@ public class Watermark extends HudElement {
 
     private final Setting<Double> scale = sgGeneral.add(new DoubleSetting.Builder()
         .name("scale")
-        .description("Size of the watermark. Whole numbers stay the sharpest.")
+        .description("Size of the watermark.")
         .defaultValue(1)
         .range(0.5, 4)
         .sliderRange(0.5, 3)

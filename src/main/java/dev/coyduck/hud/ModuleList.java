@@ -45,7 +45,7 @@ public class ModuleList extends HudElement {
 
     private final Setting<List<Module>> hidden = sgGeneral.add(new ModuleListSetting.Builder()
         .name("hidden")
-        .description("Modules never listed, for ones that are always on like the menu or the update checker.")
+        .description("Modules never listed.")
         .defaultValue(ClickGui.class, UpdateChecker.class, AutoLogin.class)
         .build()
     );
@@ -101,7 +101,7 @@ public class ModuleList extends HudElement {
 
     private final Setting<Boolean> bar = sgLayout.add(new BoolSetting.Builder()
         .name("bar")
-        .description("Draws a thin accent line on the screen-edge side of each row.")
+        .description("Draws an accent line on each row's outer edge.")
         .defaultValue(false)
         .build()
     );

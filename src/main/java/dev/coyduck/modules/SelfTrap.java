@@ -70,7 +70,7 @@ public class SelfTrap extends Module {
 
     private final Setting<Boolean> top = sgGeneral.add(new BoolSetting.Builder()
         .name("top")
-        .description("Also covers the block above your head. Prefers a block crystals cannot be placed on, so it cannot be used to crystal you from above.")
+        .description("Also covers the block above your head.")
         .defaultValue(true)
         .build()
     );
@@ -94,14 +94,14 @@ public class SelfTrap extends Module {
 
     private final Setting<Boolean> onlyStill = sgGeneral.add(new BoolSetting.Builder()
         .name("only-still")
-        .description("Only traps while you stand still on the ground, so walking around never boxes you in.")
+        .description("Only traps while you stand still on the ground.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("Silent selects the item's hotbar slot for a moment and sends no inventory clicks; an item in your inventory is first moved into an empty hotbar slot once. InvSwap swaps the item into your hand and back with inventory clicks, which some servers answer by resending the whole inventory. While you eat, InvSwap is always used. Your offhand totem is never touched.")
+        .description("Silent uses the hotbar, InvSwap uses inventory clicks.")
         .defaultValue(InventoryManager.SwitchMode.Silent)
         .build()
     );
@@ -124,14 +124,14 @@ public class SelfTrap extends Module {
 
     private final Setting<Boolean> breakCrystals = sgGeneral.add(new BoolSetting.Builder()
         .name("break-crystals")
-        .description("Breaks a crystal that sits where a trap block belongs, then places the block in the same tick.")
+        .description("Breaks crystals sitting where trap blocks go.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> allowPop = sgGeneral.add(new BoolSetting.Builder()
         .name("allow-pop")
-        .description("Also breaks such a crystal when it pops you, once Auto Totem+ has confirmed your offhand totem and you still have a spare.")
+        .description("Also breaks them if it pops you and a spare totem is left.")
         .defaultValue(false)
         .visible(breakCrystals::get)
         .build()
@@ -139,7 +139,7 @@ public class SelfTrap extends Module {
 
     private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
         .name("rotate")
-        .description("Turns your head toward each block before placing it and places only once the server sees you looking at it. Slower, but for servers whose anticheat checks where you look. Visible faces are always preferred.")
+        .description("Looks at each block before placing. Slower.")
         .defaultValue(false)
         .build()
     );

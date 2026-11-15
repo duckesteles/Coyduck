@@ -90,7 +90,7 @@ public class BoatFly extends Module {
 
     private final Setting<Double> speed = sgGeneral.add(new DoubleSetting.Builder()
         .name("speed")
-        .description("Highest horizontal blocks per tick. 6b6t takes you off the boat at 1 or more, so 0.999 (about 19.98 blocks a second) is the fastest it allows. With learn on the boat starts here and only slows down when the server rejects a speed it has not accepted before.")
+        .description("Max horizontal speed in blocks per tick.")
         .defaultValue(0.999)
         .range(0.05, 5)
         .sliderRange(0.05, 5)
@@ -99,7 +99,7 @@ public class BoatFly extends Module {
 
     private final Setting<Double> verticalSpeed = sgGeneral.add(new DoubleSetting.Builder()
         .name("vertical-speed")
-        .description("Highest blocks per tick up with jump and down with sneak, the same as elytra-fly+ by default. With learn on it works the same way as speed.")
+        .description("Max vertical speed in blocks per tick.")
         .defaultValue(2.4)
         .range(0.05, 5)
         .sliderRange(0.05, 5)
@@ -108,35 +108,35 @@ public class BoatFly extends Module {
 
     private final Setting<Boolean> learn = sgGeneral.add(new BoolSetting.Builder()
         .name("learn")
-        .description("Finds the fastest the server allows. A setback only slows the boat down when it was going faster than any speed the server already accepted, since the server also sets boats back for other reasons, like going down into a block. After that it speeds up again quickly to just under the rejected speed and then tries a little higher now and then. Open air, inside blocks and up or down are learned apart.")
+        .description("Learns the fastest speed the server allows.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> phase = sgGeneral.add(new BoolSetting.Builder()
         .name("phase")
-        .description("Lets the boat move through blocks. Each move only goes as far past a wall as the server forgives.")
+        .description("Lets the boat move through blocks.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> remount = sgGeneral.add(new BoolSetting.Builder()
         .name("remount")
-        .description("Gets back on the boat by itself when the server takes you off it, which it does when it sets the boat back.")
+        .description("Remounts the boat when the server dismounts you.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> antiKick = sgGeneral.add(new BoolSetting.Builder()
         .name("anti-kick")
-        .description("Dips the boat a little every few seconds while nothing is around it, so the server does not kick you for flying.")
+        .description("Dips now and then to avoid the fly kick.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> travel = sgTravel.add(new BoolSetting.Builder()
         .name("travel")
-        .description("Goes up or down to cruise-y first, then flies to the target and stops there. Turns itself off when you arrive.")
+        .description("Flies to the target coordinates, then turns off.")
         .defaultValue(false)
         .build()
     );
@@ -161,7 +161,7 @@ public class BoatFly extends Module {
 
     private final Setting<Double> cruiseY = sgTravel.add(new DoubleSetting.Builder()
         .name("cruise-y")
-        .description("Height of the boat while travelling. At 127 in the nether the boat sits inside the top bedrock layer and your head is just above the roof, so you do not suffocate and only someone standing on the roof can reach you.")
+        .description("Cruise height while travelling.")
         .defaultValue(127)
         .range(-64, 320)
         .sliderRange(0, 128)

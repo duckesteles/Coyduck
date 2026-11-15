@@ -50,14 +50,14 @@ public class Burrow extends Module {
 
     private final Setting<Block> block = sgGeneral.add(new EnumSetting.Builder<Block>()
         .name("block")
-        .description("Block to burrow into. Falls back to the other one if you have none.")
+        .description("Block to burrow into, falls back to the other.")
         .defaultValue(Block.Obsidian)
         .build()
     );
 
     private final Setting<Double> rubberband = sgGeneral.add(new DoubleSetting.Builder()
         .name("rubberband")
-        .description("Height of the impossible move that makes the server set you back. Try other values if you end up on top of the block.")
+        .description("Height of the setback move in blocks.")
         .defaultValue(12)
         .sliderRange(-10, 30)
         .build()
@@ -65,14 +65,14 @@ public class Burrow extends Module {
 
     private final Setting<Boolean> keep = sgGeneral.add(new BoolSetting.Builder()
         .name("keep")
-        .description("Stays on and burrows again whenever the block in your feet is gone, for example when an enemy keeps breaking it. Only tries while you stand still on the ground and press no movement keys.")
+        .description("Burrows again when the block is gone.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<Integer> retryDelay = sgGeneral.add(new IntSetting.Builder()
         .name("retry-delay")
-        .description("Milliseconds between burrow attempts while keep is on, so the server has time to set you back into the block.")
+        .description("Milliseconds between attempts while keep is on.")
         .defaultValue(500)
         .range(100, 3000)
         .sliderRange(100, 2000)

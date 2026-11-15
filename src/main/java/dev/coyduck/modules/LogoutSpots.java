@@ -44,7 +44,7 @@ public class LogoutSpots extends Module {
 
     private final Setting<Boolean> notify = sgGeneral.add(new BoolSetting.Builder()
         .name("chat-notify")
-        .description("Says in chat when someone near you logs out and when they come back, without coordinates.")
+        .description("Announces logouts and returns in chat.")
         .defaultValue(false)
         .build()
     );

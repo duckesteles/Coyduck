@@ -66,7 +66,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Style> style = sgGeneral.add(new EnumSetting.Builder<Style>()
         .name("mode")
-        .description("Casual flies at one steady speed. Ultra speeds up to max speed while you hold a key, with overdrive and the rubberband cap.")
+        .description("Casual keeps one speed, ultra ramps up while moving.")
         .defaultValue(Style.Casual)
         .onChanged(mode -> resetRamp())
         .build()
@@ -74,21 +74,21 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> wallGuard = sgGeneral.add(new BoolSetting.Builder()
         .name("wall-guard")
-        .description("Shortens a move that would slam into a wall and stops at chunks that are not loaded yet. In ultra it also slows you down near walls, so you never take elytra crash damage.")
+        .description("Stops wall crashes and flying into unloaded chunks.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> autoTakeoff = sgGeneral.add(new BoolSetting.Builder()
         .name("auto-takeoff")
-        .description("Hold jump and the glide starts by itself as soon as you start falling, no second press needed.")
+        .description("Starts gliding when you fall while holding jump.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<Boolean> fluids = sgGeneral.add(new BoolSetting.Builder()
         .name("fluids")
-        .description("Also forces the flight controls in water and lava instead of swimming normally. Experimental, the server may pull you back.")
+        .description("Also flies in water and lava. Experimental.")
         .defaultValue(false)
         .onChanged(on -> {
             if (on && this.stopInWater != null && this.stopInWater.get()) this.stopInWater.set(false);
@@ -98,7 +98,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> stopInWater = sgGeneral.add(new BoolSetting.Builder()
         .name("stop-in-water")
-        .description("Ends the glide as soon as you touch water instead of skimming over it. Turns fluids off.")
+        .description("Stops gliding on touching water. Turns fluids off.")
         .defaultValue(false)
         .onChanged(on -> {
             if (on && fluids.get()) fluids.set(false);
@@ -108,7 +108,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> instaDrop = sgGeneral.add(new BoolSetting.Builder()
         .name("insta-drop")
-        .description("When you turn the module off mid-flight, tells the server you are on the ground so the glide ends at once and you drop straight down.")
+        .description("Drops straight down when turned off mid-flight.")
         .defaultValue(false)
         .build()
     );
@@ -142,7 +142,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Double> minSpeed = sgSpeed.add(new DoubleSetting.Builder()
         .name("min-speed")
-        .description("Horizontal blocks per tick you start at and drop back to when you let go of the movement keys.")
+        .description("Starting speed in blocks per tick, reset on release.")
         .defaultValue(2.999)
         .min(0)
         .sliderRange(0, 5)
@@ -152,7 +152,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Double> maxSpeed = sgSpeed.add(new DoubleSetting.Builder()
         .name("max-speed")
-        .description("Horizontal blocks per tick you speed up to while holding a movement key.")
+        .description("Top speed in blocks per tick while moving.")
         .defaultValue(14.999)
         .min(0)
         .sliderRange(0, 17)
@@ -162,7 +162,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Double> acceleration = sgSpeed.add(new DoubleSetting.Builder()
         .name("acceleration")
-        .description("Speed gained per tick at a standstill. The gain shrinks the closer you get to the plateau.")
+        .description("Speed gained per tick from a standstill.")
         .defaultValue(0.3)
         .min(0)
         .sliderRange(0, 2)
@@ -172,7 +172,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Double> plateau = sgSpeed.add(new DoubleSetting.Builder()
         .name("plateau")
-        .description("Speed where the gain reaches zero. Higher means you keep speeding up quickly for longer.")
+        .description("Speed where acceleration fades to zero.")
         .defaultValue(14.999)
         .min(0.1)
         .sliderRange(1, 30)
@@ -182,7 +182,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Double> up = sgSpeed.add(new DoubleSetting.Builder()
         .name("up-speed")
-        .description("Blocks moved up per tick while holding jump. The 6b6t anticheat flags anything over 3.")
+        .description("Blocks per tick up while holding jump.")
         .defaultValue(MAX_VERTICAL)
         .range(0, MAX_VERTICAL)
         .sliderRange(0, MAX_VERTICAL)
@@ -191,7 +191,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Double> down = sgSpeed.add(new DoubleSetting.Builder()
         .name("down-speed")
-        .description("Blocks moved down per tick while holding sneak. The 6b6t anticheat flags anything over 3.")
+        .description("Blocks per tick down while holding sneak.")
         .defaultValue(MAX_VERTICAL)
         .range(0, MAX_VERTICAL)
         .sliderRange(0, MAX_VERTICAL)
@@ -200,7 +200,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> overdrive = sgSpeed.add(new BoolSetting.Builder()
         .name("overdrive")
-        .description("Runs extra flight ticks while you speed up, each with its own small step, so you reach max speed far sooner. Never moves you further per tick than max speed.")
+        .description("Extra flight ticks to reach max speed sooner.")
         .defaultValue(true)
         .visible(this::ultra)
         .build()
@@ -208,7 +208,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> rubberbandCap = sgSpeed.add(new BoolSetting.Builder()
         .name("rubberband-cap")
-        .description("Every pull back winds the speed back a little. After 3 pull backs within 3 seconds at or above the cap speed, holds you at the cap speed for 10 seconds.")
+        .description("Slows on pull backs, caps speed after repeated ones.")
         .defaultValue(true)
         .visible(this::ultra)
         .build()
@@ -226,7 +226,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> antiSlam = sgLanding.add(new BoolSetting.Builder()
         .name("anti-slam")
-        .description("Ultra only. Slows the descent near the ground so landing never hurts.")
+        .description("Slows the descent near the ground. Ultra only.")
         .defaultValue(true)
         .visible(this::ultra)
         .build()
@@ -234,7 +234,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Double> slamDistance = sgLanding.add(new DoubleSetting.Builder()
         .name("slow-from")
-        .description("Height above the ground where the descent starts slowing down.")
+        .description("Height where the descent starts slowing.")
         .defaultValue(10)
         .range(1, 30)
         .sliderRange(1, 30)
@@ -244,7 +244,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Double> slamFloor = sgLanding.add(new DoubleSetting.Builder()
         .name("floor-height")
-        .description("Height above the ground where the descent reaches its slowest speed.")
+        .description("Height where the descent is slowest.")
         .defaultValue(0.5)
         .range(0, 10)
         .sliderRange(0, 5)
@@ -254,7 +254,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Double> slamSpeed = sgLanding.add(new DoubleSetting.Builder()
         .name("landing-speed")
-        .description("Slowest descent in blocks per tick. 0.45 was measured safe on 6b6t.")
+        .description("Slowest descent in blocks per tick.")
         .defaultValue(0.45)
         .range(0.05, MAX_VERTICAL)
         .sliderRange(0.05, 1)
@@ -264,7 +264,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> mapping = sgModes.add(new BoolSetting.Builder()
         .name("mapping")
-        .description("Waits in place until every chunk within the radius has loaded, so you never fly past unloaded land.")
+        .description("Waits until nearby chunks have loaded.")
         .defaultValue(false)
         .build()
     );
@@ -281,7 +281,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> building = sgModes.add(new BoolSetting.Builder()
         .name("building")
-        .description("Eases down to a slow speed whenever any block is within the distance, for flying close to builds.")
+        .description("Slows down when blocks are near.")
         .defaultValue(false)
         .build()
     );
@@ -298,7 +298,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Double> buildingSpeed = sgModes.add(new DoubleSetting.Builder()
         .name("building-speed")
-        .description("Horizontal blocks per tick near blocks. Vertical speed eases to one and a half times this.")
+        .description("Horizontal blocks per tick near blocks.")
         .defaultValue(0.7)
         .range(0.05, 5)
         .sliderRange(0.05, 3)
@@ -308,14 +308,14 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> bypass = sgModes.add(new BoolSetting.Builder()
         .name("bypass")
-        .description("Keeps the vanilla glide direction and only speeds it up along the same curve. Ultra mode also uses it inside cobwebs on its own.")
+        .description("Boosts the vanilla glide along its own curve.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<Boolean> autopilot = sgAutopilot.add(new BoolSetting.Builder()
         .name("autopilot")
-        .description("Flies forward by itself while you are above the minimum height.")
+        .description("Flies forward by itself above the minimum height.")
         .defaultValue(false)
         .build()
     );
@@ -332,7 +332,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> fireworks = sgAutopilot.add(new BoolSetting.Builder()
         .name("use-fireworks")
-        .description("Uses a firework rocket from the hotbar every few seconds while autopilot flies.")
+        .description("Uses fireworks periodically during autopilot.")
         .defaultValue(false)
         .visible(autopilot::get)
         .build()
@@ -350,7 +350,7 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> replace = sgInventory.add(new BoolSetting.Builder()
         .name("replace")
-        .description("Swaps in a fresh elytra from your inventory before the worn one breaks, then picks the flight back up.")
+        .description("Swaps in a fresh elytra before the worn one breaks.")
         .defaultValue(true)
         .build()
     );
@@ -367,21 +367,21 @@ public class ElytraFly extends Module {
 
     private final Setting<Boolean> chestSwap = sgInventory.add(new BoolSetting.Builder()
         .name("chest-swap")
-        .description("Puts the elytra on when you turn the module on and the chestplate back when you turn it off, once you are on the ground.")
+        .description("Wears elytra while on, chestplate back when off.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<Boolean> replenish = sgInventory.add(new BoolSetting.Builder()
         .name("replenish-fireworks")
-        .description("Keeps a firework stack in the chosen hotbar slot, refilled from your inventory.")
+        .description("Keeps fireworks refilled in a hotbar slot.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<Integer> replenishSlot = sgInventory.add(new IntSetting.Builder()
         .name("replenish-slot")
-        .description("Hotbar slot for the fireworks. Slot 9 stays the totem slot.")
+        .description("Hotbar slot for the fireworks.")
         .defaultValue(8)
         .range(1, 8)
         .sliderRange(1, 8)

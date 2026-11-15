@@ -35,14 +35,14 @@ public class PacketMinePlus extends Module implements MiningManager.HidesMining,
 
     private final Setting<Boolean> rebreak = sgGeneral.add(new BoolSetting.Builder()
         .name("rebreak")
-        .description("Keeps the block selected after it breaks, so anything placed there again breaks at once.")
+        .description("Rebreaks anything placed back in the block.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Integer> rebreakTime = sgGeneral.add(new IntSetting.Builder()
         .name("rebreak-time")
-        .description("Seconds a broken block stays selected for rebreaking. 0 keeps it until you click elsewhere.")
+        .description("Rebreak time in seconds. 0 keeps it until you click away.")
         .defaultValue(15)
         .range(0, 300)
         .sliderRange(0, 60)
@@ -52,14 +52,14 @@ public class PacketMinePlus extends Module implements MiningManager.HidesMining,
 
     private final Setting<Boolean> doubleMine = sgGeneral.add(new BoolSetting.Builder()
         .name("double-mine")
-        .description("Clicking a second block while the first is still mining keeps the first going in the background, so both break in about the time of one. The 6b6t anticheat may cancel the background block, test it.")
+        .description("Mines a second block while the first keeps going.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<Boolean> hideMining = sgGeneral.add(new BoolSetting.Builder()
         .name("hide-mining")
-        .description("Cancels the mining right after starting it, so others see no cracks. The server still breaks the block on time.")
+        .description("Hides the cracks from others.")
         .defaultValue(true)
         .build()
     );

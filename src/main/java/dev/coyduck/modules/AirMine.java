@@ -39,7 +39,7 @@ public class AirMine extends Module {
 
     private final Setting<Boolean> falling = sgGeneral.add(new BoolSetting.Builder()
         .name("falling")
-        .description("Also mines at ground speed while falling, jumping or swimming, as long as the fall is still too short to hurt you. Elytra gliding counts even when this is off.")
+        .description("Also mines at ground speed while airborne or swimming.")
         .defaultValue(true)
         .build()
     );

@@ -39,7 +39,7 @@ public class SpeedPlus extends Module {
 
     private final Setting<Mode> mode = sgGeneral.add(new EnumSetting.Builder<Mode>()
         .name("mode")
-        .description("Strafe hops and keeps the speed through the air like Meteor's strafe speed. Vanilla moves at a flat speed.")
+        .description("Strafe hops, Vanilla moves at a flat speed.")
         .defaultValue(Mode.Strafe)
         .build()
     );
@@ -73,7 +73,7 @@ public class SpeedPlus extends Module {
 
     private final Setting<Integer> liquidGrace = sgPause.add(new IntSetting.Builder()
         .name("liquid-grace")
-        .description("Ticks to wait after leaving water or lava, so climbing out of the water is not pulled back.")
+        .description("Ticks to wait after leaving water or lava.")
         .defaultValue(10)
         .range(0, 40)
         .sliderRange(0, 20)
@@ -82,21 +82,21 @@ public class SpeedPlus extends Module {
 
     private final Setting<Boolean> slowBlocks = sgPause.add(new BoolSetting.Builder()
         .name("slow-blocks")
-        .description("Pauses in cobwebs, powder snow and berry bushes and on soul sand or honey, where the server expects you to be slowed.")
+        .description("Pauses in webs, powder snow and slowing blocks.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> oddBlocks = sgPause.add(new BoolSetting.Builder()
         .name("odd-blocks")
-        .description("Pauses next to and inside candles, ladders, scaffolding and vines, where speed gets pulled back. Slabs, carpets and ice are fine.")
+        .description("Pauses near ladders, scaffolding, vines and candles.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Integer> setbackPause = sgPause.add(new IntSetting.Builder()
         .name("setback-pause")
-        .description("Ticks to wait after the server pulls you back, so one pull back does not turn into a chain.")
+        .description("Ticks to wait after a setback.")
         .defaultValue(10)
         .range(0, 40)
         .sliderRange(0, 20)

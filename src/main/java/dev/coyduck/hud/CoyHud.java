@@ -35,7 +35,7 @@ public final class CoyHud {
             SettingGroup group = settings.createGroup("Background");
             enabled = group.add(new BoolSetting.Builder()
                 .name("box")
-                .description("Draws a dark box behind this element. Off leaves only the text, with a shadow so it stays readable.")
+                .description("Draws a dark box behind this element.")
                 .defaultValue(false)
                 .build()
             );

@@ -55,7 +55,7 @@ public class PhaseEsp extends Module {
 
     private final Setting<SettingColor> semiColor = sgGeneral.add(new ColorSetting.Builder()
         .name("obsidian-color")
-        .description("Blast proof but minable, like obsidian, on a blast proof floor.")
+        .description("Minable blast proof wall on a blast proof floor.")
         .defaultValue(new SettingColor(240, 200, 80, 45))
         .build()
     );

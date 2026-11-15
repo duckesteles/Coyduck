@@ -28,21 +28,21 @@ public class AutoLogin extends Module {
 
     private final Setting<String> password = sgGeneral.add(new StringSetting.Builder()
         .name("password")
-        .description("Your login password. Meteor saves settings as plain text in its config folder.")
+        .description("Your login password, stored as plain text.")
         .defaultValue("")
         .build()
     );
 
     private final Setting<List<String>> servers = sgGeneral.add(new StringListSetting.Builder()
         .name("servers")
-        .description("The password is only sent to servers whose address ends with one of these, so another server asking for /login never gets it.")
+        .description("Only servers ending with these get the password.")
         .defaultValue(List.of("6b6t.org"))
         .build()
     );
 
     private final Setting<Integer> delay = sgGeneral.add(new IntSetting.Builder()
         .name("delay")
-        .description("Milliseconds to wait after the server asks before logging in.")
+        .description("Delay before logging in, in milliseconds.")
         .defaultValue(800)
         .range(0, 5000)
         .sliderRange(0, 3000)

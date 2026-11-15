@@ -169,7 +169,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Double> placeRange = sgGeneral.add(new DoubleSetting.Builder()
         .name("place-range")
-        .description("Range from your eyes to the block a crystal is placed on. 6b6t's anti-cheat lets a few places past 4.5 through, then cancels them for the rest of the session.")
+        .description("Place range from your eyes, in blocks.")
         .defaultValue(4.5)
         .range(1, 5.5)
         .sliderRange(1, 5.5)
@@ -178,7 +178,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Double> breakRange = sgGeneral.add(new DoubleSetting.Builder()
         .name("break-range")
-        .description("Range from your eyes to a crystal you break. The server allows up to 6.")
+        .description("Break range from your eyes, in blocks.")
         .defaultValue(5.5)
         .range(1, 6)
         .sliderRange(1, 6)
@@ -187,14 +187,14 @@ public class AutoCrystal extends Module {
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("Silent selects the item's hotbar slot for a moment and sends no inventory clicks; an item in your inventory is first moved into an empty hotbar slot once. InvSwap swaps the item into your hand and back with inventory clicks, which some servers answer by resending the whole inventory. While you eat, InvSwap is always used. Your offhand totem is never touched.")
+        .description("Silent uses the hotbar, InvSwap uses inventory clicks.")
         .defaultValue(InventoryManager.SwitchMode.Silent)
         .build()
     );
 
     private final Setting<Integer> placesPerTick = sgGeneral.add(new IntSetting.Builder()
         .name("places-per-tick")
-        .description("Most crystals placed in one tick. Two lets a crystal broken mid tick be replaced at once.")
+        .description("Most crystals placed in one tick.")
         .defaultValue(2)
         .range(1, 4)
         .sliderRange(1, 4)
@@ -226,14 +226,14 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> pauseEating = sgGeneral.add(new BoolSetting.Builder()
         .name("pause-eating")
-        .description("Pauses while you eat. When off, crystals are swapped into your main hand and back even while you eat, which can cut the eating. Your offhand totem is never touched.")
+        .description("Pauses while you eat.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<Boolean> showStatus = sgGeneral.add(new BoolSetting.Builder()
         .name("show-status")
-        .description("Shows in the module list why the last crystal was or was not placed.")
+        .description("Shows why the last crystal was or wasn't placed.")
         .defaultValue(true)
         .build()
     );
@@ -249,7 +249,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Double> maxSelfDamage = sgDamage.add(new DoubleSetting.Builder()
         .name("max-self-damage")
-        .description("Most damage a crystal may deal to you. It is only exceeded for a crystal that kills an enemy holding no totem, and a crystal that would pop or kill you is never used.")
+        .description("Most damage a crystal may deal to you.")
         .defaultValue(8)
         .range(0, 36)
         .sliderRange(0, 36)
@@ -258,7 +258,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Double> minHealth = sgDamage.add(new DoubleSetting.Builder()
         .name("min-health")
-        .description("Least health plus absorption you keep after a crystal's damage to you. Ones that would leave you lower are not used, so your own crystals never set you up for the next hit. Ones that can't hurt you are always allowed.")
+        .description("Least health you keep after your own crystals.")
         .defaultValue(8)
         .range(0, 36)
         .sliderRange(0, 20)
@@ -267,7 +267,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Double> facePlaceHealth = sgDamage.add(new DoubleSetting.Builder()
         .name("face-place-health")
-        .description("Uses face place damage once the target's health is at or below this.")
+        .description("Face places at or below this target health.")
         .defaultValue(36)
         .range(0, 36)
         .sliderRange(0, 36)
@@ -285,7 +285,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Integer> armorBreak = sgDamage.add(new IntSetting.Builder()
         .name("armor-break")
-        .description("Face places once any armor piece of the target is at or below this durability percent.")
+        .description("Face places at or below this armor durability percent.")
         .defaultValue(15)
         .range(0, 100)
         .sliderRange(0, 100)
@@ -294,7 +294,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> chip = sgDamage.add(new BoolSetting.Builder()
         .name("chip")
-        .description("Keeps hitting with crystals below min damage when they barely hurt you, to wear down the target's armor and absorption.")
+        .description("Chips armor with weak crystals that barely hurt you.")
         .defaultValue(true)
         .build()
     );
@@ -321,7 +321,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Double> balance = sgDamage.add(new DoubleSetting.Builder()
         .name("balance")
-        .description("Least ratio of the damage a crystal deals to the target over the damage it deals to you. A crystal below it is neither placed nor broken, unless it kills the target. 0 turns it off.")
+        .description("Least target to self damage ratio. 0 turns it off.")
         .defaultValue(1.0)
         .range(0, 5)
         .sliderRange(0, 3)
@@ -330,7 +330,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Double> selfWeight = sgDamage.add(new DoubleSetting.Builder()
         .name("self-weight")
-        .description("How much the damage to you counts against a crystal when choosing the best one. 0 only looks at the target's damage.")
+        .description("How much self damage counts when picking a crystal.")
         .defaultValue(0.5)
         .range(0, 2)
         .sliderRange(0, 2)
@@ -339,28 +339,28 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> defend = sgDamage.add(new BoolSetting.Builder()
         .name("defend")
-        .description("Breaks an enemy crystal near you while your own damage immunity makes the blast almost harmless, so it is wasted instead of hitting you later.")
+        .description("Breaks enemy crystals near you while you are immune.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> hurtSync = sgTiming.add(new BoolSetting.Builder()
         .name("hurt-sync")
-        .description("Holds a ready crystal until the target's damage immunity ends, so no crystal is spent on a hit that deals nothing.")
+        .description("Waits for the target's damage immunity to end.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> predict = sgTiming.add(new BoolSetting.Builder()
         .name("predict")
-        .description("Aims at where targets will be when your packets reach the server.")
+        .description("Aims where targets will be when packets arrive.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> idPredict = sgTiming.add(new BoolSetting.Builder()
         .name("id-predict")
-        .description("Attacks the entity ID a new crystal will most likely get, right after placing it, so it breaks in the same server tick at any ping.")
+        .description("Attacks the predicted crystal ID right after placing.")
         .defaultValue(false)
         .build()
     );
@@ -377,7 +377,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> kickGuard = sgTiming.add(new BoolSetting.Builder()
         .name("kick-guard")
-        .description("Skips predicting when the ID could belong to a dropped item, arrow or xp orb. Only needed on servers that kick for attacking those.")
+        .description("Skips IDs that could be items, arrows or xp orbs.")
         .defaultValue(false)
         .visible(idPredict::get)
         .build()
@@ -385,28 +385,28 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> antiSurround = sgGeneral.add(new BoolSetting.Builder()
         .name("anti-surround")
-        .description("Fills a gap in the target's surround with a crystal the moment it opens, and prefers crystals that keep it open, so the gap cannot be closed again.")
+        .description("Crystals surround gaps and keeps them open.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> throughWalls = sgGeneral.add(new BoolSetting.Builder()
         .name("through-walls")
-        .description("Places and breaks crystals with a block in between. On 6b6t these fail about twice as often for placing and six times as often for breaking, but most still land. Off only uses crystals you can see.")
+        .description("Places and breaks crystals through blocks.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> mineAhead = sgGeneral.add(new BoolSetting.Builder()
         .name("mine-ahead")
-        .description("Counts the surround block you are about to break as already gone, so a crystal waits next to it and goes off in the same tick the block breaks.")
+        .description("Treats the surround block you mine as already gone.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> basePlace = sgBase.add(new BoolSetting.Builder()
         .name("base-place")
-        .description("Places a block to put a crystal on when no existing spot deals enough damage.")
+        .description("Places a base block when no spot deals enough damage.")
         .defaultValue(true)
         .build()
     );
@@ -422,7 +422,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> baseAirplace = sgBase.add(new BoolSetting.Builder()
         .name("airplace")
-        .description("Places the base block without a neighbouring block to click on.")
+        .description("Places the base block without a neighbour.")
         .defaultValue(true)
         .visible(basePlace::get)
         .build()
@@ -430,14 +430,14 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> rotate = sgRotate.add(new BoolSetting.Builder()
         .name("rotate")
-        .description("Looks at the block before placing a crystal on it. Placing fails much more often on 6b6t without this.")
+        .description("Looks at the block before placing a crystal.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> instantAim = sgRotate.add(new BoolSetting.Builder()
         .name("instant-aim")
-        .description("When a crystal spot opens and you are not looking at it yet, sends a look packet right before the crystal so it goes out the same tick instead of waiting for the turn. Look-only packets are not limited per tick like position packets.")
+        .description("Sends a look packet right before the crystal.")
         .defaultValue(true)
         .visible(rotate::get)
         .build()
@@ -445,7 +445,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> rotateBreak = sgRotate.add(new BoolSetting.Builder()
         .name("rotate-break")
-        .description("Also looks at crystals before breaking them. Breaking works without it and is a tick faster.")
+        .description("Also looks at crystals before breaking them.")
         .defaultValue(false)
         .visible(rotate::get)
         .build()
@@ -463,7 +463,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> moveFix = sgRotate.add(new BoolSetting.Builder()
         .name("move-fix")
-        .description("Moves you relative to the rotation the server sees, so the anticheat's movement prediction matches.")
+        .description("Moves relative to the server-side rotation.")
         .defaultValue(true)
         .visible(rotate::get)
         .build()
@@ -478,7 +478,7 @@ public class AutoCrystal extends Module {
 
     private final Setting<Boolean> damageText = sgRender.add(new BoolSetting.Builder()
         .name("damage-text")
-        .description("Writes the damage the crystal deals to the target on its box.")
+        .description("Shows the target damage on the box.")
         .defaultValue(true)
         .visible(render::get)
         .build()

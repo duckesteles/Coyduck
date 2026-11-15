@@ -24,14 +24,14 @@ public class CustomFov extends Module {
 
     private final Setting<Boolean> effects = sgGeneral.add(new BoolSetting.Builder()
         .name("effects")
-        .description("Keeps the vanilla field of view changes from sprinting and speed. Zooming in, from a bow or a spyglass, always works.")
+        .description("Keeps vanilla fov changes from sprinting and speed.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> hand = sgGeneral.add(new BoolSetting.Builder()
         .name("hand")
-        .description("Also changes the field of view your held items are drawn with.")
+        .description("Also changes the held item field of view.")
         .defaultValue(false)
         .build()
     );

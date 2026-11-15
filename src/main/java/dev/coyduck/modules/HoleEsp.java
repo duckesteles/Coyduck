@@ -69,7 +69,7 @@ public class HoleEsp extends Module {
 
     private final Setting<Boolean> markTrapped = sgGeneral.add(new BoolSetting.Builder()
         .name("mark-trapped")
-        .description("Gives holes with a solid roof their own color, since you can't jump out of them.")
+        .description("Gives roofed holes their own color.")
         .defaultValue(true)
         .build()
     );
@@ -94,21 +94,21 @@ public class HoleEsp extends Module {
 
     private final Setting<SettingColor> safeColor = sgRender.add(new ColorSetting.Builder()
         .name("bedrock-color")
-        .description("Holes made only of bedrock. The alpha sets how strong the glass looks.")
+        .description("Bedrock-only holes.")
         .defaultValue(new SettingColor(255, 255, 255, 60))
         .build()
     );
 
     private final Setting<SettingColor> otherColor = sgRender.add(new ColorSetting.Builder()
         .name("obsidian-color")
-        .description("Holes with breakable walls. The alpha sets how strong the glass looks.")
+        .description("Holes with breakable walls.")
         .defaultValue(new SettingColor(190, 170, 255, 60))
         .build()
     );
 
     private final Setting<SettingColor> trappedColor = sgRender.add(new ColorSetting.Builder()
         .name("trapped-color")
-        .description("Holes with a solid roof. The alpha sets how strong the glass looks.")
+        .description("Holes with a solid roof.")
         .defaultValue(new SettingColor(255, 180, 70, 60))
         .visible(markTrapped::get)
         .build()

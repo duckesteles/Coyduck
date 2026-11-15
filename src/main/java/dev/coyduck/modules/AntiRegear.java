@@ -39,7 +39,7 @@ public class AntiRegear extends Module {
 
     private final Setting<Double> nearPlayer = sgGeneral.add(new DoubleSetting.Builder()
         .name("near-player")
-        .description("Only breaks containers this close to an enemy, so your own base stays safe.")
+        .description("Only breaks containers this close to an enemy.")
         .defaultValue(5)
         .range(1, 16)
         .sliderRange(1, 10)

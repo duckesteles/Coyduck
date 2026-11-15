@@ -40,14 +40,14 @@ public class DiscordWebhook extends Module {
 
     private final Setting<String> url = sgGeneral.add(new StringSetting.Builder()
         .name("url")
-        .description("Your Discord webhook link, from the channel settings under Integrations.")
+        .description("Your Discord webhook link.")
         .defaultValue("")
         .build()
     );
 
     private final Setting<String> mention = sgGeneral.add(new StringSetting.Builder()
         .name("mention")
-        .description("Put in front of important alerts, like <@your id>. Leave empty for none.")
+        .description("Prefix for important alerts, like <@your id>.")
         .defaultValue("")
         .build()
     );

@@ -108,7 +108,7 @@ public class ElytraEvade extends Module {
 
     private final Setting<Double> minDamage = sgGeneral.add(new DoubleSetting.Builder()
         .name("min-damage")
-        .description("Evades from players who could hurt you this much with one crystal from the closest point they can reach, walls and blocks between counted. Anyone close enough to put a crystal right next to you always counts.")
+        .description("Evades players who could deal this much crystal damage.")
         .defaultValue(4)
         .range(0.5, 20)
         .sliderRange(0.5, 20)
@@ -117,7 +117,7 @@ public class ElytraEvade extends Module {
 
     private final Setting<Double> reach = sgGeneral.add(new DoubleSetting.Builder()
         .name("reach")
-        .description("How far a player can place a crystal from their eyes. 6b6t enforces about 4.5.")
+        .description("How far a player can place a crystal from their eyes.")
         .defaultValue(5)
         .range(3, 7)
         .sliderRange(3, 7)
@@ -126,7 +126,7 @@ public class ElytraEvade extends Module {
 
     private final Setting<Double> margin = sgGeneral.add(new DoubleSetting.Builder()
         .name("margin")
-        .description("Extra reach assumed while evading, so it only calms down once you are this much further out than they could hurt you from.")
+        .description("Extra reach assumed while evading.")
         .defaultValue(4)
         .range(0, 16)
         .sliderRange(0, 16)
@@ -135,7 +135,7 @@ public class ElytraEvade extends Module {
 
     private final Setting<Double> radius = sgGeneral.add(new DoubleSetting.Builder()
         .name("radius")
-        .description("How far each hop goes. Spots are picked around you at this distance and half of it.")
+        .description("How far each hop goes, in blocks.")
         .defaultValue(16)
         .range(6, 48)
         .sliderRange(6, 48)
@@ -144,7 +144,7 @@ public class ElytraEvade extends Module {
 
     private final Setting<Double> height = sgGeneral.add(new DoubleSetting.Builder()
         .name("height")
-        .description("Spots are also tried this much higher and lower than you, so a hop can climb over a glider or drop away from it.")
+        .description("How far above and below you spots are tried.")
         .defaultValue(6)
         .range(0, 20)
         .sliderRange(0, 20)
@@ -162,7 +162,7 @@ public class ElytraEvade extends Module {
 
     private final Setting<Double> maceRange = sgGeneral.add(new DoubleSetting.Builder()
         .name("mace-range")
-        .description("A diving player counts as a threat from this far, since a mace or spear dive starts from far above. Gliders only count when they hold a mace or spear, close in on you or hang over you.")
+        .description("Range at which diving players count as threats.")
         .defaultValue(28)
         .range(6, 64)
         .sliderRange(6, 64)
@@ -171,7 +171,7 @@ public class ElytraEvade extends Module {
 
     private final Setting<Double> leash = sgGeneral.add(new DoubleSetting.Builder()
         .name("leash")
-        .description("Spots try to stay within this many blocks of where the evasion started, so you do not drift away from your fight. Going past it costs, it is not a wall.")
+        .description("Tries to keep spots within this range of the start.")
         .defaultValue(48)
         .range(16, 160)
         .sliderRange(16, 160)
@@ -180,7 +180,7 @@ public class ElytraEvade extends Module {
 
     private final Setting<Boolean> yieldToKeys = sgGeneral.add(new BoolSetting.Builder()
         .name("yield-to-keys")
-        .description("Hands the flight back to you for a second whenever you press a movement key, so you can always steer out yourself.")
+        .description("Movement keys give you control for a second.")
         .defaultValue(true)
         .build()
     );

@@ -67,14 +67,14 @@ public class AutoTotem extends Module {
 
     private final Setting<Mainhand> mainhand = sgGeneral.add(new EnumSetting.Builder<Mainhand>()
         .name("mainhand")
-        .description("Holds a second totem in the main hand. The main hand pops first, so a second hit before the refill arrives still finds a totem.")
+        .description("Holds a second totem in the main hand.")
         .defaultValue(Mainhand.Smart)
         .build()
     );
 
     private final Setting<Double> combatRange = sgGeneral.add(new DoubleSetting.Builder()
         .name("combat-range")
-        .description("Smart holds the main hand totem while an enemy this close has hurt you in the last few seconds or your health is low. An enemy that only walks by does not count.")
+        .description("Smart mode: range of enemies that hurt you.")
         .defaultValue(12)
         .range(0, 32)
         .sliderRange(0, 32)
@@ -84,7 +84,7 @@ public class AutoTotem extends Module {
 
     private final Setting<Double> health = sgGeneral.add(new DoubleSetting.Builder()
         .name("health")
-        .description("Smart holds the main hand totem at or below this health while an enemy is in combat range. A lethal crystal near you always counts, enemy or not.")
+        .description("Smart mode: holds the totem at or below this health.")
         .defaultValue(12)
         .range(0, 40)
         .sliderRange(0, 40)
@@ -94,7 +94,7 @@ public class AutoTotem extends Module {
 
     private final Setting<Boolean> overFood = sgGeneral.add(new BoolSetting.Builder()
         .name("over-food")
-        .description("At or below the health setting, takes the main hand totem even while you hold food, as long as you are not eating or holding use. Otherwise food in your hand keeps it away.")
+        .description("Takes the main hand totem over held food at low health.")
         .defaultValue(true)
         .visible(() -> mainhand.get() == Mainhand.Smart)
         .build()
@@ -102,7 +102,7 @@ public class AutoTotem extends Module {
 
     private final Setting<Integer> resumeDelay = sgGeneral.add(new IntSetting.Builder()
         .name("resume-delay")
-        .description("Ticks to wait after you switch away from the main hand totem, eat or hold food before taking it back.")
+        .description("Ticks before retaking the main hand totem.")
         .defaultValue(20)
         .range(0, 200)
         .sliderRange(0, 100)
@@ -122,7 +122,7 @@ public class AutoTotem extends Module {
 
     private final Setting<Boolean> restore = sgGeneral.add(new BoolSetting.Builder()
         .name("restore")
-        .description("Switches back to the previous slot once the main hand totem is no longer needed.")
+        .description("Switches back when the main hand totem is not needed.")
         .defaultValue(true)
         .visible(() -> mainhand.get() != Mainhand.Off)
         .build()
@@ -130,28 +130,28 @@ public class AutoTotem extends Module {
 
     private final Setting<Boolean> offhandGapple = sgGeneral.add(new BoolSetting.Builder()
         .name("offhand-gapple")
-        .description("While a totem is in your main hand, holding use swaps a golden apple into your offhand so you eat it there, then puts the offhand totem back. The main hand totem guards you while you eat, and switching hotbar slots never cuts offhand eating.")
+        .description("Holding use eats a gapple from the offhand.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> hotbarSwap = sgGeneral.add(new BoolSetting.Builder()
         .name("hotbar-swap")
-        .description("Refills the offhand from a hotbar totem with the swap-hands key instead of an inventory click. NoCheatPlus drops inventory clicks while you move, sprint or use an item, but not the swap-hands key. Keep a few spare totems in your hotbar.")
+        .description("Refills the offhand with the swap-hands key.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> pearlGuard = sgGeneral.add(new BoolSetting.Builder()
         .name("pearl-guard")
-        .description("Cancels an ender pearl throw that would hit an end crystal right in front of your face, since the blast would count as yours. Off by default.")
+        .description("Cancels pearls that would hit a crystal at your face.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<Boolean> closeContainers = sgGeneral.add(new BoolSetting.Builder()
         .name("close-containers")
-        .description("Closes an open container when you pop. The server never reports the offhand while a container is open, so the refill could not be confirmed.")
+        .description("Closes open containers when you pop.")
         .defaultValue(true)
         .build()
     );

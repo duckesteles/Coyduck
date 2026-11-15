@@ -78,7 +78,7 @@ public class HoleSnap extends Module {
 
     private final Setting<Integer> collisions = sgGeneral.add(new IntSetting.Builder()
         .name("collisions-to-disable")
-        .description("Gives up after running into a wall this many moves in a row. 0 never gives up.")
+        .description("Gives up after this many wall hits in a row; 0 never.")
         .defaultValue(15)
         .range(0, 100)
         .sliderRange(0, 100)
@@ -87,7 +87,7 @@ public class HoleSnap extends Module {
 
     private final Setting<Integer> rubberbands = sgGeneral.add(new IntSetting.Builder()
         .name("rubberbands-to-disable")
-        .description("Gives up after the server pulls you back this many times. 0 never gives up.")
+        .description("Gives up after this many setbacks; 0 never.")
         .defaultValue(1)
         .range(0, 20)
         .sliderRange(0, 20)
@@ -132,7 +132,7 @@ public class HoleSnap extends Module {
 
     private final Setting<Double> timer = sgSpeed.add(new DoubleSetting.Builder()
         .name("timer")
-        .description("Speeds up the game while snapping, so you are in the hole almost instantly. 1 leaves it alone.")
+        .description("Game speed while snapping; 1 leaves it alone.")
         .defaultValue(10)
         .range(1, 20)
         .sliderRange(1, 20)
@@ -171,14 +171,14 @@ public class HoleSnap extends Module {
 
     private final Setting<Boolean> safeOnly = sgHole.add(new BoolSetting.Builder()
         .name("safe-only")
-        .description("Only targets holes made of blast proof blocks like obsidian and bedrock.")
+        .description("Only targets blast proof holes.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<Boolean> retarget = sgHole.add(new BoolSetting.Builder()
         .name("retarget")
-        .description("Picks a new hole when the chosen one gets blocked, instead of giving up.")
+        .description("Picks a new hole if the chosen one gets blocked.")
         .defaultValue(true)
         .build()
     );

@@ -50,7 +50,7 @@ public class HoleFill extends Module {
 
     private final Setting<Double> fillRange = sgGeneral.add(new DoubleSetting.Builder()
         .name("fill-range")
-        .description("How close a hole must be to where the target is heading to get filled.")
+        .description("Fills holes this close to where the target heads.")
         .defaultValue(2.5)
         .range(0.5, 5)
         .sliderRange(0.5, 5)
@@ -82,7 +82,7 @@ public class HoleFill extends Module {
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("How the block is switched to. Your offhand totem is never touched.")
+        .description("How the block is switched to.")
         .defaultValue(InventoryManager.SwitchMode.Silent)
         .build()
     );
@@ -103,7 +103,7 @@ public class HoleFill extends Module {
 
     private final Setting<Boolean> leaveOwn = sgGeneral.add(new BoolSetting.Builder()
         .name("leave-own")
-        .description("Leaves holes that are closer to you than to the enemy, so you can still get into them.")
+        .description("Skips holes closer to you than to the enemy.")
         .defaultValue(true)
         .build()
     );

@@ -67,7 +67,7 @@ public class AutoTrap extends Module {
 
     private final Setting<List<Block>> blocks = sgGeneral.add(new BlockListSetting.Builder()
         .name("blocks")
-        .description("Blocks to trap with, in order of preference. Obsidian on top also lets Cev Breaker use it.")
+        .description("Blocks to trap with, in order of preference.")
         .defaultValue(Blocks.OBSIDIAN, Blocks.CRYING_OBSIDIAN)
         .filter(block -> block.getBlastResistance() >= 600)
         .build()
@@ -75,28 +75,28 @@ public class AutoTrap extends Module {
 
     private final Setting<Boolean> top = sgGeneral.add(new BoolSetting.Builder()
         .name("top")
-        .description("Covers the block above the target's head so they cannot jump out.")
+        .description("Covers the block above the target's head.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Face> face = sgGeneral.add(new EnumSetting.Builder<Face>()
         .name("face")
-        .description("Smart only covers escape routes: nothing for a target in a full hole, the head-level block over a gap a crystal cannot fill, and every open side in the open. Always covers the whole head ring.")
+        .description("Smart covers only escape routes, Always the whole ring.")
         .defaultValue(Face.Smart)
         .build()
     );
 
     private final Setting<Boolean> onlyStill = sgGeneral.add(new BoolSetting.Builder()
         .name("only-still")
-        .description("Only traps targets that are in a hole or standing still, so no blocks are wasted on someone running past.")
+        .description("Only traps targets in a hole or standing still.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("Silent selects the item's hotbar slot for a moment and sends no inventory clicks; an item in your inventory is first moved into an empty hotbar slot once. InvSwap swaps the item into your hand and back with inventory clicks, which some servers answer by resending the whole inventory. Your offhand totem is never touched. Nothing is switched in while you eat from the main hand, so trapping waits.")
+        .description("Silent uses the hotbar, InvSwap uses inventory clicks.")
         .defaultValue(InventoryManager.SwitchMode.Silent)
         .build()
     );
@@ -110,7 +110,7 @@ public class AutoTrap extends Module {
 
     private final Setting<Integer> blocksPerTick = sgGeneral.add(new IntSetting.Builder()
         .name("blocks-per-tick")
-        .description("Most blocks placed in one tick, including reactions between ticks.")
+        .description("Most blocks placed in one tick.")
         .defaultValue(6)
         .range(1, 20)
         .sliderRange(1, 20)
@@ -119,7 +119,7 @@ public class AutoTrap extends Module {
 
     private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
         .name("rotate")
-        .description("Turns your head toward each block before placing it and places only once the server sees you looking at it. Slower, but for servers whose anticheat checks where you look. Visible faces are always preferred.")
+        .description("Looks at each block before placing. Slower.")
         .defaultValue(false)
         .build()
     );

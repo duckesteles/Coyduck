@@ -67,28 +67,28 @@ public class LadderTrap extends Module {
 
     private final Setting<Mode> mode = sgGeneral.add(new EnumSetting.Builder<Mode>()
         .name("mode")
-        .description("Smart only traps targets that are in a hole. Always traps them anywhere.")
+        .description("Smart traps holed targets only, always anywhere.")
         .defaultValue(Mode.Smart)
         .build()
     );
 
     private final Setting<Item> item = sgGeneral.add(new EnumSetting.Builder<Item>()
         .name("item")
-        .description("Auto uses a ladder when one fits beside the target, otherwise scaffolding. Walking into a ladder climbs, so a target trying to step out rises out of the hole.")
+        .description("Auto uses a ladder if it fits, else scaffolding.")
         .defaultValue(Item.Auto)
         .build()
     );
 
     private final Setting<InventoryManager.SwitchMode> switchMode = sgGeneral.add(new EnumSetting.Builder<InventoryManager.SwitchMode>()
         .name("switch")
-        .description("Silent selects the item's hotbar slot for a moment and sends no inventory clicks; an item in your inventory is first moved into an empty hotbar slot once. InvSwap swaps the item into your hand and back with inventory clicks, which some servers answer by resending the whole inventory. While you eat, InvSwap is always used. Your offhand totem is never touched.")
+        .description("How the item is switched to.")
         .defaultValue(InventoryManager.SwitchMode.Silent)
         .build()
     );
 
     private final Setting<Boolean> rotate = sgGeneral.add(new BoolSetting.Builder()
         .name("rotate")
-        .description("Turns your head toward each block before placing it and places only once the server sees you looking at it. Slower, but for servers whose anticheat checks where you look. Visible faces are always preferred.")
+        .description("Places only after facing each block.")
         .defaultValue(true)
         .build()
     );

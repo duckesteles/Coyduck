@@ -34,21 +34,21 @@ public class Esp extends Module implements ShaderGlow.Source {
 
     private final Setting<Boolean> fullBody = sgGeneral.add(new BoolSetting.Builder()
         .name("full-body")
-        .description("Draws players through blocks with their real model, skin, armor and movement.")
+        .description("Draws full player models through blocks.")
         .defaultValue(true)
         .build()
     );
 
     private final Setting<Boolean> outline = sgOutline.add(new BoolSetting.Builder()
         .name("outline")
-        .description("Draws a shader outline and fill around players, like Meteor's shader ESP. Works together with full body or alone.")
+        .description("Draws a shader outline and fill around players.")
         .defaultValue(false)
         .build()
     );
 
     private final Setting<SettingColor> outlineColor = sgOutline.add(new ColorSetting.Builder()
         .name("players-color")
-        .description("Outline and fill color for players whose name has no color, white like Meteor's shader ESP.")
+        .description("Color for players without a name color.")
         .defaultValue(new SettingColor(255, 255, 255, 255))
         .visible(outline::get)
         .build()
@@ -56,7 +56,7 @@ public class Esp extends Module implements ShaderGlow.Source {
 
     private final Setting<Boolean> nameColor = sgOutline.add(new BoolSetting.Builder()
         .name("name-color")
-        .description("Colors each outline like Meteor's shader ESP: friends get the friend color, others the color of their name when Meteor's team color option is on.")
+        .description("Uses friend and team name colors.")
         .defaultValue(true)
         .visible(outline::get)
         .build()
@@ -74,7 +74,7 @@ public class Esp extends Module implements ShaderGlow.Source {
 
     private final Setting<Double> outlineFill = sgOutline.add(new DoubleSetting.Builder()
         .name("outline-fill")
-        .description("How strongly the color fills the model. 0 draws only the outline.")
+        .description("Fill strength; 0 draws only the outline.")
         .defaultValue(0.2)
         .range(0, 1)
         .sliderRange(0, 1)
@@ -101,7 +101,7 @@ public class Esp extends Module implements ShaderGlow.Source {
 
     private final Setting<Boolean> invisible = sgGeneral.add(new BoolSetting.Builder()
         .name("invisible")
-        .description("Also shows players with invisibility, as far as the game draws them.")
+        .description("Also shows invisible players.")
         .defaultValue(false)
         .build()
     );
