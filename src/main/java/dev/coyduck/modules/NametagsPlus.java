@@ -90,6 +90,13 @@ public class NametagsPlus extends Module {
         .build()
     );
 
+    private final Setting<Boolean> invisible = sgGeneral.add(new BoolSetting.Builder()
+        .name("invisible")
+        .description("Also tags invisible players.")
+        .defaultValue(true)
+        .build()
+    );
+
     private final Setting<Double> scale = sgGeneral.add(new DoubleSetting.Builder()
         .name("scale")
         .description("Size of the tags.")
@@ -173,7 +180,7 @@ public class NametagsPlus extends Module {
         boolean thirdPerson = mc.options.getPerspective() != Perspective.FIRST_PERSON;
 
         for (PlayerEntity player : mc.world.getPlayers()) {
-            if (!player.isAlive() || player.isInvisible()) continue;
+            if (!player.isAlive() || player.isInvisible() && !invisible.get()) continue;
             if (player == mc.player && (!self.get() || !thirdPerson)) continue;
 
             Utils.set(pos, player, event.tickDelta);

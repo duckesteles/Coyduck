@@ -101,7 +101,7 @@ public class Esp extends Module implements ShaderGlow.Source {
 
     private final Setting<Boolean> invisible = sgGeneral.add(new BoolSetting.Builder()
         .name("invisible")
-        .description("Also shows invisible players.")
+        .description("Also shows invisible players, body included.")
         .defaultValue(false)
         .build()
     );

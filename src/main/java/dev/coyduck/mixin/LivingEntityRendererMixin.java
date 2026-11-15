@@ -11,7 +11,11 @@ import net.minecraft.client.render.entity.state.LivingEntityRenderState;
 import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
 import net.minecraft.client.render.state.CameraRenderState;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(LivingEntityRenderer.class)
 public abstract class LivingEntityRendererMixin {
@@ -19,5 +23,12 @@ public abstract class LivingEntityRendererMixin {
     private void coyduck$throughWalls(LivingEntityRenderState state, MatrixStack matrices, OrderedRenderCommandQueue queue, CameraRenderState camera, Operation<Void> original) {
         boolean through = !(queue instanceof OutlineRenderCommandQueue) && state instanceof PlayerEntityRenderState player && Esp.showsBody(player.id);
         original.call(state, matrices, through ? new WallQueue(queue) : queue, camera);
+    }
+
+    @Inject(method = "updateRenderState(Lnet/minecraft/entity/LivingEntity;Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;F)V", at = @At("TAIL"))
+    private void coyduck$revealInvisible(LivingEntity entity, LivingEntityRenderState state, float tickDelta, CallbackInfo info) {
+        if (!entity.isInvisible() || !Esp.shows(entity)) return;
+        state.invisible = false;
+        state.invisibleToPlayer = false;
     }
 }
