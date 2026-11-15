@@ -37,4 +37,18 @@ class LeakGuardTest {
     void scrubsSafeLookingKeysThatAreNotListed() {
         assertEquals("target-x=? target-z=?", guard.clean("target-x=1000000 target-z=-1000000"));
     }
+
+    @Test
+    void keepsOutcomeLines() {
+        String[] lines = {
+            "< SETBACK since-last=1450ms last-1s places=3 attacks=1 uses=0 inside-block ground",
+            "totem refill ms: count 1.2k, min 150ms, median 1200ms, p90 2400ms, max 2950ms",
+            "moves sent: 12.3k, blocks refused: 4",
+            "< boom at +1.00,-2.00,+3.00 result me -4.5, ronnie291013 POP",
+            "< place REFUSED 2,1,-3 obsidianx38 seq=48213 after 254ms",
+            "> stop -1,0,2 did not break within 1200ms, block=obsidian",
+            "E jump Gamerguy11 +0.50,+0.00,-7.25 (7.27 blocks) to +3.00,-1.00,-6.00"
+        };
+        for (String line : lines) assertEquals(line, guard.clean(line));
+    }
 }

@@ -3,14 +3,20 @@ package dev.coyduck.logger;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.SharedConstants;
+import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.BlockWithEntity;
+import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.PlayerListEntry;
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.BlockItem;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.Packet;
@@ -51,6 +57,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 
 import java.io.IOException;
@@ -58,13 +65,17 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 public final class Recorder {
@@ -80,6 +91,18 @@ public final class Recorder {
     private static final int STATE_EVERY = 20;
     private static final int POP = 35;
     private static final int DEATH = 3;
+    private static final int OFFHAND_SLOT = 45;
+    private static final long PLACE_FORGET_MS = 5_000;
+    private static final long CRYSTAL_WAIT_MS = 1_500;
+    private static final long STOP_WAIT_MS = 1_200;
+    private static final long BOOM_SETTLE_MS = 350;
+    private static final long TOTEM_WAIT_MS = 3_000;
+    private static final long RECENT_MS = 1_000;
+    private static final long PEARL_GRACE_MS = 3_000;
+    private static final double BOOM_RANGE = 12;
+    private static final double SETBACK_MAX = 10;
+    private static final double JUMP = 3;
+    private static final double GLIDE_JUMP = 8;
     private static final DateTimeFormatter FILE = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
     private static final List<String> PUBLIC_SERVERS = List.of("6b6t.org", "2b2t.org", "9b9t.com", "0b0t.org", "8b8t.me", "constantiam.net", "anarchy.pw", "simpleanarchy.net");
@@ -113,6 +136,35 @@ public final class Recorder {
     private long lastWorldTime = -1;
     private long lastWorldTimeAt;
     private double tps = 20;
+
+    private record SentPlace(int sequence, BlockPos target, BlockPos alternative, String item, long at) {}
+
+    private record CrystalPlace(Vec3d expected, long at) {}
+
+    private record Boom(Vec3d center, long at, Map<Integer, Float> before, Set<Integer> popped) {}
+
+    private final List<SentPlace> places = new ArrayList<>();
+    private final List<CrystalPlace> crystalPlaces = new ArrayList<>();
+    private final Map<BlockPos, Long> starts = new HashMap<>();
+    private final Map<BlockPos, Long> stops = new HashMap<>();
+    private final List<Boom> booms = new ArrayList<>();
+    private final Map<Integer, Vec3d> lastPos = new HashMap<>();
+    private final Map<Integer, Long> lastHurt = new HashMap<>();
+    private final Map<Integer, String> using = new HashMap<>();
+    private final Map<Integer, Long> usingSince = new HashMap<>();
+    private final ArrayDeque<Long> recentPlaces = new ArrayDeque<>();
+    private final ArrayDeque<Long> recentAttacks = new ArrayDeque<>();
+    private final ArrayDeque<Long> recentUses = new ArrayDeque<>();
+    private long popAt;
+    private long lastSetback;
+    private long lastOwnPearl;
+    private long lastSelfHurt;
+    private String lastDamageType = "?";
+    private long lastDamageAt;
+    private Item eating;
+    private Hand eatingHand;
+    private int eatingCount;
+    private long eatingSince;
 
     private Recorder() {}
 
@@ -186,6 +238,7 @@ public final class Recorder {
     private void header() {
         raw("HDR Coyduck Logger " + FabricLoader.getInstance().getModContainer("coyduck-logger").map(m -> m.getMetadata().getVersion().getFriendlyString()).orElse("?")
             + " on Minecraft " + SharedConstants.getGameVersion().name());
+        raw("HDR server brand " + (mc.getNetworkHandler() == null || mc.getNetworkHandler().getBrand() == null ? "?" : mc.getNetworkHandler().getBrand()));
         raw("HDR privacy: positions are written only inside fight windows, relative to where the window opened (W lines). A window closes after "
             + (int) MAX_SPAN + " blocks of travel, a far teleport or a respawn, and after any window ends the next cannot open for " + COOLDOWN_MS / 1000 + "s, so windows cannot be chained into a route. Teleports outside windows are written without distances. Any other number of 1000 or more is replaced by ?.");
         raw("HDR player " + (mc.player == null ? "?" : mc.player.getName().getString()) + ", server " + server() + ", dimension " + dimension);
@@ -198,6 +251,7 @@ public final class Recorder {
         mods.sort(String::compareTo);
         raw("HDR mods " + String.join(" ", mods));
         raw("HDR tags: W window, > sent by this client, < received, E another player, S state every second, F fight summary");
+        raw("HDR outcomes: '< place REFUSED' when the server undid a block, '> crystal place got no crystal', '< boom' damage per explosion, '< SETBACK' for server pull-backs, '< broke' and '> stop ... did not break' for mining, '< offhand totem' refill time after a pop");
     }
 
     private String server() {
@@ -257,7 +311,88 @@ public final class Recorder {
         }
 
         trackPlayers();
+        trackEating(time);
+        expire(time);
         if (tick % STATE_EVERY == 0) state();
+    }
+
+    private void trackEating(long time) {
+        boolean food = mc.player.isUsingItem() && mc.player.getActiveItem().get(DataComponentTypes.FOOD) != null;
+        if (food && eating == null) {
+            eatingHand = mc.player.getActiveHand();
+            ItemStack stack = held(eatingHand);
+            eating = stack.getItem();
+            eatingCount = stack.getCount();
+            eatingSince = time;
+            count("eats started");
+            line("> eat start " + Describe.item(stack) + " " + hand(eatingHand));
+        } else if (!food && eating != null) {
+            ItemStack stack = held(eatingHand);
+            int left = stack.isOf(eating) ? stack.getCount() : 0;
+            boolean finished = left < eatingCount;
+            count(finished ? "eats finished" : "eats cut");
+            sample(finished ? "eat took ms" : "eat cut after ms", time - eatingSince);
+            line("> eat " + (finished ? "finished" : "cut") + " after " + (time - eatingSince) + "ms");
+            eating = null;
+        }
+    }
+
+    private void expire(long time) {
+        places.removeIf(place -> time - place.at() > PLACE_FORGET_MS);
+        for (Iterator<CrystalPlace> it = crystalPlaces.iterator(); it.hasNext(); ) {
+            CrystalPlace place = it.next();
+            if (time - place.at() <= CRYSTAL_WAIT_MS) continue;
+            it.remove();
+            count("crystal places with no crystal");
+            line("> crystal place got no crystal at " + rel(place.expected()) + " within " + CRYSTAL_WAIT_MS + "ms");
+        }
+        for (Iterator<Map.Entry<BlockPos, Long>> it = stops.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<BlockPos, Long> stop = it.next();
+            if (time - stop.getValue() <= STOP_WAIT_MS) continue;
+            it.remove();
+            count("stops that did not break");
+            line("> stop " + relBlock(stop.getKey()) + " did not break within " + STOP_WAIT_MS + "ms, block=" + Describe.block(mc.world.getBlockState(stop.getKey())));
+        }
+        starts.values().removeIf(at -> time - at > 30_000);
+        for (Iterator<Boom> it = booms.iterator(); it.hasNext(); ) {
+            Boom boom = it.next();
+            if (time - boom.at() < BOOM_SETTLE_MS) continue;
+            it.remove();
+            settle(boom);
+        }
+        if (popAt > 0 && time - popAt > TOTEM_WAIT_MS) {
+            count("pops with no offhand totem after 3s");
+            line("< offhand still has no totem " + TOTEM_WAIT_MS + "ms after the pop");
+            popAt = 0;
+        }
+        prune(recentPlaces, time);
+        prune(recentAttacks, time);
+        prune(recentUses, time);
+    }
+
+    private static void prune(ArrayDeque<Long> times, long now) {
+        while (!times.isEmpty() && now - times.peekFirst() > RECENT_MS) times.pollFirst();
+    }
+
+    private void settle(Boom boom) {
+        StringBuilder out = new StringBuilder();
+        for (Map.Entry<Integer, Float> entry : boom.before().entrySet()) {
+            Entity entity = mc.world.getEntityById(entry.getKey());
+            if (!(entity instanceof PlayerEntity player)) continue;
+            float lost = entry.getValue() - (player.getHealth() + player.getAbsorptionAmount());
+            boolean popped = boom.popped().contains(entry.getKey());
+            if (lost < 0.5f && !popped) continue;
+            String who = player == mc.player ? "me" : player.getName().getString();
+            out.append(out.isEmpty() ? "" : ", ").append(who).append(' ').append(popped ? "POP" : "-" + Describe.one(lost));
+            if (player == mc.player) {
+                count("explosions that hurt me");
+                if (!popped) sample("my hp per explosion", lost);
+            } else {
+                count("explosions that hurt " + who);
+                if (!popped) sample("hp per explosion on " + who, lost);
+            }
+        }
+        line("< boom at " + rel(boom.center()) + " result " + (out.isEmpty() ? "nobody hurt" : out));
     }
 
     private PlayerEntity nearestEnemy(double range) {
@@ -282,6 +417,7 @@ public final class Recorder {
         stats = new Stats();
         health.clear();
         gliding.clear();
+        resetTracking();
         line("W" + window + " start, " + reason + ", positions below are relative to here");
         state();
     }
@@ -296,9 +432,27 @@ public final class Recorder {
         stats = null;
         crystals.clear();
         before.clear();
+        resetTracking();
         beforeTeleport = null;
         beforeTeleportEntity = null;
         cooldownUntil = Util.getMeasuringTimeMs() + COOLDOWN_MS;
+    }
+
+    private void resetTracking() {
+        places.clear();
+        crystalPlaces.clear();
+        starts.clear();
+        stops.clear();
+        booms.clear();
+        lastPos.clear();
+        lastHurt.clear();
+        using.clear();
+        usingSince.clear();
+        recentPlaces.clear();
+        recentAttacks.clear();
+        recentUses.clear();
+        popAt = 0;
+        eating = null;
     }
 
     private void trackPlayers() {
@@ -311,9 +465,39 @@ public final class Recorder {
                 line("E hp " + player.getName().getString() + " " + Describe.one(last) + " -> " + Describe.one(total) + " (" + (total > last ? "+" : "") + Describe.one(total - last) + ")");
                 if (total < last) stats.add("hp taken by " + player.getName().getString(), last - total);
             }
+            if (player == mc.player && last != null && total < last - 0.01f) {
+                boolean recent = Util.getMeasuringTimeMs() - lastDamageAt < 250;
+                stats.add("my hp lost to " + (recent ? lastDamageType : "other"), last - total);
+            }
+            if (player != mc.player) trackOther(player, id);
             boolean glide = player.isGliding();
             Boolean wasGliding = gliding.put(id, glide);
             if (player != mc.player && wasGliding != null && wasGliding != glide) line("E " + player.getName().getString() + (glide ? " starts gliding" : " stops gliding") + " at " + rel(player.getEntityPos()));
+        }
+    }
+
+    private void trackOther(PlayerEntity player, int id) {
+        String name = player.getName().getString();
+        Vec3d pos = player.getEntityPos();
+        Vec3d last = lastPos.put(id, pos);
+        if (last != null) {
+            double moved = pos.distanceTo(last);
+            if (moved > (player.isGliding() ? GLIDE_JUMP : JUMP)) {
+                count("jumps by " + name);
+                line("E jump " + name + " " + Describe.vec(pos.subtract(last)) + " (" + Describe.num(moved) + " blocks) to " + rel(pos));
+            }
+        }
+        String item = player.isUsingItem() ? Describe.item(player.getActiveItem()) : null;
+        String before = item == null ? using.remove(id) : using.put(id, item);
+        long now = Util.getMeasuringTimeMs();
+        if (item != null && before == null) {
+            usingSince.put(id, now);
+            line("E " + name + " starts using " + item);
+        } else if (item == null && before != null) {
+            Long since = usingSince.remove(id);
+            long took = since == null ? -1 : now - since;
+            line("E " + name + " stops using " + before + (took >= 0 ? " after " + took + "ms" : ""));
+            if (took >= 0 && before.startsWith("enchanted_golden_apple")) sample("gapple use by " + name + " ms", took);
         }
     }
 
@@ -330,6 +514,8 @@ public final class Recorder {
             + " hp=" + Describe.one(mc.player.getHealth()) + "+" + Describe.one(mc.player.getAbsorptionAmount()) + " food=" + mc.player.getHungerManager().getFoodLevel()
             + " totems=" + totems + " main=" + Describe.item(mc.player.getMainHandStack()) + " off=" + Describe.item(mc.player.getOffHandStack())
             + " sel=" + mc.player.getInventory().getSelectedSlot() + " armor=" + Describe.armor(mc.player) + " ping=" + ping + " tps=" + Describe.one(tps));
+        if (ping >= 0) sample("ping ms", ping);
+        sample("tps", tps);
         List<PlayerEntity> players = new ArrayList<>(mc.world.getPlayers());
         players.sort(Comparator.comparingDouble(player -> player.distanceTo(mc.player)));
         for (PlayerEntity player : players) {
@@ -374,8 +560,10 @@ public final class Recorder {
                 ItemStack held = held(use.getHand());
                 String kind = held.isOf(Items.END_CRYSTAL) ? "crystals placed" : held.isOf(Items.RESPAWN_ANCHOR) ? "anchors placed" : held.getItem() instanceof net.minecraft.item.BlockItem ? "blocks placed" : "blocks used";
                 count(kind);
+                recentPlaces.addLast(Util.getMeasuringTimeMs());
                 if (anchor == null) return;
                 BlockPos pos = use.getBlockHitResult().getBlockPos();
+                expectPlacement(pos, use.getBlockHitResult().getSide(), held, use.getSequence());
                 Vec3d hit = use.getBlockHitResult().getPos().subtract(pos.getX(), pos.getY(), pos.getZ());
                 line("> use-block " + relBlock(pos) + " face=" + use.getBlockHitResult().getSide().asString() + " hit=" + Describe.num(hit.x) + "," + Describe.num(hit.y) + "," + Describe.num(hit.z)
                     + (use.getBlockHitResult().isInsideBlock() ? " inside" : "") + " " + hand(use.getHand()) + " item=" + Describe.item(held) + " seq=" + use.getSequence()
@@ -383,6 +571,8 @@ public final class Recorder {
             }
             case PlayerInteractItemC2SPacket use -> {
                 count("items used");
+                recentUses.addLast(Util.getMeasuringTimeMs());
+                if (held(use.getHand()).isOf(Items.ENDER_PEARL) || held(use.getHand()).isOf(Items.CHORUS_FRUIT)) lastOwnPearl = Util.getMeasuringTimeMs();
                 line("> use-item " + hand(use.getHand()) + " item=" + Describe.item(held(use.getHand())) + " seq=" + use.getSequence());
             }
             case PlayerInteractEntityC2SPacket interact -> {
@@ -406,6 +596,7 @@ public final class Recorder {
                     }
                 });
                 if (kind[0].equals("attack")) count(target instanceof EndCrystalEntity ? "crystals hit" : target instanceof PlayerEntity ? "player hits" : "other hits");
+                if (kind[0].equals("attack")) recentAttacks.addLast(Util.getMeasuringTimeMs());
                 if (kind[0].equals("attack") && target instanceof EndCrystalEntity && crystals.containsKey(id)) {
                     line("> attack " + Describe.entity(target, id) + " " + (Util.getMeasuringTimeMs() - crystals.get(id)) + "ms after it appeared main=" + Describe.item(mc.player.getMainHandStack()));
                     return;
@@ -422,8 +613,23 @@ public final class Recorder {
                 };
                 if (positional) {
                     if (anchor == null) return;
+                    long now = Util.getMeasuringTimeMs();
+                    BlockPos mined = action.getPos().toImmutable();
+                    String timing = "";
+                    if (action.getAction() == PlayerActionC2SPacket.Action.START_DESTROY_BLOCK) {
+                        starts.put(mined, now);
+                    } else if (action.getAction() == PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK) {
+                        Long started = starts.get(mined);
+                        if (started != null) {
+                            timing = " after=" + (now - started) + "ms";
+                            sample("start to stop ms", now - started);
+                        }
+                        if (!mc.world.getBlockState(mined).isAir()) stops.put(mined, now);
+                    } else {
+                        starts.remove(mined);
+                    }
                     line("> " + name + " " + relBlock(action.getPos()) + " face=" + action.getDirection().asString() + " block=" + Describe.block(mc.world.getBlockState(action.getPos()))
-                        + " main=" + Describe.item(mc.player.getMainHandStack()) + " seq=" + action.getSequence());
+                        + " main=" + Describe.item(mc.player.getMainHandStack()) + " seq=" + action.getSequence() + timing);
                 } else {
                     line("> " + name + " main=" + Describe.item(mc.player.getMainHandStack()) + " off=" + Describe.item(mc.player.getOffHandStack()));
                 }
@@ -461,6 +667,52 @@ public final class Recorder {
             case CommandExecutionC2SPacket ignored -> count("commands (not recorded)");
             case ChatCommandSignedC2SPacket ignored -> count("commands (not recorded)");
             default -> count("other sent " + packet.getPacketType().id().getPath());
+        }
+    }
+
+    private void expectPlacement(BlockPos hit, Direction side, ItemStack held, int sequence) {
+        long now = Util.getMeasuringTimeMs();
+        if (held.isOf(Items.END_CRYSTAL)) {
+            crystalPlaces.add(new CrystalPlace(new Vec3d(hit.getX() + 0.5, hit.getY() + 1, hit.getZ() + 0.5), now));
+            return;
+        }
+        if (!(held.getItem() instanceof BlockItem blockItem)) return;
+        BlockState clicked = mc.world.getBlockState(hit);
+        if (clicked.getBlock() instanceof BlockWithEntity || clicked.isOf(Blocks.RESPAWN_ANCHOR)) return;
+        Block block = blockItem.getBlock();
+        BlockPos offset = hit.offset(side).toImmutable();
+        BlockState next = mc.world.getBlockState(offset);
+        BlockPos target;
+        BlockPos alternative = null;
+        if (next.isOf(block)) {
+            target = offset;
+        } else if (clicked.isReplaceable()) {
+            target = hit.toImmutable();
+        } else if (clicked.isOf(block) && next.isReplaceable()) {
+            target = offset;
+            alternative = hit.toImmutable();
+        } else {
+            target = offset;
+        }
+        places.add(new SentPlace(sequence, target, alternative, Describe.item(held), now));
+    }
+
+    private void answered(int acked) {
+        long now = Util.getMeasuringTimeMs();
+        for (Iterator<SentPlace> it = places.iterator(); it.hasNext(); ) {
+            SentPlace place = it.next();
+            if (place.sequence() > acked) continue;
+            it.remove();
+            boolean placed = !mc.world.getBlockState(place.target()).isReplaceable()
+                || place.alternative() != null && !mc.world.getBlockState(place.alternative()).isReplaceable();
+            long took = now - place.at();
+            if (placed) {
+                count("blocks accepted");
+                sample("block answer ms", took);
+            } else {
+                count("blocks refused");
+                line("< place REFUSED " + relBlock(place.target()) + " " + place.item() + " seq=" + place.sequence() + " after " + took + "ms");
+            }
         }
     }
 
@@ -524,12 +776,15 @@ public final class Recorder {
                     line("< teleport id=" + teleport.teleportId() + " far");
                     endWindow("teleported far");
                 } else {
-                    lastActivity = Util.getMeasuringTimeMs();
+                    long now = Util.getMeasuringTimeMs();
+                    lastActivity = now;
                     line("< teleport id=" + teleport.teleportId() + " moved " + Describe.vec(moved) + " (" + Describe.num(moved.length()) + " blocks)");
+                    if (moved.length() <= SETBACK_MAX && now - lastOwnPearl > PEARL_GRACE_MS) setback(now);
                 }
             }
             case PlayerActionResponseS2CPacket ack -> {
                 if (anchor != null) line("< ack seq=" + ack.sequence());
+                answered(ack.sequence());
             }
             case BlockUpdateS2CPacket update -> blockChanged(update.getPos(), update.getState());
             case ChunkDeltaUpdateS2CPacket delta -> delta.visitUpdates(this::blockChanged);
@@ -539,10 +794,15 @@ public final class Recorder {
                 line("< breaking " + relBlock(progress.getPos()) + " " + Describe.block(mc.world.getBlockState(progress.getPos())) + " stage=" + progress.getProgress() + " by " + Describe.name(breaker));
             }
             case EntitySpawnS2CPacket spawn -> {
+                if (anchor != null && spawn.getEntityType() == EntityType.ENDER_PEARL) {
+                    pearlThrown(spawn);
+                    return;
+                }
                 if (anchor == null || spawn.getEntityType() != EntityType.END_CRYSTAL) return;
                 Vec3d pos = new Vec3d(spawn.getX(), spawn.getY(), spawn.getZ());
                 if (pos.distanceTo(mc.player.getEntityPos()) > TRACK_RANGE) return;
                 crystals.put(spawn.getEntityId(), Util.getMeasuringTimeMs());
+                crystalAppeared(pos);
                 PlayerEntity placer = nearestTo(pos);
                 line("< crystal#" + spawn.getEntityId() + " at " + rel(pos) + " d=" + Describe.num(pos.distanceTo(mc.player.getEntityPos()))
                     + (placer == null ? "" : " nearest " + placer.getName().getString() + "(" + Describe.num(placer.getEntityPos().distanceTo(pos)) + ")"));
@@ -557,6 +817,11 @@ public final class Recorder {
                 if (anchor == null) return;
                 line("< explosion at " + rel(explosion.center()) + " d=" + Describe.num(explosion.center().distanceTo(mc.player.getEntityPos())) + " power=" + Describe.one(explosion.radius())
                     + explosion.playerKnockback().map(push -> " push=" + Describe.vec(push)).orElse(""));
+                Map<Integer, Float> snapshot = new HashMap<>();
+                for (PlayerEntity player : mc.world.getPlayers()) {
+                    if (player.getEntityPos().distanceTo(explosion.center()) <= BOOM_RANGE) snapshot.put(player.getId(), health.getOrDefault(player.getId(), player.getHealth() + player.getAbsorptionAmount()));
+                }
+                if (!snapshot.isEmpty()) booms.add(new Boom(explosion.center(), Util.getMeasuringTimeMs(), snapshot, new HashSet<>()));
             }
             case EntityEquipmentUpdateS2CPacket equipment -> {
                 if (anchor == null) return;
@@ -577,10 +842,14 @@ public final class Recorder {
             }
             case ScreenHandlerSlotUpdateS2CPacket slot -> {
                 if (slot.getSyncId() != 0 || slot.getSlot() < 36) return;
+                if (slot.getSlot() == OFFHAND_SLOT) offhandChanged(slot.getStack());
                 line("< slot " + slot.getSlot() + " " + Describe.item(slot.getStack()) + " rev=" + slot.getRevision());
             }
             case InventoryS2CPacket inventory -> {
-                if (inventory.syncId() == 0) line("< inventory resync rev=" + inventory.revision());
+                if (inventory.syncId() == 0) {
+                    line("< inventory resync rev=" + inventory.revision());
+                    if (inventory.contents().size() > OFFHAND_SLOT) offhandChanged(inventory.contents().get(OFFHAND_SLOT));
+                }
             }
             case WorldTimeUpdateS2CPacket time -> {
                 long wall = Util.getMeasuringTimeMs();
@@ -596,19 +865,73 @@ public final class Recorder {
         }
     }
 
+    private void setback(long now) {
+        count("setbacks");
+        boolean inside = mc.world.getBlockCollisions(mc.player, mc.player.getBoundingBox().contract(0.05)).iterator().hasNext();
+        line("< SETBACK since-last=" + (lastSetback == 0 ? "-" : (now - lastSetback) + "ms") + " last-1s places=" + recentPlaces.size() + " attacks=" + recentAttacks.size()
+            + " uses=" + recentUses.size() + (inside ? " inside-block" : "") + (mc.player.isOnGround() ? " ground" : " air") + (mc.player.isGliding() ? " glide" : "")
+            + (mc.player.hasVehicle() ? " vehicle" : ""));
+        if (lastSetback > 0) sample("between setbacks ms", now - lastSetback);
+        lastSetback = now;
+    }
+
+    private void crystalAppeared(Vec3d pos) {
+        long now = Util.getMeasuringTimeMs();
+        for (Iterator<CrystalPlace> it = crystalPlaces.iterator(); it.hasNext(); ) {
+            CrystalPlace place = it.next();
+            Vec3d expected = place.expected();
+            double dx = expected.x - pos.x;
+            double dz = expected.z - pos.z;
+            if (dx * dx + dz * dz > 0.36 || Math.abs(expected.y - pos.y) > 0.6) continue;
+            it.remove();
+            count("crystal places that appeared");
+            sample("crystal appear ms", now - place.at());
+            return;
+        }
+    }
+
+    private void pearlThrown(EntitySpawnS2CPacket spawn) {
+        Entity owner = mc.world.getEntityById(spawn.getEntityData());
+        if (owner == mc.player) return;
+        Vec3d pos = new Vec3d(spawn.getX(), spawn.getY(), spawn.getZ());
+        if (pos.distanceTo(mc.player.getEntityPos()) > TRACK_RANGE) return;
+        String name = owner instanceof PlayerEntity ? Describe.name(owner) : "?";
+        count("pearls by " + name);
+        line("E pearl thrown by " + name + " at " + rel(pos) + " d=" + Describe.num(pos.distanceTo(mc.player.getEntityPos())));
+    }
+
+    private void offhandChanged(ItemStack stack) {
+        if (popAt <= 0) return;
+        long took = Util.getMeasuringTimeMs() - popAt;
+        if (stack.isOf(Items.TOTEM_OF_UNDYING)) {
+            sample("totem refill ms", took);
+            line("< offhand totem back " + took + "ms after the pop");
+            popAt = 0;
+        } else {
+            line("< offhand " + Describe.item(stack) + " " + took + "ms after the pop");
+        }
+    }
+
     private void onDamage(EntityDamageS2CPacket damage) {
         Entity victim = mc.world.getEntityById(damage.entityId());
         if (!(victim instanceof PlayerEntity)) return;
         Entity cause = mc.world.getEntityById(damage.sourceCauseId());
         Entity direct = mc.world.getEntityById(damage.sourceDirectId());
         String type = Describe.damage(damage.sourceType());
+        long now = Util.getMeasuringTimeMs();
         if (victim == mc.player) {
-            lastActivity = Util.getMeasuringTimeMs();
+            lastActivity = now;
+            lastDamageType = type;
+            lastDamageAt = now;
+            if (lastSelfHurt > 0 && now - lastSelfHurt < 3000) sample("my hurt gaps ms", now - lastSelfHurt);
+            lastSelfHurt = now;
             count("damage taken " + type);
             line("< damage " + type + " by " + (cause == null ? "-" : Describe.name(cause)) + (direct != null && direct != cause ? " via " + Describe.name(direct) : ""));
             return;
         }
         if (anchor == null || victim.distanceTo(mc.player) > TRACK_RANGE) return;
+        Long previous = lastHurt.put(victim.getId(), now);
+        if (previous != null && now - previous < 3000) sample("enemy hurt gaps ms", now - previous);
         line("E hurt " + Describe.name(victim) + " " + type + " by " + (cause == null ? "-" : cause == mc.player ? "me" : Describe.name(cause)));
         if (cause == mc.player) count("hits on players " + type);
     }
@@ -617,8 +940,10 @@ public final class Recorder {
         Entity entity = status.getEntity(mc.world);
         if (!(entity instanceof PlayerEntity player)) return;
         if (status.getStatus() == POP) {
+            for (Boom boom : booms) boom.popped().add(player.getId());
             if (player == mc.player) {
                 lastActivity = Util.getMeasuringTimeMs();
+                popAt = lastActivity;
                 count("pops taken");
                 line("< POP me hp=" + Describe.one(player.getHealth()) + " off=" + Describe.item(player.getOffHandStack()));
             } else if (player.distanceTo(mc.player) <= TRACK_RANGE) {
@@ -632,6 +957,14 @@ public final class Recorder {
     }
 
     private void blockChanged(BlockPos pos, BlockState state) {
+        Long stopped = stops.get(pos);
+        if (stopped != null && state.isAir()) {
+            stops.remove(pos);
+            long took = Util.getMeasuringTimeMs() - stopped;
+            count("stops that broke");
+            sample("break after stop ms", took);
+            line("< broke " + relBlock(pos) + " " + took + "ms after the stop");
+        }
         BlockState old = before.remove(pos);
         if (anchor == null || old == null || old.equals(state) || !near(pos)) return;
         line("< block " + relBlock(pos) + " " + Describe.block(old) + " -> " + Describe.block(state));
@@ -686,6 +1019,10 @@ public final class Recorder {
         if (stats != null) stats.add(key, 1);
     }
 
+    private void sample(String key, double value) {
+        if (stats != null) stats.sample(key, value);
+    }
+
     private void note(String text, String key) {
         count(key);
         if (anchor != null) line(text);
@@ -703,6 +1040,11 @@ public final class Recorder {
     private static final class Stats {
         private final Map<String, Double> values = new TreeMap<>();
         private final Map<String, Double> maxima = new LinkedHashMap<>();
+        private final Map<String, List<Double>> samples = new TreeMap<>();
+
+        void sample(String key, double value) {
+            samples.computeIfAbsent(key, k -> new ArrayList<>()).add(value);
+        }
 
         void add(String key, double amount) {
             values.merge(key, amount, Double::sum);
@@ -716,8 +1058,7 @@ public final class Recorder {
             List<String> out = new ArrayList<>();
             StringBuilder line = new StringBuilder();
             for (Map.Entry<String, Double> entry : values.entrySet()) {
-                String value = entry.getValue() == Math.rint(entry.getValue()) ? String.valueOf(entry.getValue().longValue()) : Describe.one(entry.getValue());
-                String part = entry.getKey() + ": " + value;
+                String part = entry.getKey() + ": " + format(entry.getKey(), entry.getValue());
                 if (line.length() + part.length() > 180) {
                     out.add(line.toString());
                     line.setLength(0);
@@ -726,15 +1067,29 @@ public final class Recorder {
                 line.append(part);
             }
             if (!line.isEmpty()) out.add(line.toString());
+            for (Map.Entry<String, List<Double>> entry : samples.entrySet()) {
+                List<Double> values = new ArrayList<>(entry.getValue());
+                values.sort(Double::compare);
+                int n = values.size();
+                String key = entry.getKey();
+                out.add(key + ": count " + format("", n) + ", min " + format(key, values.getFirst()) + ", median " + format(key, values.get(n / 2))
+                    + ", p90 " + format(key, values.get(Math.min(n - 1, n * 9 / 10))) + ", max " + format(key, values.getLast()));
+            }
             if (!maxima.isEmpty()) {
                 StringBuilder peaks = new StringBuilder();
                 maxima.forEach((key, value) -> {
                     if (!peaks.isEmpty()) peaks.append(", ");
-                    peaks.append(key).append(": ").append(value.longValue());
+                    peaks.append(key).append(": ").append(format(key, value));
                 });
                 out.add(peaks.toString());
             }
             return out;
+        }
+
+        static String format(String key, double value) {
+            if (key.endsWith(" ms")) return Math.round(value) + "ms";
+            if (Math.abs(value) >= 1000) return Describe.one(value / 1000) + "k";
+            return value == Math.rint(value) ? String.valueOf((long) value) : Describe.one(value);
         }
     }
 }
