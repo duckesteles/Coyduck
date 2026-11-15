@@ -601,7 +601,18 @@ public class AutoTotem extends Module {
         if (home != NONE && home != InventoryManager.get().serverSlot() && !isTotem(mc.player.getOffHandStack()) && isTotem(InventoryManager.get().stack(home))
             && InventoryManager.get().handlerSlot(mc.player.currentScreenHandler, home) != -1) return home;
         int source = offhandSource(true);
-        return source != NONE ? source : offhandSource(false);
+        if (source == NONE) source = offhandSource(false);
+        return source != NONE ? source : reserveSource();
+    }
+
+    private int reserveSource() {
+        if (isGapple(mc.player.getOffHandStack())) return NONE;
+        InventoryManager inventory = InventoryManager.get();
+        int server = inventory.serverSlot();
+        for (int i : new int[] {slot.get() - 1, reserveSlot}) {
+            if (i >= 0 && i < InventoryManager.HOTBAR_END && i != server && (skipMask & (1 << i)) == 0 && isTotem(inventory.stack(i))) return i;
+        }
+        return NONE;
     }
 
     private int offhandSource(boolean avoidRecent) {
