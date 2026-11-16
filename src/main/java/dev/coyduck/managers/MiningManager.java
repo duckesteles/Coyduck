@@ -63,6 +63,8 @@ public final class MiningManager {
     private static final long START_GAP = 600;
     private static final double STOP_FACE_COS = Math.cos(Math.toRadians(15));
     private static final int STOP_FACE_PRIORITY = 95;
+    private static final long STOP_FACE_WAIT = 300;
+    private static final float STOP_TURN_SPEED = 60.0f;
     private static final long QUIET = 150;
     private static final long QUIET_CAP = 400;
 
@@ -97,6 +99,7 @@ public final class MiningManager {
     private boolean startPending;
     private long lastStopAt;
     private long readySince;
+    private long faceRefusedAt;
 
     public interface StopGate {
         boolean allowStop(BlockPos pos);
@@ -164,6 +167,7 @@ public final class MiningManager {
 
     private void begin() {
         readySince = 0;
+        faceRefusedAt = 0;
         startPending = true;
         startTick = ticks;
         startTime = Util.getMeasuringTimeMs();
@@ -290,6 +294,7 @@ public final class MiningManager {
 
         if (Trace.on()) Trace.log("mine stop {} {} elapsed {}t need {}t tool {}", pos, broken ? "rebreak" : "first", (int) elapsed(), (int) Math.ceil(STOP_THRESHOLD / Math.max(bestDelta(state), 1.0E-6f)), tool == -1 ? "hand" : InventoryManager.get().stack(tool).getItem());
         readySince = 0;
+        faceRefusedAt = 0;
         lastStop = Util.getMeasuringTimeMs();
         lastStopTick = ticks;
         brokenSinceStop = false;
@@ -316,9 +321,18 @@ public final class MiningManager {
         Vec3d look = Vec3d.fromPolar(rotations.serverPitch(), rotations.serverYaw());
         Vec3d want = point.subtract(eye).normalize();
         if (look.dotProduct(want) >= STOP_FACE_COS) return true;
-        if (!rotations.lookNow(point, STOP_FACE_PRIORITY)) return false;
-        if (Trace.on()) Trace.log("mine faces {} before stop", pos);
-        return true;
+        if (rotations.lookNow(point, STOP_FACE_PRIORITY)) {
+            if (Trace.on()) Trace.log("mine faces {} before stop", pos);
+            return true;
+        }
+        long now = Util.getMeasuringTimeMs();
+        if (faceRefusedAt == 0) faceRefusedAt = now;
+        if (now - faceRefusedAt >= STOP_FACE_WAIT) {
+            Trace.log("mine stop {} unfaced after {}ms", pos, now - faceRefusedAt);
+            return true;
+        }
+        rotations.request(STOP_FACE_PRIORITY, point, STOP_TURN_SPEED, false);
+        return false;
     }
 
     private void blindStop() {
@@ -562,7 +576,7 @@ public final class MiningManager {
     }
 
     private void keepTool() {
-        if (holdTicks > 0 && holdHotbar != -1 && !canHold()) {
+        if (holdTicks > 0 && holdHotbar != -1 && (!canHold() || InventoryManager.get().selectedSlot() != holdHotbar)) {
             holdTicks = 0;
             unhold();
             return;
