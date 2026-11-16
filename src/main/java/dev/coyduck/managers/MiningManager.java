@@ -452,6 +452,16 @@ public final class MiningManager {
         }
     }
 
+    public void tap(BlockPos target, Direction side) {
+        sending = true;
+        try {
+            mc.interactionManager.attackBlock(target, side);
+        } finally {
+            sending = false;
+        }
+        foreignBreak();
+    }
+
     public void foreignBreak() {
         lastStopAt = Util.getMeasuringTimeMs();
         if (pos == null || broken) return;

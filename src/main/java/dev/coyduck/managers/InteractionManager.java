@@ -309,8 +309,7 @@ public final class InteractionManager {
 
     private void extinguish(BlockPos above) {
         if (!extinguishable(above)) return;
-        mc.interactionManager.attackBlock(above, Direction.UP);
-        MiningManager.get().foreignBreak();
+        MiningManager.get().tap(above, Direction.UP);
         Trace.log("crystal base fire put out at {}", above);
     }
 
