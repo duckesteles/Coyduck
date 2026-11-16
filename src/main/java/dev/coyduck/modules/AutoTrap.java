@@ -303,10 +303,9 @@ public class AutoTrap extends Feature {
         BlockHitResult hit = known != null ? known : hitFor(pos);
         if (hit == null) return false;
         if (!interaction.seen(hit)) {
-            BlockPos helper = interaction.helper(pos);
-            BlockHitResult helperHit = helper == null ? null : interaction.hit(helper, false);
-            if (helperHit != null && placeable(helper) && interaction.place(helper, helperHit, swing.get(), rotate.get(), look.get(), InteractionManager.TRAP_PRIORITY)) {
-                rendered.put(helper.asLong(), Util.getMeasuringTimeMs());
+            BlockHitResult helperHit = interaction.helper(pos, helper -> helper.getY() >= pos.getY() && placeable(helper));
+            if (helperHit != null && interaction.place(helperHit.getBlockPos(), helperHit, swing.get(), rotate.get(), look.get(), InteractionManager.TRAP_PRIORITY)) {
+                rendered.put(helperHit.getBlockPos().asLong(), Util.getMeasuringTimeMs());
                 if (--budget <= 0) return true;
                 hit = hitFor(pos);
                 if (hit == null) return true;

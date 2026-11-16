@@ -58,6 +58,7 @@ import net.minecraft.world.RaycastContext;
 
 import java.util.ArrayDeque;
 import java.util.List;
+import java.util.function.Predicate;
 
 import static dev.coyduck.core.Core.mc;
 
@@ -234,28 +235,33 @@ public final class InteractionManager {
         return ncpSees(hit.getBlockPos(), hit.getSide(), mc.player.getEyePos());
     }
 
-    public BlockPos helper(BlockPos cell) {
+    public BlockHitResult helper(BlockPos cell, Predicate<BlockPos> allowed) {
         Vec3d eye = mc.player.getEyePos();
         double reach = mc.player.getBlockInteractionRange() - REACH_MARGIN;
-        BlockPos best = null;
+        BlockHitResult best = null;
         double bestDistance = Double.MAX_VALUE;
         for (Direction direction : Direction.values()) {
             BlockPos helper = cell.offset(direction);
             double distance = new Box(helper).squaredMagnitude(eye);
-            if (distance >= reach * reach || distance >= bestDistance || !centerReach(helper)) continue;
+            if (distance >= reach * reach || distance >= bestDistance || !centerReach(helper) || !allowed.test(helper)) continue;
             if (!canPlace(helper) || !obstructions(helper).isEmpty()) continue;
             Direction side = direction.getOpposite();
             if (!ncpFace(helper, side, eye)) continue;
             BlockHitResult hit = hit(helper, false);
-            if (hit == null || !seen(hit)) continue;
-            assumed = helper;
-            boolean opens = ncpSees(helper, side, eye);
-            assumed = null;
-            if (!opens) continue;
-            best = helper;
+            if (hit == null || !seen(hit) || !opens(helper, side, eye)) continue;
+            best = hit;
             bestDistance = distance;
         }
         return best;
+    }
+
+    private boolean opens(BlockPos helper, Direction side, Vec3d eye) {
+        assumed = helper;
+        try {
+            return ncpSees(helper, side, eye);
+        } finally {
+            assumed = null;
+        }
     }
 
     private boolean ncpSees(BlockPos block, Direction side, Vec3d eye) {
@@ -625,6 +631,7 @@ public final class InteractionManager {
         if (event.packet instanceof PlayerPositionLookS2CPacket) {
             voidTo = Util.getMeasuringTimeMs();
             voidFrom = voidTo - LatencyManager.get().rtt();
+            rejectedAt.long2LongEntrySet().removeIf(entry -> voided(entry.getLongKey()));
         }
         if (mc.world != null) {
             switch (event.packet) {

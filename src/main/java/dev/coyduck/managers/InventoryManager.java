@@ -324,6 +324,7 @@ public final class InventoryManager {
                 continue;
             }
 
+            if (!spareClick()) return;
             int from = find(stack -> stack.isOf(item), HOTBAR_END, MAIN_END);
             if (from != -1) swapWithHotbar(from, slot);
         }
