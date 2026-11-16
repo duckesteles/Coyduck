@@ -177,7 +177,9 @@ public class AutoTotem extends Feature {
     private boolean verifying;
     private long nextVerify;
     private long popExpectedUntil;
+    private static final long LETHAL_HOLD = 750;
     private int dangerHold;
+    private long lethalAt;
     private int pendingSource = NONE;
     private int skipMask;
     private int pendingSyncId;
@@ -337,6 +339,7 @@ public class AutoTotem extends Feature {
         if (!(event.entity instanceof EndCrystalEntity crystal) || !canAct()) return;
         if (lethal(crystal, mc.player.getHealth() + mc.player.getAbsorptionAmount())) {
             if (mainhand.get() == Mainhand.Smart) dangerHold = DANGER_HOLD;
+            lethalAt = Util.getMeasuringTimeMs();
             updateMainhand();
         }
     }
@@ -649,7 +652,8 @@ public class AutoTotem extends Feature {
     }
 
     private void updateMainhand() {
-        if (MiningManager.get().isHolding()) return;
+        boolean lethal = Util.getMeasuringTimeMs() - lethalAt < LETHAL_HOLD;
+        if (MiningManager.get().isHolding() && !lethal) return;
         if (gapple) dangerHold = DANGER_HOLD;
 
         InventoryManager inventory = InventoryManager.get();
@@ -689,10 +693,10 @@ public class AutoTotem extends Feature {
             if (activelyBusy()) resumeTicks = Math.max(resumeTicks, resumeDelay.get());
             else foodTicks = resumeDelay.get();
         }
-        boolean critical = mainhand.get() == Mainhand.Smart && dangerHold > 0 && !inventory.isEating()
+        boolean critical = mainhand.get() == Mainhand.Smart && dangerHold > 0 && (lethal || !inventory.isEating()
             && manualTicks >= CRITICAL_GRACE && !mc.options.useKey.isPressed()
-            && mc.player.getHealth() + mc.player.getAbsorptionAmount() <= health.get();
-        if ((!popped && !critical && (resumeTicks > 0 || foodTicks > 0)) || (!gapple && !isTotem(mc.player.getOffHandStack()))) return;
+            && mc.player.getHealth() + mc.player.getAbsorptionAmount() <= health.get());
+        if ((!popped && !critical && (resumeTicks > 0 || foodTicks > 0)) || (!gapple && !lethal && !isTotem(mc.player.getOffHandStack()))) return;
 
         int hotbar = NONE;
         for (int i = 0; i < InventoryManager.HOTBAR_END && hotbar == NONE; i++) {

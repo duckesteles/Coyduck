@@ -582,7 +582,7 @@ public final class MiningManager {
         if (!displaced.contains(DataComponentTypes.DEATH_PROTECTION)) return true;
 
         float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
-        return health > HOLD_MIN_HEALTH || (Core.host().canAffordPop() && !lethalCrystalNear(health));
+        return !lethalCrystalNear(health) && (health > HOLD_MIN_HEALTH || Core.host().canAffordPop());
     }
 
     private boolean lethalCrystalNear(float health) {
