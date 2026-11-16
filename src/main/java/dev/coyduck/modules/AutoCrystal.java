@@ -817,6 +817,7 @@ public class AutoCrystal extends Feature {
         float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
         if (InventoryManager.get().isOffhandEating()) {
             status = "eating";
+            if (defend.get() && breakBudget > 0) defend(targets, health, true);
             return;
         }
         boolean holding = breakBudget > 0 && breakCrystals(targets, health);
@@ -1197,11 +1198,11 @@ public class AutoCrystal extends Feature {
 
         releaseAt = release;
         breakClearing(targets, health);
-        if (defend.get() && breakBudget > 0 && defend(targets, health)) broke = true;
+        if (defend.get() && breakBudget > 0 && defend(targets, health, false)) broke = true;
         return held && !broke;
     }
 
-    private boolean defend(List<Target> targets, float health) {
+    private boolean defend(List<Target> targets, float health, boolean lethalOnly) {
         CrystalTracker tracker = CrystalTracker.get();
         long arrival = Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2;
         double range = breakRange.get() * breakRange.get();
@@ -1216,7 +1217,7 @@ public class AutoCrystal extends Feature {
             if (ExplosionDamage.upperBound(mc.player, mc.player.getEntityPos(), center) < DEFENSE_THREAT) continue;
             float raw = ExplosionDamage.crystalRaw(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), center, mc.world);
             float full = ExplosionDamage.mitigate(mc.player, raw);
-            if (full < DEFENSE_THREAT) continue;
+            if (full < DEFENSE_THREAT || lethalOnly && full < health) continue;
 
             HurtTracker hurt = HurtTracker.get();
             if (hurt.effectiveOnSelf(raw, arrival) > DEFENSE_FREE) continue;
@@ -1226,7 +1227,7 @@ public class AutoCrystal extends Feature {
 
             if (!InteractionManager.get().canAttack()) return broke;
             if (!breakReady(crystal, DEFEND_PRIORITY)) return broke;
-            if (!InteractionManager.get().attack(crystal, switchMode.get(), swing.get(), !pauseEating.get())) return broke;
+            if (!InteractionManager.get().attack(crystal, switchMode.get(), swing.get(), lethalOnly || !pauseEating.get())) return broke;
 
             tracker.broke(crystal);
             expectHits(targets, center, null);
