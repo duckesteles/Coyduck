@@ -26,9 +26,12 @@ public class InfoHud extends Widget {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final CoyHud.Background background = new CoyHud.Background(settings);
 
+    private static final long SETBACK_SHOWN = 1_500;
+
     private final Setting<Boolean> fps = add("fps", "Frames per second.");
     private final Setting<Boolean> ping = add("ping", "Your ping.");
     private final Setting<Boolean> tps = add("tps", "Server ticks per second.");
+    private final Setting<Boolean> lag = add("lag", "Shows how long the server has been silent, and fresh setbacks.");
     private final Setting<Boolean> speed = add("speed", "Your speed in blocks per second.");
     private final Setting<Boolean> coords = add("coords", "Your coordinates, with the other dimension's next to them.");
     private final Setting<Integer> hideBeyond = sgGeneral.add(new IntSetting.Builder()
@@ -68,6 +71,11 @@ public class InfoHud extends Widget {
         if (ping.get()) {
             int latency = latency();
             lines.add(new Line("Ping", latency + "ms", latency > 250 ? Palette.BAD : latency > 150 ? Palette.WARN : Palette.TEXT));
+        }
+        if (lag.get() && mc.getNetworkHandler() != null) {
+            LatencyManager latency = LatencyManager.get();
+            if (latency.frozen()) lines.add(new Line("Lag", String.format(Locale.ROOT, "%.1fs", latency.silentFor() / 1000.0), Palette.BAD));
+            if (latency.sinceSetback() < SETBACK_SHOWN) lines.add(new Line("Setback", "now", Palette.WARN));
         }
         if (tps.get()) {
             float rate = TickRate.get().tickRate();
