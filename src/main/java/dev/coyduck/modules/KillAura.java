@@ -84,7 +84,7 @@ public class KillAura extends Module {
     private final Setting<Double> range = sgGeneral.add(new DoubleSetting.Builder()
         .name("range")
         .description("Reach to the closest point of the target's hitbox.")
-        .defaultValue(3.5)
+        .defaultValue(4.5)
         .range(1, 6)
         .sliderRange(1, 6)
         .build()
