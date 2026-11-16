@@ -110,6 +110,7 @@ public final class InteractionManager {
     private boolean trackDrops;
     private final ArrayDeque<OwnBreak> ownBreaks = new ArrayDeque<>();
     private final NcpVisible visible = new NcpVisible();
+    private BlockPos assumed;
     private long voidFrom;
     private long voidTo;
     private final NcpVisible.Solid solid = this::solid;
@@ -229,6 +230,34 @@ public final class InteractionManager {
         };
     }
 
+    public boolean seen(BlockHitResult hit) {
+        return ncpSees(hit.getBlockPos(), hit.getSide(), mc.player.getEyePos());
+    }
+
+    public BlockPos helper(BlockPos cell) {
+        Vec3d eye = mc.player.getEyePos();
+        double reach = mc.player.getBlockInteractionRange() - REACH_MARGIN;
+        BlockPos best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (Direction direction : Direction.values()) {
+            BlockPos helper = cell.offset(direction);
+            double distance = new Box(helper).squaredMagnitude(eye);
+            if (distance >= reach * reach || distance >= bestDistance || !centerReach(helper)) continue;
+            if (!canPlace(helper) || !obstructions(helper).isEmpty()) continue;
+            Direction side = direction.getOpposite();
+            if (!ncpFace(helper, side, eye)) continue;
+            BlockHitResult hit = hit(helper, false);
+            if (hit == null || !seen(hit)) continue;
+            assumed = helper;
+            boolean opens = ncpSees(helper, side, eye);
+            assumed = null;
+            if (!opens) continue;
+            best = helper;
+            bestDistance = distance;
+        }
+        return best;
+    }
+
     private boolean ncpSees(BlockPos block, Direction side, Vec3d eye) {
         int axis = switch (side.getAxis()) {
             case X -> NcpVisible.X;
@@ -239,6 +268,7 @@ public final class InteractionManager {
     }
 
     private boolean solid(int x, int y, int z) {
+        if (assumed != null && assumed.getX() == x && assumed.getY() == y && assumed.getZ() == z) return true;
         scratch.set(x, y, z);
         return !mc.world.getBlockState(scratch).getCollisionShape(mc.world, scratch).isEmpty();
     }
