@@ -1,18 +1,18 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
+import dev.coyduck.MeteorColors;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.renderer.Renderer3D;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.render.color.Color;
-import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.render.entity.EndCrystalEntityRenderer;
@@ -24,7 +24,7 @@ import net.minecraft.entity.decoration.EndCrystalEntity;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
-public class CrystalChams extends Module {
+public class CrystalChams extends Feature {
     private static final int[][] FACES = {
         {0, 2, 6, 4}, {1, 3, 7, 5},
         {0, 1, 5, 4}, {2, 3, 7, 6},
@@ -40,17 +40,17 @@ public class CrystalChams extends Module {
         .build()
     );
 
-    private final Setting<SettingColor> lineColor = sgGeneral.add(new ColorSetting.Builder()
+    private final Setting<Rgba> lineColor = sgGeneral.add(new ColorSetting.Builder()
         .name("line-color")
         .description("Colour of the cube edges.")
-        .defaultValue(new SettingColor(255, 255, 255, 255))
+        .defaultValue(new Rgba(255, 255, 255, 255))
         .build()
     );
 
-    private final Setting<SettingColor> sideColor = sgGeneral.add(new ColorSetting.Builder()
+    private final Setting<Rgba> sideColor = sgGeneral.add(new ColorSetting.Builder()
         .name("side-color")
         .description("Colour of the cube faces.")
-        .defaultValue(new SettingColor(255, 255, 255, 30))
+        .defaultValue(new Rgba(255, 255, 255, 30))
         .build()
     );
 
@@ -79,7 +79,7 @@ public class CrystalChams extends Module {
     private boolean lines;
 
     public CrystalChams() {
-        super(Coyduck.CATEGORY, "crystal-chams", "Wireframe end crystals.");
+        super("crystal-chams", "Wireframe end crystals.");
         for (int i = 0; i < corners.length; i++) corners[i] = new Vector3f();
     }
 
@@ -88,7 +88,7 @@ public class CrystalChams extends Module {
     }
 
     public static boolean hidesModel() {
-        CrystalChams module = Modules.get().get(CrystalChams.class);
+        CrystalChams module = Features.get(CrystalChams.class);
         return module != null && module.isActive() && module.hideModel.get();
     }
 
@@ -96,8 +96,8 @@ public class CrystalChams extends Module {
     private void onRender(Render3DEvent event) {
         if (mc.world == null) return;
         Renderer3D renderer = throughWalls.get() ? event.renderer : event.depthRenderer;
-        side = Shaders.tint(sideColor.get());
-        line = Shaders.lightTint(lineColor.get());
+        side = Shaders.tint(MeteorColors.of(sideColor));
+        line = Shaders.lightTint(MeteorColors.of(lineColor));
         sides = shapeMode.get().sides();
         lines = shapeMode.get().lines();
         double range = MAX_DISTANCE * MAX_DISTANCE;

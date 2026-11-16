@@ -1,32 +1,32 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
+import dev.coyduck.MeteorColors;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.utils.ShaderGlow;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.render.color.Color;
-import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.render.entity.state.EndCrystalEntityRenderState;
-import net.minecraft.entity.EntityType;
 import net.minecraft.client.render.entity.state.EntityRenderState;
 import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
+import net.minecraft.entity.EntityType;
 
-public class Shaders extends Module implements ShaderGlow.Source {
+public class Shaders extends Feature implements ShaderGlow.Source {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgAtmosphere = settings.createGroup("Atmosphere");
 
-    private final Setting<SettingColor> color = sgGeneral.add(new ColorSetting.Builder()
+    private final Setting<Rgba> color = sgGeneral.add(new ColorSetting.Builder()
         .name("color")
         .description("Shader color, also used by Coyduck renders.")
-        .defaultValue(new SettingColor(130, 202, 255, 255))
+        .defaultValue(new Rgba(130, 202, 255, 255))
         .build()
     );
 
@@ -138,27 +138,25 @@ public class Shaders extends Module implements ShaderGlow.Source {
     );
 
     public Shaders() {
-        super(Coyduck.CATEGORY, "shaders+", "Glow on players and crystals.");
+        super("shaders+", "Glow on players and crystals.");
     }
 
     public static Shaders active() {
-        Modules modules = Modules.get();
-        if (modules == null) return null;
-        Shaders module = modules.get(Shaders.class);
+        Shaders module = Features.get(Shaders.class);
         return module != null && module.isActive() ? module : null;
     }
 
     public static Color tint(Color original) {
         Shaders module = active();
         if (module == null || !module.allRenders.get()) return original;
-        Color global = module.color.get();
+        Color global = MeteorColors.of(module.color);
         return new Color(global.r, global.g, global.b, original.a);
     }
 
     public static Color lightTint(Color original) {
         Shaders module = active();
         if (module == null || !module.allRenders.get()) return original;
-        Color global = module.color.get();
+        Color global = MeteorColors.of(module.color);
         return new Color((global.r + 255) / 2, (global.g + 255) / 2, (global.b + 255) / 2, original.a);
     }
 
@@ -201,7 +199,7 @@ public class Shaders extends Module implements ShaderGlow.Source {
 
     @Override
     public Color maskColor() {
-        Color global = color.get();
+        Color global = MeteorColors.of(color);
         return new Color(global.r, global.g, global.b, 255);
     }
 

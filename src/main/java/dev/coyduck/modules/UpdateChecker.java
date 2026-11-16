@@ -2,19 +2,17 @@ package dev.coyduck.modules;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.GameJoinedEvent;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.Feature;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.orbit.EventHandler;
-import meteordevelopment.meteorclient.systems.modules.Module;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.toast.Toast;
 import net.minecraft.client.toast.ToastManager;
-import net.minecraft.nbt.NbtCompound;
 import net.minecraft.text.ClickEvent;
 import net.minecraft.text.HoverEvent;
 import net.minecraft.text.Style;
@@ -29,7 +27,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 
-public class UpdateChecker extends Module {
+public class UpdateChecker extends Feature {
     private static final URI LATEST = URI.create("https://api.github.com/repos/duckesteles/Coyduck/releases/latest");
     private static final String RELEASES = "https://github.com/duckesteles/Coyduck/releases";
     private static final Identifier BACKGROUND = Identifier.ofVanilla("toast/advancement");
@@ -40,15 +38,14 @@ public class UpdateChecker extends Module {
     private Text pending;
 
     public UpdateChecker() {
-        super(Coyduck.CATEGORY, "update-checker", "Checks for Coyduck updates.");
+        super("update-checker", "Checks for Coyduck updates.");
         runInMainMenu = true;
         MeteorClient.EVENT_BUS.subscribe(new FirstRun());
     }
 
     @Override
-    public Module fromTag(NbtCompound tag) {
+    public void onLoad() {
         saved = true;
-        return super.fromTag(tag);
     }
 
     @EventHandler

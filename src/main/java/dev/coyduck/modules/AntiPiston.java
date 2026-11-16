@@ -1,10 +1,19 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
+import dev.coyduck.MeteorColors;
 import dev.coyduck.events.EntityAddedEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.feature.BlockListSetting;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
@@ -24,15 +33,6 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
-import meteordevelopment.meteorclient.settings.BlockListSetting;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.AbstractRedstoneGateBlock;
 import net.minecraft.block.Block;
@@ -66,7 +66,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-public class AntiPiston extends Module {
+public class AntiPiston extends Feature {
     private static final float POP_MARGIN = 1.5f;
     private static final float LOW_HEALTH = 12;
     private static final float CHEAP_BREAK = 6;
@@ -193,18 +193,18 @@ public class AntiPiston extends Module {
         .build()
     );
 
-    private final Setting<SettingColor> sideColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> sideColor = sgRender.add(new ColorSetting.Builder()
         .name("side-color")
         .description("Highlight side color.")
-        .defaultValue(new SettingColor(230, 60, 60, 40))
+        .defaultValue(new Rgba(230, 60, 60, 40))
         .visible(render::get)
         .build()
     );
 
-    private final Setting<SettingColor> lineColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> lineColor = sgRender.add(new ColorSetting.Builder()
         .name("line-color")
         .description("Highlight line color.")
-        .defaultValue(new SettingColor(230, 60, 60, 200))
+        .defaultValue(new Rgba(230, 60, 60, 200))
         .visible(render::get)
         .build()
     );
@@ -249,7 +249,7 @@ public class AntiPiston extends Module {
     private boolean running;
 
     public AntiPiston() {
-        super(Coyduck.CATEGORY, "anti-piston", "Stops piston crystals and pushes.");
+        super("anti-piston", "Stops piston crystals and pushes.");
         reset();
     }
 
@@ -336,7 +336,7 @@ public class AntiPiston extends Module {
         long now = Util.getMeasuringTimeMs();
         rendered.long2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > DuckRender.LIFETIME);
         for (var entry : rendered.long2LongEntrySet()) {
-            DuckRender.box(event.renderer, new Box(BlockPos.fromLong(entry.getLongKey())), sideColor.get(), lineColor.get(), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
+            DuckRender.box(event.renderer, new Box(BlockPos.fromLong(entry.getLongKey())), MeteorColors.of(sideColor), MeteorColors.of(lineColor), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
         }
     }
 

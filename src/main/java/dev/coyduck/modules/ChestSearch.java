@@ -1,13 +1,13 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.utils.render.color.SettingColor;
+import dev.coyduck.MeteorColors;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.ContainerComponent;
@@ -18,7 +18,7 @@ import net.minecraft.registry.entry.RegistryEntry;
 
 import java.util.Locale;
 
-public class ChestSearch extends Module {
+public class ChestSearch extends Feature {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
     private final Setting<Boolean> insideShulkers = sgGeneral.add(new BoolSetting.Builder()
@@ -35,24 +35,24 @@ public class ChestSearch extends Module {
         .build()
     );
 
-    private final Setting<SettingColor> color = sgGeneral.add(new ColorSetting.Builder()
+    private final Setting<Rgba> color = sgGeneral.add(new ColorSetting.Builder()
         .name("color")
         .description("Highlight on matching slots.")
-        .defaultValue(new SettingColor(185, 74, 230, 110))
+        .defaultValue(new Rgba(185, 74, 230, 110))
         .build()
     );
 
     public ChestSearch() {
-        super(Coyduck.CATEGORY, "chest-search", "Search bar for chests.");
+        super("chest-search", "Search bar for chests.");
     }
 
     public static ChestSearch active() {
-        ChestSearch module = Modules.get() == null ? null : Modules.get().get(ChestSearch.class);
+        ChestSearch module = Features.get(ChestSearch.class);
         return module != null && module.isActive() ? module : null;
     }
 
     public int highlight() {
-        return color.get().getPacked();
+        return MeteorColors.of(color).getPacked();
     }
 
     public boolean matches(ItemStack stack, String query) {

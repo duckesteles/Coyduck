@@ -1,10 +1,19 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
+import dev.coyduck.MeteorColors;
 import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.logic.AnchorScore;
 import dev.coyduck.logic.AnchorScore.Choice;
 import dev.coyduck.logic.AnchorScore.Rules;
@@ -32,18 +41,11 @@ import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.systems.modules.combat.AnchorAura;
 import meteordevelopment.meteorclient.utils.render.color.Color;
-import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
@@ -77,7 +79,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
-public class AutoAnchor extends Module {
+public class AutoAnchor extends Feature {
     private static final float POWER = 5.0f;
     private static final double RANGE = POWER * 2.0;
     private static final int PRIORITY = 100;
@@ -302,18 +304,18 @@ public class AutoAnchor extends Module {
         .build()
     );
 
-    private final Setting<SettingColor> sideColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> sideColor = sgRender.add(new ColorSetting.Builder()
         .name("side-color")
         .description("Highlight side color.")
-        .defaultValue(new SettingColor(230, 140, 40, 40))
+        .defaultValue(new Rgba(230, 140, 40, 40))
         .visible(render::get)
         .build()
     );
 
-    private final Setting<SettingColor> lineColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> lineColor = sgRender.add(new ColorSetting.Builder()
         .name("line-color")
         .description("Highlight line color.")
-        .defaultValue(new SettingColor(230, 140, 40, 200))
+        .defaultValue(new Rgba(230, 140, 40, 200))
         .visible(render::get)
         .build()
     );
@@ -341,7 +343,7 @@ public class AutoAnchor extends Module {
     private final AnchorScore scorer = new AnchorScore(new ScoreModel());
 
     public AutoAnchor() {
-        super(Coyduck.CATEGORY, "auto-anchor", "Places and blows up respawn anchors.");
+        super("auto-anchor", "Places and blows up respawn anchors.");
     }
 
     @Override
@@ -523,7 +525,7 @@ public class AutoAnchor extends Module {
         }
 
         if (!render.get()) return;
-        slide.render(event.renderer, sideColor.get(), lineColor.get(), shapeMode.get());
+        slide.render(event.renderer, MeteorColors.of(sideColor), MeteorColors.of(lineColor), shapeMode.get());
     }
 
     private boolean matters(BlockPos pos, BlockState state) {
@@ -868,7 +870,7 @@ public class AutoAnchor extends Module {
     }
 
     private List<Vec3d> ownCrystals() {
-        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
+        AutoCrystal autoCrystal = Features.get(AutoCrystal.class);
         if (autoCrystal == null || !autoCrystal.isActive()) return null;
 
         CrystalTracker tracker = CrystalTracker.get();

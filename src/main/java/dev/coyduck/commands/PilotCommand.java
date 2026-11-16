@@ -2,9 +2,9 @@ package dev.coyduck.commands;
 
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import dev.coyduck.feature.Features;
 import dev.coyduck.modules.ElytraPilot;
 import meteordevelopment.meteorclient.commands.Command;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.command.CommandSource;
 
 public class PilotCommand extends Command {
@@ -45,6 +45,6 @@ public class PilotCommand extends Command {
     }
 
     private static ElytraPilot pilot() {
-        return Modules.get().get(ElytraPilot.class);
+        return Features.get(ElytraPilot.class);
     }
 }

@@ -24,7 +24,6 @@ import dev.coyduck.utils.Targets;
 import dev.coyduck.utils.Trace;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.Utils;
 import meteordevelopment.meteorclient.utils.entity.DamageUtils;
 import meteordevelopment.orbit.EventHandler;
@@ -413,7 +412,7 @@ public class MaceStrike extends Feature {
     }
 
     private void airTick() {
-        ElytraPilot pilot = Modules.get().get(ElytraPilot.class);
+        ElytraPilot pilot = Features.get(ElytraPilot.class);
         if (pilot != null && pilot.isActive()) {
             target = null;
             lastTarget = null;
@@ -555,7 +554,7 @@ public class MaceStrike extends Feature {
     }
 
     private void steer(Vec3d goal) {
-        ElytraFly fly = Modules.get().get(ElytraFly.class);
+        ElytraFly fly = Features.get(ElytraFly.class);
         Vec3d delta = goal.subtract(mc.player.getEntityPos());
 
         double horizontal = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
@@ -1041,7 +1040,7 @@ public class MaceStrike extends Feature {
     }
 
     private boolean flying() {
-        return follow.get() && mc.player.isGliding() && Modules.get().isActive(ElytraFly.class);
+        return follow.get() && mc.player.isGliding() && Features.isActive(ElytraFly.class);
     }
 
     private boolean canAct() {

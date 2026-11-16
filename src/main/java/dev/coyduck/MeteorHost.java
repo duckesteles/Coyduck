@@ -1,6 +1,7 @@
 package dev.coyduck;
 
 import dev.coyduck.core.Host;
+import dev.coyduck.feature.Features;
 import dev.coyduck.modules.AirMine;
 import dev.coyduck.modules.AutoCity;
 import dev.coyduck.modules.AutoCrystal;
@@ -56,13 +57,13 @@ public final class MeteorHost implements Host {
 
     @Override
     public PlayerEntity preferredTarget() {
-        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
+        AutoCrystal autoCrystal = Features.get(AutoCrystal.class);
         return autoCrystal == null ? null : autoCrystal.target();
     }
 
     @Override
     public double keepHealth() {
-        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
+        AutoCrystal autoCrystal = Features.get(AutoCrystal.class);
         return autoCrystal == null ? 0 : autoCrystal.minHealth();
     }
 }

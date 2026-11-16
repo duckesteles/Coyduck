@@ -1,14 +1,20 @@
 package dev.coyduck.modules;
 
-import meteordevelopment.meteorclient.utils.render.color.Color;
-import net.minecraft.registry.Registries;
-import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
-import dev.coyduck.Coyduck;
+import dev.coyduck.MeteorColors;
 import dev.coyduck.events.EntityAddedEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.feature.BlockListSetting;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.logic.BlockOverlay;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
@@ -17,54 +23,49 @@ import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
-import dev.coyduck.utils.Trace;
 import dev.coyduck.utils.DuckRender;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
+import dev.coyduck.utils.Trace;
+import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
-import meteordevelopment.meteorclient.settings.BlockListSetting;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
+import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.utils.render.color.SettingColor;
+import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.FallingBlockEntity;
 import net.minecraft.entity.MovementType;
 import net.minecraft.entity.decoration.EndCrystalEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.network.packet.s2c.play.BlockBreakingProgressS2CPacket;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.EntitiesDestroyS2CPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Util;
 import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.entity.player.PlayerEntity;
-import meteordevelopment.meteorclient.systems.friends.Friends;
-import net.minecraft.entity.FallingBlockEntity;
-import net.minecraft.registry.tag.BlockTags;
-import net.minecraft.item.Items;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.registry.RegistryKey;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
@@ -78,7 +79,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-public class Surround extends Module {
+public class Surround extends Feature {
     private static final double ANVIL_RANGE = 1.5;
     public enum Disable {
         Never,
@@ -276,18 +277,18 @@ public class Surround extends Module {
         .build()
     );
 
-    private final Setting<SettingColor> sideColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> sideColor = sgRender.add(new ColorSetting.Builder()
         .name("side-color")
         .description("Highlight side color.")
-        .defaultValue(new SettingColor(251, 192, 45, 40))
+        .defaultValue(new Rgba(251, 192, 45, 40))
         .visible(render::get)
         .build()
     );
 
-    private final Setting<SettingColor> lineColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> lineColor = sgRender.add(new ColorSetting.Builder()
         .name("line-color")
         .description("Highlight line color.")
-        .defaultValue(new SettingColor(251, 192, 45, 200))
+        .defaultValue(new Rgba(251, 192, 45, 200))
         .visible(render::get)
         .build()
     );
@@ -299,10 +300,10 @@ public class Surround extends Module {
         .build()
     );
 
-    private final Setting<SettingColor> openColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> openColor = sgRender.add(new ColorSetting.Builder()
         .name("open-color")
         .description("Color of open cells.")
-        .defaultValue(new SettingColor(230, 60, 60, 220))
+        .defaultValue(new Rgba(230, 60, 60, 220))
         .visible(showOpen::get)
         .build()
     );
@@ -321,7 +322,7 @@ public class Surround extends Module {
     private boolean running;
 
     public Surround() {
-        super(Coyduck.CATEGORY, "surround+", "Surrounds your feet with obsidian.");
+        super("surround+", "Surrounds your feet with obsidian.");
     }
 
     private long feetHit;
@@ -519,10 +520,10 @@ public class Surround extends Module {
         InteractionManager interaction = InteractionManager.get();
         for (var entry : rendered.long2LongEntrySet()) {
             if (interaction.rejectedAt(BlockPos.fromLong(entry.getLongKey())) >= entry.getLongValue()) continue;
-            DuckRender.box(event.renderer, new Box(BlockPos.fromLong(entry.getLongKey())), sideColor.get(), lineColor.get(), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
+            DuckRender.box(event.renderer, new Box(BlockPos.fromLong(entry.getLongKey())), MeteorColors.of(sideColor), MeteorColors.of(lineColor), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
         }
         if (showOpen.get() && mc.world != null && !anchored.isEmpty()) {
-            Color line = openColor.get();
+            Color line = MeteorColors.of(openColor);
             openSide.set(line.r, line.g, line.b, Math.min(line.a, 45));
             for (BlockPos pos : Targets.ring(anchored, 0)) {
                 if (open(pos, now)) DuckRender.box(event.renderer, new Box(pos), openSide, line, ShapeMode.Both, 1);

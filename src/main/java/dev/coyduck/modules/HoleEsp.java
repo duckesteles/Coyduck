@@ -1,31 +1,31 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
+import dev.coyduck.MeteorColors;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.renderer.Renderer3D;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.render.color.Color;
-import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
 import net.minecraft.world.attribute.EnvironmentAttributes;
-import net.minecraft.util.math.Direction;
 
-public class HoleEsp extends Module {
+public class HoleEsp extends Feature {
     private static final double SAFE_RESISTANCE = 600;
     private static final int SCAN_TICKS = 3;
     private static final int OPEN = 0;
@@ -92,24 +92,24 @@ public class HoleEsp extends Module {
         .build()
     );
 
-    private final Setting<SettingColor> safeColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> safeColor = sgRender.add(new ColorSetting.Builder()
         .name("bedrock-color")
         .description("Bedrock-only holes.")
-        .defaultValue(new SettingColor(255, 255, 255, 60))
+        .defaultValue(new Rgba(255, 255, 255, 60))
         .build()
     );
 
-    private final Setting<SettingColor> otherColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> otherColor = sgRender.add(new ColorSetting.Builder()
         .name("obsidian-color")
         .description("Holes with breakable walls.")
-        .defaultValue(new SettingColor(190, 170, 255, 60))
+        .defaultValue(new Rgba(190, 170, 255, 60))
         .build()
     );
 
-    private final Setting<SettingColor> trappedColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> trappedColor = sgRender.add(new ColorSetting.Builder()
         .name("trapped-color")
         .description("Holes with a solid roof.")
-        .defaultValue(new SettingColor(255, 180, 70, 60))
+        .defaultValue(new Rgba(255, 180, 70, 60))
         .visible(markTrapped::get)
         .build()
     );
@@ -148,7 +148,7 @@ public class HoleEsp extends Module {
     private boolean anchorsWork;
 
     public HoleEsp() {
-        super(Coyduck.CATEGORY, "hole-esp+", "Shows safe holes.");
+        super("hole-esp+", "Shows safe holes.");
     }
 
     @Override
@@ -265,7 +265,7 @@ public class HoleEsp extends Module {
     private void draw(Renderer3D r, Hole hole) {
         double inverse = 1 - hole.shown;
         double t = 1 - inverse * inverse * inverse;
-        Color base = Shaders.tint(hole.trapped ? trappedColor.get() : hole.safe ? safeColor.get() : otherColor.get());
+        Color base = Shaders.tint(hole.trapped ? MeteorColors.of(trappedColor) : hole.safe ? MeteorColors.of(safeColor) : MeteorColors.of(otherColor));
         fill.set(base.r, base.g, base.b, (int) (base.a * t));
         clear.set(base.r, base.g, base.b, 0);
         line.set(base.r, base.g, base.b, (int) (Math.min(255, base.a * 3.5) * t));

@@ -1,14 +1,24 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
+import dev.coyduck.MeteorColors;
 import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.feature.BlockListSetting;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.logic.BlockOverlay;
-import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
+import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
@@ -21,32 +31,24 @@ import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
-import meteordevelopment.meteorclient.settings.BlockListSetting;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.render.color.Color;
-import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.AbstractFireBlock;
+import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
-import net.minecraft.block.Block;
-import net.minecraft.item.BlockItem;
 import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.decoration.EndCrystalEntity;
-import net.minecraft.util.Util;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.BlockItem;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
+import net.minecraft.util.Util;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -57,7 +59,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-public class AutoCity extends Module implements MiningManager.StopGate, MiningManager.HidesMining {
+public class AutoCity extends Feature implements MiningManager.StopGate, MiningManager.HidesMining {
     public static final int PRIORITY = 50;
     private static final long FILL_DELAY = 150;
     private static final long FILL_GAP = 400;
@@ -227,18 +229,18 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
         .build()
     );
 
-    private final Setting<SettingColor> sideColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> sideColor = sgRender.add(new ColorSetting.Builder()
         .name("side-color")
         .description("Highlight side color.")
-        .defaultValue(new SettingColor(110, 45, 200, 50))
+        .defaultValue(new Rgba(110, 45, 200, 50))
         .visible(render::get)
         .build()
     );
 
-    private final Setting<SettingColor> lineColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> lineColor = sgRender.add(new ColorSetting.Builder()
         .name("line-color")
         .description("Highlight line color.")
-        .defaultValue(new SettingColor(110, 45, 200, 220))
+        .defaultValue(new Rgba(110, 45, 200, 220))
         .visible(render::get)
         .build()
     );
@@ -272,7 +274,7 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
     private long crystalSeenAt;
 
     public AutoCity() {
-        super(Coyduck.CATEGORY, "auto-city+", "Mines enemy surrounds.");
+        super("auto-city+", "Mines enemy surrounds.");
     }
 
     @Override
@@ -378,8 +380,8 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
 
         Box box = new Box(current);
         double progress = smoothProgress.toward(MiningManager.get().progress(), 12);
-        Color side = sideColor.get();
-        Color line = lineColor.get();
+        Color side = MeteorColors.of(sideColor);
+        Color line = MeteorColors.of(lineColor);
         if (progressColor.get()) {
             side = DuckRender.lerp(sideShade, PROGRESS_START.a(side.a), PROGRESS_END.a(side.a), progress);
             line = DuckRender.lerp(lineShade, PROGRESS_START.a(line.a), PROGRESS_END.a(line.a), progress);
@@ -488,7 +490,7 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
     }
 
     public static boolean isFiller(BlockState state) {
-        AutoCity city = Modules.get().get(AutoCity.class);
+        AutoCity city = Features.get(AutoCity.class);
         return city != null && city.isActive() && city.antiReplace.get() && city.fillers.get().contains(state.getBlock());
     }
 
@@ -611,7 +613,7 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
     private boolean stopAllowed(BlockPos pos) {
         if (!pos.equals(current) || currentScore >= BURROW_SCORE) return true;
         if (target == null) return false;
-        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
+        AutoCrystal autoCrystal = Features.get(AutoCrystal.class);
         if (autoCrystal == null || !autoCrystal.isActive() || !InteractionManager.get().hasCrystals()) return true;
         if (hurtSync.get() && hurtHolds(pos)) return false;
         return worthOpening(pos);
@@ -720,7 +722,7 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
     private boolean hasAmmo() {
         if (InteractionManager.get().hasCrystals()) return true;
 
-        AutoAnchor anchor = Modules.get().get(AutoAnchor.class);
+        AutoAnchor anchor = Features.get(AutoAnchor.class);
         if (anchor == null || !anchor.isActive() || anchor.anchorsWork()) return false;
         InventoryManager inventory = InventoryManager.get();
         return inventory.find(stack -> stack.isOf(Items.RESPAWN_ANCHOR), 0, InventoryManager.MAIN_END) != -1
@@ -832,7 +834,7 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
     }
 
     private float cevDamage(BlockPos block, Box box, Vec3d feet) {
-        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
+        AutoCrystal autoCrystal = Features.get(AutoCrystal.class);
         double range = autoCrystal != null && autoCrystal.isActive() ? autoCrystal.placeRange() : 5.5;
         if (new Box(block).squaredMagnitude(mc.player.getEyePos()) > range * range) return 0;
         BlockOverlay view = new BlockOverlay(mc.world).set(block, Blocks.AIR.getDefaultState());
@@ -887,7 +889,7 @@ public class AutoCity extends Module implements MiningManager.StopGate, MiningMa
     private float gapDamage(BlockPos gap, Box box, Vec3d feet, BlockPos support) {
         BlockOverlay view = new BlockOverlay(mc.world).set(gap, Blocks.AIR.getDefaultState());
         if (support != null) view.set(support, Blocks.OBSIDIAN.getDefaultState());
-        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
+        AutoCrystal autoCrystal = Features.get(AutoCrystal.class);
         double range = autoCrystal != null && autoCrystal.isActive() ? autoCrystal.placeRange() : 5.5;
         Vec3d eye = mc.player.getEyePos();
         Vec3d[] crystals = new Vec3d[9];

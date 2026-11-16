@@ -1,15 +1,16 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
+import dev.coyduck.MeteorColors;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.utils.DuckRender;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
@@ -20,7 +21,7 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.shape.VoxelShape;
 
-public class PhaseEsp extends Module {
+public class PhaseEsp extends Feature {
     private static final double SAFE_RESISTANCE = 600;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -46,24 +47,24 @@ public class PhaseEsp extends Module {
         .build()
     );
 
-    private final Setting<SettingColor> safeColor = sgGeneral.add(new ColorSetting.Builder()
+    private final Setting<Rgba> safeColor = sgGeneral.add(new ColorSetting.Builder()
         .name("bedrock-color")
         .description("Bedrock with bedrock under it, nothing can break you out.")
-        .defaultValue(new SettingColor(90, 220, 120, 45))
+        .defaultValue(new Rgba(90, 220, 120, 45))
         .build()
     );
 
-    private final Setting<SettingColor> semiColor = sgGeneral.add(new ColorSetting.Builder()
+    private final Setting<Rgba> semiColor = sgGeneral.add(new ColorSetting.Builder()
         .name("obsidian-color")
         .description("Minable blast proof wall on a blast proof floor.")
-        .defaultValue(new SettingColor(240, 200, 80, 45))
+        .defaultValue(new Rgba(240, 200, 80, 45))
         .build()
     );
 
-    private final Setting<SettingColor> unsafeColor = sgGeneral.add(new ColorSetting.Builder()
+    private final Setting<Rgba> unsafeColor = sgGeneral.add(new ColorSetting.Builder()
         .name("unsafe-color")
         .description("Blast proof wall over a weak or missing floor.")
-        .defaultValue(new SettingColor(230, 80, 90, 45))
+        .defaultValue(new Rgba(230, 80, 90, 45))
         .build()
     );
 
@@ -71,7 +72,7 @@ public class PhaseEsp extends Module {
     private final Color line = new Color();
 
     public PhaseEsp() {
-        super(Coyduck.CATEGORY, "phase-esp", "Shows walls you can phase into.");
+        super("phase-esp", "Shows walls you can phase into.");
     }
 
     @EventHandler
@@ -102,8 +103,8 @@ public class PhaseEsp extends Module {
 
     private SettingColor color(BlockPos pos, BlockState state) {
         BlockState floor = mc.world.getBlockState(pos.down());
-        if (floor.getCollisionShape(mc.world, pos.down()).isEmpty() || floor.getBlock().getBlastResistance() < SAFE_RESISTANCE) return unsafeColor.get();
-        return state.isOf(Blocks.BEDROCK) && floor.isOf(Blocks.BEDROCK) ? safeColor.get() : semiColor.get();
+        if (floor.getCollisionShape(mc.world, pos.down()).isEmpty() || floor.getBlock().getBlastResistance() < SAFE_RESISTANCE) return MeteorColors.of(unsafeColor);
+        return state.isOf(Blocks.BEDROCK) && floor.isOf(Blocks.BEDROCK) ? MeteorColors.of(safeColor) : MeteorColors.of(semiColor);
     }
 
     private boolean inside(Box player) {

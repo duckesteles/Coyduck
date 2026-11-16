@@ -1,35 +1,34 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.utils.Trace;
-import dev.coyduck.Coyduck;
+import dev.coyduck.MeteorColors;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.Feature;
 import dev.coyduck.feature.Features;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.RotationManager;
 import dev.coyduck.utils.NetherRoute;
+import dev.coyduck.utils.Trace;
 import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.ChunkDataEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.friends.Friends;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.block.BlockState;
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.EquipmentSlot;
@@ -62,7 +61,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
-public class ElytraPilot extends Module {
+public class ElytraPilot extends Feature {
     private static final int ROTATE_PRIORITY = 60;
     private static final int CHEST_SLOT = 6;
 
@@ -219,10 +218,10 @@ public class ElytraPilot extends Module {
         .build()
     );
 
-    private final Setting<SettingColor> color = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> color = sgRender.add(new ColorSetting.Builder()
         .name("color")
         .description("Route and landing spot color.")
-        .defaultValue(new SettingColor(110, 45, 200, 200))
+        .defaultValue(new Rgba(110, 45, 200, 200))
         .visible(render::get)
         .build()
     );
@@ -291,7 +290,7 @@ public class ElytraPilot extends Module {
     private int cullTick;
 
     public ElytraPilot() {
-        super(Coyduck.CATEGORY, "elytra-pilot", "Flies you to coordinates.");
+        super("elytra-pilot", "Flies you to coordinates.");
     }
 
     public void spiral(int step) {
@@ -350,7 +349,7 @@ public class ElytraPilot extends Module {
             return;
         }
 
-        ElytraFly fly = Modules.get().get(ElytraFly.class);
+        ElytraFly fly = Features.get(ElytraFly.class);
         enabledFly = !fly.isActive();
         if (enabledFly) fly.toggle();
         start();
@@ -363,7 +362,7 @@ public class ElytraPilot extends Module {
         stopEating();
         closeRoute();
 
-        ElytraFly fly = Modules.get().get(ElytraFly.class);
+        ElytraFly fly = Features.get(ElytraFly.class);
         if (enabledFly && fly.isActive() && (mc.player == null || mc.player.isOnGround())) fly.toggle();
         enabledFly = false;
     }
@@ -413,7 +412,7 @@ public class ElytraPilot extends Module {
             return;
         }
 
-        if (!Modules.get().get(ElytraFly.class).isActive()) {
+        if (!Features.get(ElytraFly.class).isActive()) {
             error("elytra-fly+ was turned off, stopping.");
             toggle();
             return;
@@ -525,7 +524,7 @@ public class ElytraPilot extends Module {
         }
 
         double distance = horizontalDistance();
-        if (spiralStep > 0 && distance <= Math.max(ARRIVE_RADIUS, Modules.get().get(ElytraFly.class).horizontalSpeed() * 3)) {
+        if (spiralStep > 0 && distance <= Math.max(ARRIVE_RADIUS, Features.get(ElytraFly.class).horizontalSpeed() * 3)) {
             nextSpiralLeg();
             return;
         }
@@ -631,7 +630,7 @@ public class ElytraPilot extends Module {
             return;
         }
 
-        ElytraFly fly = Modules.get().get(ElytraFly.class);
+        ElytraFly fly = Features.get(ElytraFly.class);
         Vec3d target = Vec3d.ofBottomCenter(spot);
         double dx = target.x - feet.x;
         double dz = target.z - feet.z;
@@ -768,7 +767,7 @@ public class ElytraPilot extends Module {
     }
 
     private Vec3d openMove() {
-        ElytraFly fly = Modules.get().get(ElytraFly.class);
+        ElytraFly fly = Features.get(ElytraFly.class);
         Vec3d feet = mc.player.getEntityPos();
         double dx = goalX - feet.x;
         double dz = goalZ - feet.z;
@@ -859,7 +858,7 @@ public class ElytraPilot extends Module {
         double length = delta.length();
         if (length < 1.0E-3) return Vec3d.ZERO;
 
-        ElytraFly fly = Modules.get().get(ElytraFly.class);
+        ElytraFly fly = Features.get(ElytraFly.class);
         double speed = Math.min(fly.horizontalSpeed(), length);
         double unloaded = unloadedAhead(feet, delta.multiply(1 / length));
         if (unloaded != Double.MAX_VALUE) speed = Math.min(speed, Math.max(0, (unloaded - UNLOADED_MARGIN) / 4));
@@ -912,7 +911,7 @@ public class ElytraPilot extends Module {
             return Vec3d.ZERO;
         }
 
-        ElytraFly fly = Modules.get().get(ElytraFly.class);
+        ElytraFly fly = Features.get(ElytraFly.class);
         Vec3d move = crumb.subtract(feet).multiply(Math.min(fly.horizontalSpeed(), length) / length);
         return new Vec3d(move.x, MathHelper.clamp(move.y, -fly.downSpeed(), fly.upSpeed()), move.z);
     }
@@ -1204,11 +1203,11 @@ public class ElytraPilot extends Module {
             Vec3d last = mc.player.getEntityPos();
             for (int i = pathIndex; i < path.size(); i++) {
                 Vec3d next = point(i);
-                event.renderer.line(last.x, last.y, last.z, next.x, next.y, next.z, color.get());
+                event.renderer.line(last.x, last.y, last.z, next.x, next.y, next.z, MeteorColors.of(color));
                 last = next;
             }
         }
-        if (spot != null && state == State.Land) event.renderer.box(spot, color.get(), color.get(), ShapeMode.Lines, 0);
+        if (spot != null && state == State.Land) event.renderer.box(spot, MeteorColors.of(color), MeteorColors.of(color), ShapeMode.Lines, 0);
     }
 
     private BlockPos findSpot(Vec3d around, int radius) {

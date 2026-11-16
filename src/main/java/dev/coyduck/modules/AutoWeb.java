@@ -7,6 +7,7 @@ import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.DoubleSetting;
 import dev.coyduck.feature.EnumSetting;
 import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
 import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
@@ -230,8 +231,8 @@ public class AutoWeb extends Feature {
         InteractionManager interaction = InteractionManager.get();
         List<BlockPos> planned = new ArrayList<>();
         List<BlockHitResult> hits = new ArrayList<>();
-        Surround surround = Modules.get().get(Surround.class);
-        SelfTrap selfTrap = Modules.get().get(SelfTrap.class);
+        Surround surround = Features.get(Surround.class);
+        SelfTrap selfTrap = Features.get(SelfTrap.class);
         boolean walled = surround != null && surround.isActive() || selfTrap != null && selfTrap.isActive();
         List<BlockPos> ownRing = walled ? Targets.ownRing() : List.of();
 

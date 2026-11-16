@@ -1,8 +1,15 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.MiningManager;
@@ -10,22 +17,15 @@ import dev.coyduck.utils.DuckRender;
 import meteordevelopment.meteorclient.events.entity.player.StartBreakingBlockEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.render.color.Color;
-import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 
-public class PacketMinePlus extends Module implements MiningManager.HidesMining, MiningManager.RebreaksOwn {
+public class PacketMinePlus extends Feature implements MiningManager.HidesMining, MiningManager.RebreaksOwn {
     private static final int PRIORITY = 150;
     private static final Color PROGRESS_START = new Color(230, 60, 60);
     private static final Color PROGRESS_END = new Color(80, 220, 90);
@@ -85,18 +85,18 @@ public class PacketMinePlus extends Module implements MiningManager.HidesMining,
         .build()
     );
 
-    private final Setting<SettingColor> sideColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> sideColor = sgRender.add(new ColorSetting.Builder()
         .name("side-color")
         .description("Fill alpha. The color follows the progress.")
-        .defaultValue(new SettingColor(255, 255, 255, 40))
+        .defaultValue(new Rgba(255, 255, 255, 40))
         .visible(render::get)
         .build()
     );
 
-    private final Setting<SettingColor> lineColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> lineColor = sgRender.add(new ColorSetting.Builder()
         .name("line-color")
         .description("Outline alpha. The color follows the progress.")
-        .defaultValue(new SettingColor(255, 255, 255, 200))
+        .defaultValue(new Rgba(255, 255, 255, 200))
         .visible(render::get)
         .build()
     );
@@ -108,7 +108,7 @@ public class PacketMinePlus extends Module implements MiningManager.HidesMining,
     private long brokenAt;
 
     public PacketMinePlus() {
-        super(Coyduck.CATEGORY, "packet-mine+", "Packet mines the blocks you click.");
+        super("packet-mine+", "Packet mines the blocks you click.");
     }
 
     @Override
@@ -183,8 +183,8 @@ public class PacketMinePlus extends Module implements MiningManager.HidesMining,
     private void onRender(Render3DEvent event) {
         if (!render.get() || target == null || !MiningManager.get().owns(this)) return;
         double progress = smooth.toward(MiningManager.get().progress(), 12);
-        Color side = DuckRender.lerp(sideShade, PROGRESS_START.a(sideColor.get().a), PROGRESS_END.a(sideColor.get().a), progress);
-        Color line = DuckRender.lerp(lineShade, PROGRESS_START.a(lineColor.get().a), PROGRESS_END.a(lineColor.get().a), progress);
+        Color side = DuckRender.lerp(sideShade, PROGRESS_START.a(sideColor.get().a()), PROGRESS_END.a(sideColor.get().a()), progress);
+        Color line = DuckRender.lerp(lineShade, PROGRESS_START.a(lineColor.get().a()), PROGRESS_END.a(lineColor.get().a()), progress);
         Box box = new Box(target);
         DuckRender.exact(event.renderer, box.contract((1 - progress) * 0.5), side, line, ShapeMode.Sides, 1);
         DuckRender.exact(event.renderer, box, side, line, ShapeMode.Lines, 1);

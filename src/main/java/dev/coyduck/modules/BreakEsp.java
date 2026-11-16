@@ -1,36 +1,36 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
+import dev.coyduck.MeteorColors;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.utils.DuckRender;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.render.color.Color;
-import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 
-public class BreakEsp extends Module {
+public class BreakEsp extends Feature {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
-    private final Setting<SettingColor> startColor = sgGeneral.add(new ColorSetting.Builder()
+    private final Setting<Rgba> startColor = sgGeneral.add(new ColorSetting.Builder()
         .name("start-color")
         .description("Color when the block has just started breaking.")
-        .defaultValue(new SettingColor(255, 255, 255, 40))
+        .defaultValue(new Rgba(255, 255, 255, 40))
         .build()
     );
 
-    private final Setting<SettingColor> endColor = sgGeneral.add(new ColorSetting.Builder()
+    private final Setting<Rgba> endColor = sgGeneral.add(new ColorSetting.Builder()
         .name("end-color")
         .description("Color when the block is about to break.")
-        .defaultValue(new SettingColor(230, 60, 90, 80))
+        .defaultValue(new Rgba(230, 60, 90, 80))
         .build()
     );
 
@@ -54,7 +54,7 @@ public class BreakEsp extends Module {
     private long last;
 
     public BreakEsp() {
-        super(Coyduck.CATEGORY, "break-esp+", "Shows blocks being mined.");
+        super("break-esp+", "Shows blocks being mined.");
     }
 
     @Override
@@ -88,9 +88,9 @@ public class BreakEsp extends Module {
                 continue;
             }
 
-            DuckRender.lerp(side, startColor.get(), endColor.get(), entry.progress);
-            edgeStart.set(startColor.get().r, startColor.get().g, startColor.get().b, Math.min(255, startColor.get().a * 4));
-            edgeEnd.set(endColor.get().r, endColor.get().g, endColor.get().b, Math.min(255, endColor.get().a * 3));
+            DuckRender.lerp(side, MeteorColors.of(startColor), MeteorColors.of(endColor), entry.progress);
+            edgeStart.set(MeteorColors.of(startColor).r, MeteorColors.of(startColor).g, MeteorColors.of(startColor).b, Math.min(255, MeteorColors.of(startColor).a * 4));
+            edgeEnd.set(MeteorColors.of(endColor).r, MeteorColors.of(endColor).g, MeteorColors.of(endColor).b, Math.min(255, MeteorColors.of(endColor).a * 3));
             DuckRender.lerp(line, edgeStart, edgeEnd, entry.progress);
             double inset = (1 - entry.progress) * 0.5;
             DuckRender.box(event.renderer, new Box(entry.pos).contract(inset), side, line, ShapeMode.Both, entry.shown);

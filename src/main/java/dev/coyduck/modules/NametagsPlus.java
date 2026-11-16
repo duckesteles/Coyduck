@@ -1,16 +1,19 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
+import dev.coyduck.MeteorColors;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.hud.CoyHud;
 import dev.coyduck.mixin.PlayerLikeEntityAccessor;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.renderer.Renderer2D;
 import meteordevelopment.meteorclient.renderer.text.TextRenderer;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.config.Config;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
@@ -20,7 +23,6 @@ import meteordevelopment.meteorclient.utils.Utils;
 import meteordevelopment.meteorclient.utils.render.NametagUtils;
 import meteordevelopment.meteorclient.utils.render.RenderUtils;
 import meteordevelopment.meteorclient.utils.render.color.Color;
-import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.network.PlayerListEntry;
@@ -32,7 +34,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
 import org.joml.Vector3d;
 
-public class NametagsPlus extends Module {
+public class NametagsPlus extends Feature {
     public static final int MARK = 0x80;
 
     private static final Identifier MASCOT = Identifier.of("coyduck", "textures/mascot.png");
@@ -120,10 +122,10 @@ public class NametagsPlus extends Module {
         .build()
     );
 
-    private final Setting<SettingColor> fill = sgGeneral.add(new ColorSetting.Builder()
+    private final Setting<Rgba> fill = sgGeneral.add(new ColorSetting.Builder()
         .name("fill")
         .description("Tag background.")
-        .defaultValue(new SettingColor(15, 15, 20, 165))
+        .defaultValue(new Rgba(15, 15, 20, 165))
         .visible(background::get)
         .build()
     );
@@ -147,16 +149,16 @@ public class NametagsPlus extends Module {
     private final ItemStack[] shown = new ItemStack[ITEMS.length];
 
     public NametagsPlus() {
-        super(Coyduck.CATEGORY, "nametags+", "Clean player nametags.");
+        super("nametags+", "Clean player nametags.");
     }
 
     public static boolean announces() {
-        NametagsPlus module = Modules.get() == null ? null : Modules.get().get(NametagsPlus.class);
+        NametagsPlus module = Features.get(NametagsPlus.class);
         return module == null || module.announce.get();
     }
 
     public static boolean replacesVanilla() {
-        NametagsPlus module = Modules.get() == null ? null : Modules.get().get(NametagsPlus.class);
+        NametagsPlus module = Features.get(NametagsPlus.class);
         return module != null && module.isActive();
     }
 
@@ -228,7 +230,7 @@ public class NametagsPlus extends Module {
         double top = -height - bar;
 
         Renderer2D.COLOR.begin();
-        if (background.get()) Renderer2D.COLOR.quad(left - PAD, top - PAD, width + PAD * 2, height + bar + PAD * 2, fill.get());
+        if (background.get()) Renderer2D.COLOR.quad(left - PAD, top - PAD, width + PAD * 2, height + bar + PAD * 2, MeteorColors.of(fill));
         if (progress >= 0) {
             double barY = top + height + 1;
             barColor.set(CoyHud.color(CoyHud.health(1 - progress)));

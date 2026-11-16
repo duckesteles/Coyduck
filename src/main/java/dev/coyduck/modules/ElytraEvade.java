@@ -19,7 +19,6 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import meteordevelopment.meteorclient.systems.friends.Friends;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
@@ -233,7 +232,7 @@ public class ElytraEvade extends Feature {
     }
 
     public boolean evading() {
-        return isActive() && threat != null && Modules.get().isActive(ElytraFly.class);
+        return isActive() && threat != null && Features.isActive(ElytraFly.class);
     }
 
     @EventHandler
@@ -311,7 +310,7 @@ public class ElytraEvade extends Feature {
         trail.addLast(mc.player.getEntityPos());
         while (trail.size() > STUCK_TICKS + 1) trail.pollFirst();
 
-        if (!Modules.get().isActive(ElytraFly.class)) {
+        if (!Features.isActive(ElytraFly.class)) {
             if (threat != null) calm("elytra-fly+ is off");
             return;
         }
@@ -671,7 +670,7 @@ public class ElytraEvade extends Feature {
     }
 
     private Vec3d toward(Vec3d target) {
-        ElytraFly fly = Modules.get().get(ElytraFly.class);
+        ElytraFly fly = Features.get(ElytraFly.class);
         double up = fly == null ? 0 : Math.max(0, fly.upSpeed());
         double down = fly == null ? 0 : Math.max(0, fly.downSpeed());
         Vec3d delta = target.subtract(mc.player.getEntityPos());
@@ -799,7 +798,7 @@ public class ElytraEvade extends Feature {
     }
 
     private double pace() {
-        ElytraFly fly = Modules.get().get(ElytraFly.class);
+        ElytraFly fly = Features.get(ElytraFly.class);
         return fly == null ? speed.get() : Math.min(speed.get(), fly.horizontalSpeed());
     }
 

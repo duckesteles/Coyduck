@@ -5,6 +5,7 @@ import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.DoubleSetting;
 import dev.coyduck.feature.EnumSetting;
 import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.CrystalTracker;
@@ -16,7 +17,6 @@ import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.RotationManager;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.Blocks;
@@ -266,7 +266,7 @@ public class KillAura extends Feature {
         double reach = range.get();
         long now = Util.getMeasuringTimeMs();
 
-        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
+        AutoCrystal autoCrystal = Features.get(AutoCrystal.class);
         PlayerEntity focus = autoCrystal == null ? null : autoCrystal.target();
 
         Choice best = null;
@@ -513,7 +513,7 @@ public class KillAura extends Feature {
     }
 
     private boolean crystalBusy() {
-        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
+        AutoCrystal autoCrystal = Features.get(AutoCrystal.class);
         if (autoCrystal == null || !autoCrystal.isActive()) return false;
         if (CrystalTracker.get().hasPlacing()) return true;
 

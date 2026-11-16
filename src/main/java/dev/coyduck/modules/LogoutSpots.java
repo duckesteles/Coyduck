@@ -1,10 +1,18 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
+import dev.coyduck.MeteorColors;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.hud.CoyHud;
 import dev.coyduck.managers.PopTracker;
 import dev.coyduck.utils.DuckRender;
@@ -13,12 +21,6 @@ import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.renderer.Renderer2D;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.renderer.text.TextRenderer;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.config.Config;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
@@ -39,7 +41,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
-public class LogoutSpots extends Module {
+public class LogoutSpots extends Feature {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
     private final Setting<Boolean> notify = sgGeneral.add(new BoolSetting.Builder()
@@ -74,10 +76,10 @@ public class LogoutSpots extends Module {
         .build()
     );
 
-    private final Setting<SettingColor> color = sgGeneral.add(new ColorSetting.Builder()
+    private final Setting<Rgba> color = sgGeneral.add(new ColorSetting.Builder()
         .name("color")
         .description("Color of the box.")
-        .defaultValue(new SettingColor(230, 90, 110, 50))
+        .defaultValue(new Rgba(230, 90, 110, 50))
         .build()
     );
 
@@ -91,7 +93,7 @@ public class LogoutSpots extends Module {
     private final Color background = new Color();
 
     public LogoutSpots() {
-        super(Coyduck.CATEGORY, "logout-spots+", "Marks where players logged out.");
+        super("logout-spots+", "Marks where players logged out.");
     }
 
     @Override
@@ -139,7 +141,7 @@ public class LogoutSpots extends Module {
 
     @EventHandler
     private void onRender3D(Render3DEvent event) {
-        SettingColor fill = color.get();
+        SettingColor fill = MeteorColors.of(color);
         line.set(fill.r, fill.g, fill.b, Math.min(255, fill.a * 4));
         for (Spot spot : spots.values()) DuckRender.box(event.renderer, spot.box, fill, line, ShapeMode.Both, 1);
     }

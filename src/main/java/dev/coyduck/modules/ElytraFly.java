@@ -1,9 +1,17 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.Bind;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.KeybindSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.RotationManager;
@@ -11,17 +19,9 @@ import dev.coyduck.utils.Trace;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.KeybindSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.systems.modules.player.ChestSwap;
-import meteordevelopment.meteorclient.utils.misc.Keybind;
 import meteordevelopment.meteorclient.utils.player.FindItemResult;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.orbit.EventHandler;
@@ -50,7 +50,7 @@ import net.minecraft.world.RaycastContext;
 
 import java.util.ArrayDeque;
 
-public class ElytraFly extends Module {
+public class ElytraFly extends Feature {
     public enum Style {
         Casual,
         Ultra
@@ -389,42 +389,42 @@ public class ElytraFly extends Module {
         .build()
     );
 
-    private final Setting<Keybind> mappingKey = sgKeybinds.add(new KeybindSetting.Builder()
+    private final Setting<Bind> mappingKey = sgKeybinds.add(new KeybindSetting.Builder()
         .name("mapping-key")
         .description("Toggles mapping mode.")
-        .defaultValue(Keybind.none())
+        .defaultValue(Bind.NONE)
         .action(() -> flip(mapping, "Mapping"))
         .build()
     );
 
-    private final Setting<Keybind> buildingKey = sgKeybinds.add(new KeybindSetting.Builder()
+    private final Setting<Bind> buildingKey = sgKeybinds.add(new KeybindSetting.Builder()
         .name("building-key")
         .description("Toggles building mode.")
-        .defaultValue(Keybind.none())
+        .defaultValue(Bind.NONE)
         .action(() -> flip(building, "Building"))
         .build()
     );
 
-    private final Setting<Keybind> bypassKey = sgKeybinds.add(new KeybindSetting.Builder()
+    private final Setting<Bind> bypassKey = sgKeybinds.add(new KeybindSetting.Builder()
         .name("bypass-key")
         .description("Toggles bypass mode.")
-        .defaultValue(Keybind.none())
+        .defaultValue(Bind.NONE)
         .action(() -> flip(bypass, "Bypass"))
         .build()
     );
 
-    private final Setting<Keybind> antiSlamKey = sgKeybinds.add(new KeybindSetting.Builder()
+    private final Setting<Bind> antiSlamKey = sgKeybinds.add(new KeybindSetting.Builder()
         .name("anti-slam-key")
         .description("Toggles anti-slam.")
-        .defaultValue(Keybind.none())
+        .defaultValue(Bind.NONE)
         .action(() -> flip(antiSlam, "Anti slam"))
         .build()
     );
 
-    private final Setting<Keybind> modeKey = sgKeybinds.add(new KeybindSetting.Builder()
+    private final Setting<Bind> modeKey = sgKeybinds.add(new KeybindSetting.Builder()
         .name("mode-key")
         .description("Switches between casual and ultra.")
-        .defaultValue(Keybind.none())
+        .defaultValue(Bind.NONE)
         .action(() -> {
             if (mc.currentScreen != null) return;
             style.set(ultra() ? Style.Casual : Style.Ultra);
@@ -433,18 +433,18 @@ public class ElytraFly extends Module {
         .build()
     );
 
-    private final Setting<Keybind> overdriveKey = sgKeybinds.add(new KeybindSetting.Builder()
+    private final Setting<Bind> overdriveKey = sgKeybinds.add(new KeybindSetting.Builder()
         .name("overdrive-key")
         .description("Toggles overdrive.")
-        .defaultValue(Keybind.none())
+        .defaultValue(Bind.NONE)
         .action(() -> flip(overdrive, "Overdrive"))
         .build()
     );
 
-    private final Setting<Keybind> autopilotKey = sgKeybinds.add(new KeybindSetting.Builder()
+    private final Setting<Bind> autopilotKey = sgKeybinds.add(new KeybindSetting.Builder()
         .name("autopilot-key")
         .description("Toggles autopilot.")
-        .defaultValue(Keybind.none())
+        .defaultValue(Bind.NONE)
         .action(() -> flip(autopilot, "Autopilot"))
         .build()
     );
@@ -499,7 +499,7 @@ public class ElytraFly extends Module {
     private final Afterwards afterwards = new Afterwards();
 
     public ElytraFly() {
-        super(Coyduck.CATEGORY, "elytra-fly+", "Fast elytra flight.");
+        super("elytra-fly+", "Fast elytra flight.");
     }
 
     @Override

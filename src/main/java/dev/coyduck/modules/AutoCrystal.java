@@ -1,12 +1,23 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
+import dev.coyduck.MeteorColors;
 import dev.coyduck.core.Clock;
 import dev.coyduck.events.EntityAddedEvent;
 import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.feature.BlockListSetting;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.logic.Blast;
 import dev.coyduck.logic.BlockOverlay;
 import dev.coyduck.logic.CrystalScore;
@@ -38,20 +49,11 @@ import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.BlockUpdateEvent;
 import meteordevelopment.meteorclient.events.world.ChunkDataEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
-import meteordevelopment.meteorclient.settings.BlockListSetting;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.systems.modules.combat.CrystalAura;
 import meteordevelopment.meteorclient.utils.render.color.Color;
-import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -94,7 +96,7 @@ import net.minecraft.world.RaycastContext;
 import java.util.ArrayList;
 import java.util.List;
 
-public class AutoCrystal extends Module {
+public class AutoCrystal extends Feature {
     private static final long OPEN_TIME = 2_000;
     private static final int PLACE_PRIORITY = 100;
     private static final int HOLD_PRIORITY = 101;
@@ -481,18 +483,18 @@ public class AutoCrystal extends Module {
         .build()
     );
 
-    private final Setting<SettingColor> sideColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> sideColor = sgRender.add(new ColorSetting.Builder()
         .name("side-color")
         .description("Highlight side color.")
-        .defaultValue(new SettingColor(185, 74, 230, 40))
+        .defaultValue(new Rgba(185, 74, 230, 40))
         .visible(render::get)
         .build()
     );
 
-    private final Setting<SettingColor> lineColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> lineColor = sgRender.add(new ColorSetting.Builder()
         .name("line-color")
         .description("Highlight line color.")
-        .defaultValue(new SettingColor(185, 74, 230, 200))
+        .defaultValue(new Rgba(185, 74, 230, 200))
         .visible(render::get)
         .build()
     );
@@ -529,7 +531,7 @@ public class AutoCrystal extends Module {
     private long preparedAt = -1;
 
     public AutoCrystal() {
-        super(Coyduck.CATEGORY, "auto-crystal", "Places and breaks crystals.");
+        super("auto-crystal", "Places and breaks crystals.");
     }
 
     @Override
@@ -571,7 +573,7 @@ public class AutoCrystal extends Module {
 
         if (preparedAt != Clock.ticks()) prepare();
         Target target = makeTarget(player, predictTicks());
-        Surround surround = Modules.get().get(Surround.class);
+        Surround surround = Features.get(Surround.class);
         ownCells = surround != null && surround.isActive() ? Targets.ownRing() : List.of();
         return canFillGap(gap, target, mc.player.getHealth() + mc.player.getAbsorptionAmount());
     }
@@ -754,7 +756,7 @@ public class AutoCrystal extends Module {
         }
 
         if (!render.get()) return;
-        slide.render(event.renderer, sideColor.get(), lineColor.get(), shapeMode.get());
+        slide.render(event.renderer, MeteorColors.of(sideColor), MeteorColors.of(lineColor), shapeMode.get());
     }
 
     private void pass() {
@@ -831,7 +833,7 @@ public class AutoCrystal extends Module {
             return;
         }
 
-        Surround surround = Modules.get().get(Surround.class);
+        Surround surround = Features.get(Surround.class);
         ownCells = surround != null && surround.isActive() ? Targets.ownRing() : List.of();
 
         float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
@@ -1053,7 +1055,7 @@ public class AutoCrystal extends Module {
         if (mining.remainingTicks() > MathHelper.ceil(LatencyManager.get().rtt() / 50.0) + 1) return null;
 
         long key = cell.asLong();
-        AutoCity city = Modules.get().get(AutoCity.class);
+        AutoCity city = Features.get(AutoCity.class);
         boolean cityCell = city != null && city.isActive() && mining.owns(city);
         for (Target target : targets) {
             if (target.gaps().contains(key)) return cell;

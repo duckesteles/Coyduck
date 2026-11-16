@@ -1,9 +1,20 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
+import dev.coyduck.MeteorColors;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.feature.BlockListSetting;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
@@ -14,17 +25,8 @@ import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
-import meteordevelopment.meteorclient.settings.BlockListSetting;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
@@ -44,7 +46,7 @@ import net.minecraft.util.math.Box;
 import java.util.ArrayList;
 import java.util.List;
 
-public class AutoTrap extends Module {
+public class AutoTrap extends Feature {
     public enum Face {
         Smart,
         Always,
@@ -146,18 +148,18 @@ public class AutoTrap extends Module {
         .build()
     );
 
-    private final Setting<SettingColor> sideColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> sideColor = sgRender.add(new ColorSetting.Builder()
         .name("side-color")
         .description("Highlight side color.")
-        .defaultValue(new SettingColor(110, 45, 200, 40))
+        .defaultValue(new Rgba(110, 45, 200, 40))
         .visible(render::get)
         .build()
     );
 
-    private final Setting<SettingColor> lineColor = sgRender.add(new ColorSetting.Builder()
+    private final Setting<Rgba> lineColor = sgRender.add(new ColorSetting.Builder()
         .name("line-color")
         .description("Highlight line color.")
-        .defaultValue(new SettingColor(110, 45, 200, 200))
+        .defaultValue(new Rgba(110, 45, 200, 200))
         .visible(render::get)
         .build()
     );
@@ -169,7 +171,7 @@ public class AutoTrap extends Module {
     private boolean entityBlocked;
 
     public AutoTrap() {
-        super(Coyduck.CATEGORY, "auto-trap+", "Traps enemies in obsidian.");
+        super("auto-trap+", "Traps enemies in obsidian.");
     }
 
     @Override
@@ -232,7 +234,7 @@ public class AutoTrap extends Module {
         long now = Util.getMeasuringTimeMs();
         rendered.long2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > DuckRender.LIFETIME);
         for (var entry : rendered.long2LongEntrySet()) {
-            DuckRender.box(event.renderer, new Box(BlockPos.fromLong(entry.getLongKey())), sideColor.get(), lineColor.get(), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
+            DuckRender.box(event.renderer, new Box(BlockPos.fromLong(entry.getLongKey())), MeteorColors.of(sideColor), MeteorColors.of(lineColor), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
         }
     }
 
@@ -250,7 +252,7 @@ public class AutoTrap extends Module {
     private void run() {
         if (InventoryManager.get().isOffhandEating()) return;
         if (target != null && target.getEntityWorld() != mc.world) target = null;
-        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
+        AutoCrystal autoCrystal = Features.get(AutoCrystal.class);
         PlayerEntity focus = autoCrystal == null ? null : autoCrystal.target();
         target = Targets.find(targetRange.get(), Targets.valid(focus, targetRange.get()) ? focus : target);
         if (target == null || budget <= 0) return;
@@ -373,7 +375,7 @@ public class AutoTrap extends Module {
         CrystalTracker tracker = CrystalTracker.get();
         if (tracker.isPlacing(base) || !mc.world.getEntitiesByClass(EndCrystalEntity.class, new Box(cell), tracker::isAlive).isEmpty()) return false;
 
-        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
+        AutoCrystal autoCrystal = Features.get(AutoCrystal.class);
         return autoCrystal == null || target == null || !autoCrystal.wouldFillGap(cell, target);
     }
 

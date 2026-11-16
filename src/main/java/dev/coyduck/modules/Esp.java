@@ -1,31 +1,31 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
+import dev.coyduck.MeteorColors;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.ColorSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Rgba;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.utils.ShaderGlow;
+import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
+import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.utils.player.PlayerUtils;
 import meteordevelopment.meteorclient.utils.render.color.Color;
-import meteordevelopment.meteorclient.utils.render.color.SettingColor;
+import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.render.entity.state.EntityRenderState;
 import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
-import meteordevelopment.meteorclient.MeteorClient;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.friends.Friends;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 
 import java.lang.reflect.Method;
 
-public class Esp extends Module implements ShaderGlow.Source {
+public class Esp extends Feature implements ShaderGlow.Source {
     private static final String CULLABLE = "dev.tr7zw.entityculling.access.Cullable";
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -46,10 +46,10 @@ public class Esp extends Module implements ShaderGlow.Source {
         .build()
     );
 
-    private final Setting<SettingColor> outlineColor = sgOutline.add(new ColorSetting.Builder()
+    private final Setting<Rgba> outlineColor = sgOutline.add(new ColorSetting.Builder()
         .name("players-color")
         .description("Color for players without a name color.")
-        .defaultValue(new SettingColor(255, 255, 255, 255))
+        .defaultValue(new Rgba(255, 255, 255, 255))
         .visible(outline::get)
         .build()
     );
@@ -111,7 +111,7 @@ public class Esp extends Module implements ShaderGlow.Source {
     private static boolean cullingChecked;
 
     public Esp() {
-        super(Coyduck.CATEGORY, "esp+", "Shows players through walls.");
+        super("esp+", "Shows players through walls.");
     }
 
     public static boolean shows(int id) {
@@ -119,14 +119,12 @@ public class Esp extends Module implements ShaderGlow.Source {
     }
 
     public static boolean showsBody(int id) {
-        Esp module = Modules.get().get(Esp.class);
+        Esp module = Features.get(Esp.class);
         return module != null && module.fullBody.get() && shows(id);
     }
 
     public static ShaderGlow.Source outlineSource() {
-        Modules modules = Modules.get();
-        if (modules == null) return null;
-        Esp module = modules.get(Esp.class);
+        Esp module = Features.get(Esp.class);
         return module != null && module.isActive() && module.outline.get() ? module : null;
     }
 
@@ -142,7 +140,7 @@ public class Esp extends Module implements ShaderGlow.Source {
 
     @Override
     public Color maskColor() {
-        Color color = outlineColor.get();
+        Color color = MeteorColors.of(outlineColor);
         return new Color(color.r, color.g, color.b, 255);
     }
 
@@ -150,7 +148,7 @@ public class Esp extends Module implements ShaderGlow.Source {
     public Color color(EntityRenderState state) {
         if (!nameColor.get() || !(state instanceof PlayerEntityRenderState player) || mc.world == null) return maskColor();
         if (!(mc.world.getEntityById(player.id) instanceof PlayerEntity entity)) return maskColor();
-        Color color = PlayerUtils.getPlayerColor(entity, outlineColor.get());
+        Color color = PlayerUtils.getPlayerColor(entity, MeteorColors.of(outlineColor));
         return new Color(color.r, color.g, color.b, 255);
     }
 
@@ -176,7 +174,7 @@ public class Esp extends Module implements ShaderGlow.Source {
 
     public static boolean shows(Entity entity) {
         if (!(entity instanceof PlayerEntity player) || player == MeteorClient.mc.player) return false;
-        Esp module = Modules.get().get(Esp.class);
+        Esp module = Features.get(Esp.class);
         if (module == null || !module.isActive() || !module.fullBody.get() && !module.outline.get()) return false;
         if (!module.friends.get() && Friends.get().isFriend(player)) return false;
         return module.invisible.get() || !player.isInvisible();
