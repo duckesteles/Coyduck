@@ -16,6 +16,7 @@ import dev.coyduck.feature.Rgba;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.logic.BlockOverlay;
+import dev.coyduck.logic.NcpVisible;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
@@ -67,6 +68,8 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
     private static final long OPEN_LIMIT = 1500;
     private static final long SWITCH_COOLDOWN = 1000;
     private static final float FACE_PENALTY = 1.5f;
+    private static final float STICK_BONUS = 3.0f;
+    private static final double EYE_SHARE = 0.9;
     private static final float SPEED_BONUS = 3;
     private static final float SUPPORT_PENALTY = 1;
     private static final long LOST_GRACE = 750;
@@ -254,6 +257,9 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
     private long stopHeldSince;
     private long holdUntil;
     private long lostSince;
+    private final NcpVisible visible = new NcpVisible();
+    private final BlockPos.Mutable scratch = new BlockPos.Mutable();
+    private BlockPos opened;
     private long worthlessSince;
     private int ticks;
     private int updatedTick = -1;
@@ -747,6 +753,29 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
         return SPEED_BONUS * (1 - obsidian / delta);
     }
 
+    private boolean refillable(BlockPos cell, Box target) {
+        Vec3d feet = Targets.feet(target);
+        double eyeY = feet.y + (target.maxY - target.minY) * EYE_SHARE;
+        opened = cell;
+        try {
+            for (Direction direction : Direction.values()) {
+                BlockPos support = cell.offset(direction);
+                if (!solid(support.getX(), support.getY(), support.getZ())) continue;
+                int axis = direction.getAxis() == Direction.Axis.X ? NcpVisible.X : direction.getAxis() == Direction.Axis.Y ? NcpVisible.Y : NcpVisible.Z;
+                if (visible.sees(this::solid, support.getX(), support.getY(), support.getZ(), axis, feet.x, eyeY, feet.z)) return true;
+            }
+            return false;
+        } finally {
+            opened = null;
+        }
+    }
+
+    private boolean solid(int x, int y, int z) {
+        if (opened != null && opened.getX() == x && opened.getY() == y && opened.getZ() == z) return false;
+        scratch.set(x, y, z);
+        return mc.world.getBlockState(scratch).isFullCube(mc.world, scratch);
+    }
+
     private record Choice(BlockPos pos, float score, BlockPos support) {}
 
     private List<Choice> choose(Box box, LongSet columns) {
@@ -782,7 +811,8 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
             if (damage < minDamage.get()) continue;
 
             if (obsidian < 0) obsidian = bestDelta(Blocks.OBSIDIAN.getDefaultState(), pos);
-            choices.add(new Choice(pos, damage + speedBonus(pos, obsidian), support));
+            float stick = refillable(pos, box) ? 0 : STICK_BONUS;
+            choices.add(new Choice(pos, damage + speedBonus(pos, obsidian) + stick, support));
         }
 
         for (BlockPos pos : Targets.ring(columns, 1)) {
