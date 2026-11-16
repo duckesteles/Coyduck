@@ -207,7 +207,7 @@ public class MaceStrike extends Feature {
 
     private final Setting<Double> assumedFall = sgGeneral.add(new DoubleSetting.Builder()
         .name("assumed-fall")
-        .description("Fall in blocks assumed until a hit is measured.")
+        .description("Fall assumed in Ticks mode until a hit is measured.")
         .defaultValue(3.0)
         .range(0, 30)
         .sliderRange(0, 30)
@@ -492,7 +492,8 @@ public class MaceStrike extends Feature {
         long hitAt = Util.getMeasuringTimeMs() + diveTicks * 50L + LatencyManager.get().rtt() / 2;
         float charge = mc.player.getAttackCooldownProgress(diveTicks + 0.5f);
         double drop = mc.player.getY() - y;
-        double fall = Math.min(burst ? drop : Math.min(drop, step.get()) + 1, countedFall());
+        double counted = burst && Double.isNaN(learnedFall) ? drop : countedFall();
+        double fall = Math.min(burst ? drop : Math.min(drop, step.get()) + 1, counted);
         if (HurtTracker.get().releaseTime(target) > Util.getMeasuringTimeMs() + diveTicks * 50L) {
             float raw = smashRaw(fall, charge);
             if (HurtTracker.get().effective(target, raw, hitAt) < ExplosionDamage.mitigate(target, raw) * HURT_SHARE) return;
