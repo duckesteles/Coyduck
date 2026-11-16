@@ -215,7 +215,7 @@ public class AutoCrystal extends Module {
     private final Setting<Boolean> pauseEating = sgGeneral.add(new BoolSetting.Builder()
         .name("pause-eating")
         .description("Pauses while you eat.")
-        .defaultValue(false)
+        .defaultValue(true)
         .build()
     );
 
