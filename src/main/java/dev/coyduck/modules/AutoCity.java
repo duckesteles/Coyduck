@@ -29,6 +29,7 @@ import dev.coyduck.render.Shape;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
 import dev.coyduck.utils.Trace;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.orbit.EventHandler;
@@ -37,6 +38,7 @@ import net.minecraft.block.AbstractFireBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.decoration.EndCrystalEntity;
@@ -76,6 +78,7 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
     private static final long REFILL_BAN = 5000;
     private static final long WORTHLESS_LIMIT = 500;
     private static final long HOLD_STALE = 1000;
+    private static final long REFILL_MEMORY = 1_000;
     private static final float BURROW_PREEMPT = 0.7f;
     private static final float HOLD_TOLERANCE = 1;
     private static final int TOUCHED_UPDATES = 2;
@@ -249,6 +252,7 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
     private final Long2LongOpenHashMap banned = new Long2LongOpenHashMap();
 
     private PlayerEntity target;
+    private final IntOpenHashSet eatRefills = new IntOpenHashSet();
     private BlockPos current;
     private BlockPos currentSupport;
     private float currentScore;
@@ -301,6 +305,7 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
         updatedTick = -1;
         pending = false;
         banned.clear();
+        eatRefills.clear();
     }
 
     private void drop() {
@@ -338,11 +343,15 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
         boolean[] touched = {false};
         boolean relevant = switch (event.packet) {
             case BlockUpdateS2CPacket packet -> {
+                noteRefill(packet.getPos(), packet.getState());
                 touched[0] = ours(packet.getPos());
                 yield packet.getPos().isWithinDistance(center, 3);
             }
             case ChunkDeltaUpdateS2CPacket packet -> {
-                packet.visitUpdates((pos, state) -> touched[0] |= ours(pos));
+                packet.visitUpdates((pos, state) -> {
+                    noteRefill(pos, state);
+                    touched[0] |= ours(pos);
+                });
                 yield Targets.touches(packet, center, 3);
             }
             default -> false;
@@ -357,6 +366,24 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
         } else {
             pending = true;
         }
+    }
+
+    private void noteRefill(BlockPos pos, BlockState state) {
+        if (state.isReplaceable() || !eats(target) || eatRefills.contains(target.getId())) return;
+        if (!Targets.ring(Targets.columns(Targets.box(target)), 0).contains(pos) || InteractionManager.get().placedByUs(pos, REFILL_MEMORY)) return;
+        eatRefills.add(target.getId());
+        Trace.log("city {} refills while eating, holds stay on", target.getName().getString());
+    }
+
+    private static boolean eats(PlayerEntity player) {
+        return player.isUsingItem() && player.getActiveItem().contains(DataComponentTypes.CONSUMABLE);
+    }
+
+    private boolean eatingOpen() {
+        if (!eats(target) || eatRefills.contains(target.getId())) return false;
+        long now = Util.getMeasuringTimeMs();
+        long hurt = Math.max(0, HurtTracker.get().releaseTime(target) - now);
+        return target.getItemUseTimeLeft() * 50L > hurt + LatencyManager.get().rtt();
     }
 
     private boolean ours(BlockPos pos) {
@@ -608,7 +635,7 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
         if (target == null) return false;
         AutoCrystal autoCrystal = Features.get(AutoCrystal.class);
         if (autoCrystal == null || !autoCrystal.isActive() || !InteractionManager.get().hasCrystals()) return true;
-        if (hurtSync.get() && hurtHolds(pos)) return false;
+        if (hurtSync.get() && !eatingOpen() && hurtHolds(pos)) return false;
         return worthOpening(pos);
     }
 
