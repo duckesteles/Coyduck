@@ -10,6 +10,7 @@ import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.Rgba;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.logic.Holes;
 import dev.coyduck.render.Argb;
 import dev.coyduck.render.Canvas;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -20,16 +21,12 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
 import net.minecraft.world.attribute.EnvironmentAttributes;
 
 public class HoleEsp extends Feature {
     private static final double SAFE_RESISTANCE = 600;
     private static final int SCAN_TICKS = 3;
-    private static final int OPEN = 0;
-    private static final int SOLID = 1;
-    private static final int BEDROCK = 2;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgRender = settings.createGroup("Render");
@@ -138,6 +135,18 @@ public class HoleEsp extends Feature {
     private final Long2ObjectOpenHashMap<Hole> holes = new Long2ObjectOpenHashMap<>();
     private final LongSet seen = new LongOpenHashSet();
     private final BlockPos.Mutable cursor = new BlockPos.Mutable();
+    private final Holes.Terrain terrain = new Holes.Terrain() {
+        @Override
+        public boolean room(int x, int y, int z) {
+            return open(x, y, z);
+        }
+
+        @Override
+        public int wall(int x, int y, int z) {
+            return kind(x, y, z);
+        }
+    };
+    private Holes.Shapes shapes = new Holes.Shapes(true, true, false);
     private int ticks;
     private long last;
     private boolean anchorsWork;
@@ -160,6 +169,7 @@ public class HoleEsp extends Feature {
         seen.clear();
         BlockPos center = mc.player.getBlockPos();
         anchorsWork = mc.world.getRegistryKey() == World.NETHER || Boolean.TRUE.equals(mc.world.getEnvironmentAttributes().getAttributeValue(EnvironmentAttributes.RESPAWN_ANCHOR_WORKS_GAMEPLAY, center));
+        shapes = new Holes.Shapes(true, doubles.get(), false);
         int r = range.get();
         int v = vertical.get();
         for (int dx = -r; dx <= r; dx++) {
@@ -171,49 +181,18 @@ public class HoleEsp extends Feature {
     }
 
     private void scan(int x, int y, int z) {
-        if (!open(x, y, z)) return;
+        Holes.Hole hole = Holes.at(terrain, x, y, z, shapes);
+        if (hole == null) return;
 
-        int walls = 0;
-        boolean safe = true;
-        Direction gap = null;
-        for (Direction side : Direction.Type.HORIZONTAL) {
-            int kind = kind(x + side.getOffsetX(), y, z + side.getOffsetZ());
-            if (kind != OPEN) {
-                safe &= kind == BEDROCK;
-                walls++;
-            } else if (gap == null) {
-                gap = side;
-            } else {
-                return;
-            }
+        boolean trapped = true;
+        for (int cx = hole.x(); cx < hole.maxX(); cx++) {
+            for (int cz = hole.z(); cz < hole.maxZ(); cz++) trapped &= roofed(cx, y, cz);
         }
-        int floor = kind(x, y - 1, z);
-        if (floor == OPEN) return;
-        safe &= floor == BEDROCK;
-
-        if (walls == 4) {
-            add(BlockPos.asLong(x, y, z), x, z, x + 1, z + 1, y, safe, roofed(x, y, z));
-            return;
-        }
-        if (!doubles.get() || gap == null || (gap != Direction.EAST && gap != Direction.SOUTH)) return;
-
-        int ox = x + gap.getOffsetX();
-        int oz = z + gap.getOffsetZ();
-        if (!open(ox, y, oz)) return;
-        int otherFloor = kind(ox, y - 1, oz);
-        if (otherFloor == OPEN) return;
-        safe &= otherFloor == BEDROCK;
-        for (Direction side : Direction.Type.HORIZONTAL) {
-            if (side == gap.getOpposite()) continue;
-            int kind = kind(ox + side.getOffsetX(), y, oz + side.getOffsetZ());
-            if (kind == OPEN) return;
-            safe &= kind == BEDROCK;
-        }
-        add(BlockPos.asLong(x, y, z), x, z, x + 1 + gap.getOffsetX(), z + 1 + gap.getOffsetZ(), y, safe, roofed(x, y, z) && roofed(ox, y, oz));
+        add(BlockPos.asLong(x, y, z), x, z, hole.maxX(), hole.maxZ(), y, hole.safe(), trapped);
     }
 
     private boolean roofed(int x, int y, int z) {
-        return markTrapped.get() && kind(x, y + 2, z) != OPEN;
+        return markTrapped.get() && kind(x, y + 2, z) != Holes.OPEN;
     }
 
     private void add(long id, double minX, double minZ, double maxX, double maxZ, double y, boolean safe, boolean trapped) {
@@ -234,9 +213,9 @@ public class HoleEsp extends Feature {
 
     private int kind(int x, int y, int z) {
         BlockState state = mc.world.getBlockState(cursor.set(x, y, z));
-        if (state.getHardness(mc.world, cursor) < 0) return BEDROCK;
-        if (state.isOf(Blocks.RESPAWN_ANCHOR) && !anchorsWork) return OPEN;
-        return state.getBlock().getBlastResistance() >= SAFE_RESISTANCE ? SOLID : OPEN;
+        if (state.getHardness(mc.world, cursor) < 0) return Holes.BEDROCK;
+        if (state.isOf(Blocks.RESPAWN_ANCHOR) && !anchorsWork) return Holes.OPEN;
+        return state.getBlock().getBlastResistance() >= SAFE_RESISTANCE ? Holes.SOLID : Holes.OPEN;
     }
 
     @EventHandler

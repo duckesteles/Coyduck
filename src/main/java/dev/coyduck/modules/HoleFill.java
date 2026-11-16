@@ -9,6 +9,7 @@ import dev.coyduck.feature.Feature;
 import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.logic.Holes;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
@@ -23,7 +24,6 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
@@ -109,6 +109,19 @@ public class HoleFill extends Feature {
 
     private PlayerEntity target;
 
+    private final BlockPos.Mutable cursor = new BlockPos.Mutable();
+    private final Holes.Terrain terrain = new Holes.Terrain() {
+        @Override
+        public boolean room(int x, int y, int z) {
+            return air(cursor.set(x, y, z)) && air(cursor.set(x, y + 1, z)) && air(cursor.set(x, y + 2, z));
+        }
+
+        @Override
+        public int wall(int x, int y, int z) {
+            return strong(cursor.set(x, y, z)) ? Holes.SOLID : Holes.OPEN;
+        }
+    };
+
     public HoleFill() {
         super("hole-fill", "Fills holes near enemies.");
     }
@@ -161,6 +174,7 @@ public class HoleFill extends Feature {
         Box self = mc.player.getBoundingBox().expand(0.1);
         Box enemy = target.getBoundingBox();
         double range = fillRange.get() * fillRange.get();
+        Holes.Shapes shapes = new Holes.Shapes(true, doubles.get(), false);
 
         for (int dx = -radius; dx <= radius; dx++) {
             for (int dz = -radius; dz <= radius; dz++) {
@@ -171,30 +185,13 @@ public class HoleFill extends Feature {
                     Vec3d bottom = Vec3d.ofBottomCenter(pos);
                     if (leaveOwn.get() && bottom.squaredDistanceTo(mc.player.getEntityPos()) <= Math.min(bottom.squaredDistanceTo(target.getEntityPos()), bottom.squaredDistanceTo(heading))) continue;
                     if (pos.getY() > target.getY() + MAX_STEP_UP) continue;
-                    if (isHole(pos, null) || doubles.get() && isDouble(pos)) holes.add(pos);
+                    if (Holes.containing(terrain, pos.getX(), pos.getY(), pos.getZ(), shapes) != null) holes.add(pos);
                 }
             }
         }
 
         holes.sort(Comparator.comparingDouble(pos -> Vec3d.ofBottomCenter(pos).squaredDistanceTo(heading)));
         return holes;
-    }
-
-    private boolean isHole(BlockPos pos, Direction open) {
-        if (!air(pos) || !air(pos.up()) || !air(pos.up(2)) || !strong(pos.down())) return false;
-        for (Direction direction : Direction.Type.HORIZONTAL) {
-            if (direction == open) continue;
-            if (!strong(pos.offset(direction))) return false;
-        }
-        return true;
-    }
-
-    private boolean isDouble(BlockPos pos) {
-        for (Direction direction : Direction.Type.HORIZONTAL) {
-            BlockPos other = pos.offset(direction);
-            if (isHole(pos, direction) && isHole(other, direction.getOpposite())) return true;
-        }
-        return false;
     }
 
     private boolean air(BlockPos pos) {

@@ -12,6 +12,7 @@ import dev.coyduck.feature.Features;
 import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.logic.Holes;
 import dev.coyduck.managers.MoveBudget;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
@@ -28,6 +29,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class HoleSnap extends Feature {
@@ -189,6 +191,18 @@ public class HoleSnap extends Feature {
     private record Hole(List<BlockPos> cells, Vec3d middle) {}
 
     private Hole hole;
+    private final BlockPos.Mutable cursor = new BlockPos.Mutable();
+    private final Holes.Terrain terrain = new Holes.Terrain() {
+        @Override
+        public boolean room(int x, int y, int z) {
+            return HoleSnap.this.room(cursor.set(x, y, z));
+        }
+
+        @Override
+        public int wall(int x, int y, int z) {
+            return HoleSnap.this.wall(cursor.set(x, y, z));
+        }
+    };
     private int collided;
     private int pulled;
     private volatile long pausedUntil;
@@ -300,13 +314,14 @@ public class HoleSnap extends Feature {
     private Hole find() {
         BlockPos feet = mc.player.getBlockPos();
         Vec3d position = mc.player.getEntityPos();
+        Holes.Shapes shapes = new Holes.Shapes(singles.get(), doubles.get(), quads.get());
         Hole best = null;
         double bestDistance = Double.MAX_VALUE;
 
         for (int dx = -range.get(); dx <= range.get(); dx++) {
             for (int dz = -range.get(); dz <= range.get(); dz++) {
                 for (int dy = -downRange.get(); dy <= 0; dy++) {
-                    Hole candidate = hole(feet.add(dx, dy, dz));
+                    Hole candidate = hole(feet.add(dx, dy, dz), shapes);
                     if (candidate == null || covered(candidate, feet.getY() + 1) || occupied(candidate)) continue;
                     if (dy == 0 && candidate.cells.contains(feet)) return candidate;
 
@@ -321,32 +336,18 @@ public class HoleSnap extends Feature {
         return best;
     }
 
-    private Hole hole(BlockPos pos) {
-        if (!open(pos) || !wall(pos.west()) || !wall(pos.north())) return null;
+    private Hole hole(BlockPos pos, Holes.Shapes shapes) {
+        Holes.Hole hole = Holes.at(terrain, pos.getX(), pos.getY(), pos.getZ(), shapes);
+        if (hole == null) return null;
 
-        boolean east = open(pos.east()) && wall(pos.east().north()) && wall(pos.east(2));
-        boolean south = open(pos.south()) && wall(pos.south().west()) && wall(pos.south(2));
-
-        if (singles.get() && !east && !south && wall(pos.east()) && wall(pos.south())) {
-            return new Hole(List.of(pos), new Vec3d(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5));
+        List<BlockPos> cells = new ArrayList<>(hole.kind().sizeX * hole.kind().sizeZ);
+        for (int x = hole.x(); x < hole.maxX(); x++) {
+            for (int z = hole.z(); z < hole.maxZ(); z++) cells.add(new BlockPos(x, hole.y(), z));
         }
-
-        if (quads.get() && east && south && open(pos.south().east()) && wall(pos.east(2).south()) && wall(pos.south(2).east())) {
-            return new Hole(List.of(pos, pos.east(), pos.south(), pos.south().east()), new Vec3d(pos.getX() + 1, pos.getY(), pos.getZ() + 1));
-        }
-
-        if (!doubles.get()) return null;
-        if (east && !south && wall(pos.south()) && wall(pos.south().east())) {
-            return new Hole(List.of(pos, pos.east()), new Vec3d(pos.getX() + 1, pos.getY(), pos.getZ() + 0.5));
-        }
-        if (south && !east && wall(pos.east()) && wall(pos.south().east())) {
-            return new Hole(List.of(pos, pos.south()), new Vec3d(pos.getX() + 0.5, pos.getY(), pos.getZ() + 1));
-        }
-        return null;
+        return new Hole(cells, new Vec3d(hole.middleX(), hole.y(), hole.middleZ()));
     }
 
-    private boolean open(BlockPos pos) {
-        if (!wall(pos.down())) return false;
+    private boolean room(BlockPos pos) {
         for (int i = 0; i < depth.get(); i++) {
             BlockState state = mc.world.getBlockState(pos.up(i));
             if (collidable(pos.up(i)) || state.isOf(Blocks.COBWEB) || state.isIn(BlockTags.FIRE) || state.getFluidState().isIn(FluidTags.LAVA)) return false;
@@ -367,12 +368,11 @@ public class HoleSnap extends Feature {
         return pos.getX() == cell.getX() && pos.getZ() == cell.getZ() && pos.getY() >= cell.getY() && pos.getY() < cell.getY() + depth.get();
     }
 
-    private boolean wall(BlockPos pos) {
-        if (!collidable(pos)) return false;
-        if (!safeOnly.get()) return true;
-
+    private int wall(BlockPos pos) {
+        if (!collidable(pos)) return Holes.OPEN;
         BlockState state = mc.world.getBlockState(pos);
-        return state.getHardness(mc.world, pos) < 0 || state.getBlock().getBlastResistance() >= SAFE_RESISTANCE;
+        if (state.getHardness(mc.world, pos) < 0) return Holes.BEDROCK;
+        return !safeOnly.get() || state.getBlock().getBlastResistance() >= SAFE_RESISTANCE ? Holes.SOLID : Holes.OPEN;
     }
 
     private boolean collidable(BlockPos pos) {
