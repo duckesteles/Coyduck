@@ -1,6 +1,5 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.core.Core;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.PacketEvent;
@@ -448,7 +447,6 @@ public class MaceStrike extends Feature {
             return;
         }
         takeMace();
-        if (unglide.get() == Unglide.Armor) chestplateSlot();
         Vec3d now = target.getEntityPos();
         boolean fresh = lastTargetPos == null || lastTarget != target;
         Vec3d moved = fresh ? Vec3d.ZERO : now.subtract(lastTargetPos);
@@ -768,7 +766,7 @@ public class MaceStrike extends Feature {
                 path(x, y, strikeY, z, collision);
                 strike(gliding);
                 if (worn != -1) {
-                    InventoryManager.get().swapWithHotbar(InventoryManager.CHEST, worn);
+                    swapChest(worn);
                     repairSlot = worn;
                 }
                 if (gliding) glideCommand();
@@ -840,7 +838,7 @@ public class MaceStrike extends Feature {
         if (InventoryManager.get().selectedSlot() == slot) hit.run();
         else InventoryManager.get().withItem(slot, switchMode.get(), hit);
         if (worn[0] != -1) {
-            InventoryManager.get().swapWithHotbar(InventoryManager.CHEST, worn[0]);
+            swapChest(worn[0]);
             repairSlot = worn[0];
         }
         if (toggle) glideCommand();
@@ -964,19 +962,13 @@ public class MaceStrike extends Feature {
 
     private int wearChestplate() {
         if (!LivingEntity.canGlideWith(mc.player.getEquippedStack(EquipmentSlot.CHEST), EquipmentSlot.CHEST)) return -1;
-        int hotbar = chestplateSlot();
-        if (hotbar == -1 || !InventoryManager.get().swapWithHotbar(InventoryManager.CHEST, hotbar)) return -1;
-        return hotbar;
+        int slot = InventoryManager.get().find(MaceStrike::isChestplate, 0, InventoryManager.MAIN_END);
+        return slot != -1 && swapChest(slot) ? slot : -1;
     }
 
-    private int chestplateSlot() {
+    private static boolean swapChest(int slot) {
         InventoryManager inventory = InventoryManager.get();
-        int hotbar = inventory.find(MaceStrike::isChestplate, 0, InventoryManager.HOTBAR_END);
-        if (hotbar != -1 || unglide.get() != Unglide.Armor) return hotbar;
-        int stored = inventory.find(MaceStrike::isChestplate, InventoryManager.HOTBAR_END, InventoryManager.MAIN_END);
-        int free = inventory.find(ItemStack::isEmpty, 0, InventoryManager.HOTBAR_END);
-        if (stored != -1 && free != -1 && free != Core.host().totemSlot() && free != inventory.selectedSlot()) inventory.swapWithHotbar(stored, free);
-        return -1;
+        return slot < InventoryManager.HOTBAR_END ? inventory.swapWithHotbar(InventoryManager.CHEST, slot) : inventory.move(slot, InventoryManager.CHEST);
     }
 
     private void keepElytra() {
@@ -986,7 +978,7 @@ public class MaceStrike extends Feature {
             return;
         }
         if (!isChestplate(mc.player.getEquippedStack(EquipmentSlot.CHEST)) || !LivingEntity.canGlideWith(InventoryManager.get().stack(repairSlot), EquipmentSlot.CHEST)) return;
-        InventoryManager.get().swapWithHotbar(InventoryManager.CHEST, repairSlot);
+        swapChest(repairSlot);
         repairSlot = -1;
     }
 
