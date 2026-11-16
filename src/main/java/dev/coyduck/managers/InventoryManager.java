@@ -381,7 +381,7 @@ public final class InventoryManager {
         return true;
     }
 
-    private boolean standingStill() {
+    public boolean standingStill() {
         if (mc.player.isUsingItem()) return false;
         double dx = mc.player.getX() - mc.player.lastX;
         double dz = mc.player.getZ() - mc.player.lastZ;

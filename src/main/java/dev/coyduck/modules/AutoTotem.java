@@ -606,6 +606,10 @@ public class AutoTotem extends Feature {
         gappleHome = NONE;
         if (home != NONE && home != InventoryManager.get().serverSlot() && !isTotem(mc.player.getOffHandStack()) && isTotem(InventoryManager.get().stack(home))
             && InventoryManager.get().handlerSlot(mc.player.currentScreenHandler, home) != -1) return home;
+        if (mc.player.isUsingItem() || mc.player.isOnGround() && !InventoryManager.get().standingStill()) {
+            int reserve = reserveSource();
+            if (reserve != NONE) return reserve;
+        }
         int source = offhandSource(true);
         if (source == NONE) source = offhandSource(false);
         return source != NONE ? source : reserveSource();
