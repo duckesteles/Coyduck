@@ -185,7 +185,6 @@ public class AutoTotem extends Module {
     private int pendingSyncId;
     private int barrier;
     private int mainBarrier;
-    private boolean mainPending;
     private long mainPendingUntil;
     private long pendingUntil;
     private int attempts;
@@ -245,21 +244,25 @@ public class AutoTotem extends Module {
 
     @Override
     public void onActivate() {
+        reset();
+        resumeTicks = 0;
+        warned = false;
+        disableConflicts();
+    }
+
+    private void reset() {
         gapple = false;
         mainMissing = 0;
-        mainPending = false;
+        mainPendingUntil = 0;
         clearPending();
         attempts = 0;
         confirmed = false;
+        nextVerify = 0;
+        popExpectedUntil = 0;
+        dangerHold = 0;
         reserveSlot = NONE;
         previousSlot = NONE;
         expectedSlot = NONE;
-        resumeTicks = 0;
-        dangerHold = 0;
-        nextVerify = 0;
-        popExpectedUntil = 0;
-        warned = false;
-        disableConflicts();
     }
 
     @Override
@@ -321,7 +324,7 @@ public class AutoTotem extends Module {
     private void onPacket(PacketApplyEvent.Post event) {
         if (!canAct()) return;
 
-        if (mainPending && event.packet instanceof PlayerActionResponseS2CPacket packet && packet.sequence() >= mainBarrier) mainPending = false;
+        if (mainPendingUntil != 0 && event.packet instanceof PlayerActionResponseS2CPacket packet && packet.sequence() >= mainBarrier) mainPendingUntil = 0;
         switch (event.packet) {
             case EntityStatusS2CPacket packet when packet.getStatus() == EntityStatuses.USE_TOTEM_OF_UNDYING && packet.getEntity(mc.world) == mc.player -> onPop();
             case PlayerActionResponseS2CPacket packet when pending && packet.sequence() >= barrier -> onBarrier();
@@ -343,20 +346,9 @@ public class AutoTotem extends Module {
 
     @EventHandler
     private void onWorldReset(WorldResetEvent event) {
+        reset();
         Arrays.fill(sourceUsedAt, 0);
-        gapple = false;
-        mainMissing = 0;
-        mainPending = false;
-        clearPending();
-        attempts = 0;
-        confirmed = false;
-        nextVerify = 0;
-        popExpectedUntil = 0;
-        dangerHold = 0;
         lastPopAt = 0;
-        reserveSlot = NONE;
-        previousSlot = NONE;
-        expectedSlot = NONE;
     }
 
     private void onPop() {
@@ -527,8 +519,7 @@ public class AutoTotem extends Module {
 
     private void updateGapple() {
         InventoryManager inventory = InventoryManager.get();
-        if (mainPending && Util.getMeasuringTimeMs() > mainPendingUntil) mainPending = false;
-        boolean mainTotem = isTotem(mc.player.getMainHandStack()) && !mainPending;
+        boolean mainTotem = isTotem(mc.player.getMainHandStack()) && Util.getMeasuringTimeMs() >= mainPendingUntil;
 
         if (gapple) {
             mainMissing = mainTotem ? 0 : mainMissing + 1;
@@ -576,7 +567,15 @@ public class AutoTotem extends Module {
                 if (i != selected && isTotem(inventory.stack(i))) source = i;
             }
         }
-        if (source != NONE && inventory.swapWithHotbar(source, selected)) emptyEatAt = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
+        if (source != NONE && inventory.swapWithHotbar(source, selected)) {
+            emptyEatAt = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
+            awaitMain();
+        }
+    }
+
+    private void awaitMain() {
+        mainBarrier = InventoryManager.get().barrier();
+        mainPendingUntil = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
     }
 
     private int gappleSource() {
@@ -713,9 +712,7 @@ public class AutoTotem extends Module {
 
             hotbar = reserveHotbar();
             if (hotbar == NONE || !inventory.swapWithHotbar(source, hotbar)) return;
-            mainBarrier = inventory.barrier();
-            mainPending = true;
-            mainPendingUntil = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
+            awaitMain();
         }
 
         if (!inventory.select(hotbar)) return;

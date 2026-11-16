@@ -102,7 +102,7 @@ public final class ExplosionDamage {
     }
 
     public static float mitigate(LivingEntity target, float damage) {
-        return Blast.Defense.of(target).reduce(damage);
+        return damage <= 0 ? 0 : Blast.Defense.of(target).reduce(damage);
     }
 
     public static boolean isInvulnerable(LivingEntity target) {
