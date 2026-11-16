@@ -3,18 +3,17 @@ package dev.coyduck.modules;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.utils.Trace;
-import dev.coyduck.Coyduck;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.RotationManager;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.Entity;
 import net.minecraft.block.BlockState;
@@ -37,7 +36,7 @@ import net.minecraft.world.RaycastContext;
 import java.util.ArrayList;
 import java.util.List;
 
-public class PearlPhase extends Module {
+public class PearlPhase extends Feature {
     private static final int ROTATE_PRIORITY = 130;
     private static final double SPEED = 1.5;
     private static final double GRAVITY = 0.03;
@@ -130,7 +129,7 @@ public class PearlPhase extends Module {
     private Vec3d planned;
 
     public PearlPhase() {
-        super(Coyduck.CATEGORY, "pearl-phase", "Phases you into walls with a pearl.");
+        super("pearl-phase", "Phases you into walls with a pearl.");
     }
 
     @Override

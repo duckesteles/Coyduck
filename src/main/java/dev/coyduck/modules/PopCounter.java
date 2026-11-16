@@ -1,13 +1,12 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.PopTracker;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.friends.Friends;
-import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.player.ChatUtils;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.EntityStatuses;
@@ -17,7 +16,7 @@ import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
-public class PopCounter extends Module {
+public class PopCounter extends Feature {
     private static final int NAME = 0xB94AE6;
     private static final int COUNT = 0xFBC02D;
 
@@ -45,7 +44,7 @@ public class PopCounter extends Module {
     );
 
     public PopCounter() {
-        super(Coyduck.CATEGORY, "pop-counter", "Counts enemy totem pops.");
+        super("pop-counter", "Counts enemy totem pops.");
     }
 
     public static int pops(PlayerEntity player) {

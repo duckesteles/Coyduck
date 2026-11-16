@@ -1,18 +1,19 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.utils.Trace;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
-public class NoRotate extends Module {
+public class NoRotate extends Feature {
     private static final double INSET = 0.05;
     private static final double STILL = 0.003;
 
@@ -28,7 +29,7 @@ public class NoRotate extends Module {
     private boolean frozen;
 
     public NoRotate() {
-        super(Coyduck.CATEGORY, "no-rotate+", "Keeps your view when the server turns it.");
+        super("no-rotate+", "Keeps your view when the server turns it.");
     }
 
     public static boolean on() {
@@ -42,8 +43,7 @@ public class NoRotate extends Module {
     }
 
     private static NoRotate module() {
-        Modules modules = Modules.get();
-        return modules == null ? null : modules.get(NoRotate.class);
+        return Features.get(NoRotate.class);
     }
 
     @Override

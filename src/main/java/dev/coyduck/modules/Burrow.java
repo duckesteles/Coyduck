@@ -1,7 +1,14 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
@@ -9,18 +16,10 @@ import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.RotationManager;
-import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.utils.BlockRules;
 import dev.coyduck.utils.ExplosionDamage;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.orbit.EventHandler;
 import dev.coyduck.utils.Trace;
+import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityPose;
@@ -37,7 +36,7 @@ import net.minecraft.util.math.Vec3d;
 
 import java.util.List;
 
-public class Burrow extends Module {
+public class Burrow extends Feature {
     private static final double[] JUMP = {0.42, 0.7532, 1.0013, 1.1661};
     private static final long REFILL_WINDOW = 1_500;
     private static final int MAX_FAILS = 2;
@@ -99,7 +98,7 @@ public class Burrow extends Module {
     private boolean warned;
 
     public Burrow() {
-        super(Coyduck.CATEGORY, "burrow+", "Burrows you into a block.");
+        super("burrow+", "Burrows you into a block.");
     }
 
     @Override

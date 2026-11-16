@@ -1,17 +1,17 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.managers.RotationManager;
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.managers.RotationManager;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
@@ -28,7 +28,7 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec2f;
 
-public class SpeedPlus extends Module {
+public class SpeedPlus extends Feature {
     public enum Mode { Strafe, Vanilla }
 
     private static final double BASE = 0.2873;
@@ -111,7 +111,7 @@ public class SpeedPlus extends Module {
     private String reason;
 
     public SpeedPlus() {
-        super(Coyduck.CATEGORY, "speed+", "Strafe speed that avoids setbacks.");
+        super("speed+", "Strafe speed that avoids setbacks.");
     }
 
     @Override

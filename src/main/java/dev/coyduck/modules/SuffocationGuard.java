@@ -1,17 +1,16 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.utils.Trace;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.entity.MovementType;
@@ -20,7 +19,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
-public class SuffocationGuard extends Module {
+public class SuffocationGuard extends Feature {
     private static final double SPEED = 0.2;
     private static final double ARRIVED = 0.05;
     private static final int GIVE_UP_TICKS = 40;
@@ -49,12 +48,12 @@ public class SuffocationGuard extends Module {
     private int ticks;
 
     public static boolean leaving() {
-        SuffocationGuard module = Modules.get() == null ? null : Modules.get().get(SuffocationGuard.class);
+        SuffocationGuard module = Features.get(SuffocationGuard.class);
         return module != null && module.isActive() && module.exit != null;
     }
 
     public SuffocationGuard() {
-        super(Coyduck.CATEGORY, "suffocation-guard", "Leaves the wall before suffocation kills you.");
+        super("suffocation-guard", "Leaves the wall before suffocation kills you.");
     }
 
     @Override

@@ -1,14 +1,13 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 
-public class CustomFov extends Module {
+public class CustomFov extends Feature {
     private static final float MAX_FOV = 179.0f;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -47,11 +46,11 @@ public class CustomFov extends Module {
     );
 
     public CustomFov() {
-        super(Coyduck.CATEGORY, "custom-fov", "Custom field of view.");
+        super("custom-fov", "Custom field of view.");
     }
 
     private static CustomFov active() {
-        CustomFov module = Modules.get().get(CustomFov.class);
+        CustomFov module = Features.get(CustomFov.class);
         return module != null && module.isActive() ? module : null;
     }
 

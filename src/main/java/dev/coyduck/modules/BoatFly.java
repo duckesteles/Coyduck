@@ -1,20 +1,19 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.utils.Trace;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.entity.EntityMoveEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
@@ -37,7 +36,7 @@ import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Locale;
 
-public class BoatFly extends Module {
+public class BoatFly extends Feature {
     private static final double SIDE_SLACK = 0.2;
     private static final double UP_SLACK = 0.45;
     private static final double ARRIVED = 0.5;
@@ -197,11 +196,11 @@ public class BoatFly extends Module {
     private String status;
 
     public BoatFly() {
-        super(Coyduck.CATEGORY, "boat-fly+", "Flies your boat.");
+        super("boat-fly+", "Flies your boat.");
     }
 
     public static boolean keepSeat() {
-        BoatFly module = Modules.get().get(BoatFly.class);
+        BoatFly module = Features.get(BoatFly.class);
         return module != null && module.isActive() && MeteorClient.mc.player != null && MeteorClient.mc.player.getVehicle() instanceof AbstractBoatEntity;
     }
 

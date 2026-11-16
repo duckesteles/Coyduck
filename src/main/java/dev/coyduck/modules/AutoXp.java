@@ -1,17 +1,16 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.RotationManager;
 import dev.coyduck.utils.Targets;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.EquipmentSlot;
@@ -23,7 +22,7 @@ import net.minecraft.item.Items;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.Box;
 
-public class AutoXp extends Module {
+public class AutoXp extends Feature {
     private static final int ROTATE_PRIORITY = 40;
     private static final int BOTTLE_VALUE = 7;
     private static final double ORB_RANGE = 3;
@@ -84,7 +83,7 @@ public class AutoXp extends Module {
     private boolean mending;
 
     public AutoXp() {
-        super(Coyduck.CATEGORY, "auto-xp", "Mends your armor with XP bottles.");
+        super("auto-xp", "Mends your armor with XP bottles.");
     }
 
     @Override

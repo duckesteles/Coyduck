@@ -1,17 +1,16 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import meteordevelopment.meteorclient.events.world.ParticleEvent;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.particle.ParticleType;
 import net.minecraft.particle.ParticleTypes;
 
-public class NoExplosion extends Module {
+public class NoExplosion extends Feature {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
     private final Setting<Boolean> blast = sgGeneral.add(new BoolSetting.Builder()
@@ -36,13 +35,11 @@ public class NoExplosion extends Module {
     );
 
     public NoExplosion() {
-        super(Coyduck.CATEGORY, "no-explosion", "Hides explosion particles.");
+        super("no-explosion", "Hides explosion particles.");
     }
 
     public static boolean hidesSmoke() {
-        Modules modules = Modules.get();
-        if (modules == null) return false;
-        NoExplosion module = modules.get(NoExplosion.class);
+        NoExplosion module = Features.get(NoExplosion.class);
         return module != null && module.isActive() && module.smoke.get();
     }
 

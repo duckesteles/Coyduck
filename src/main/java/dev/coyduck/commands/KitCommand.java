@@ -2,9 +2,9 @@ package dev.coyduck.commands;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import dev.coyduck.feature.Features;
 import dev.coyduck.modules.Regear;
 import meteordevelopment.meteorclient.commands.Command;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.command.CommandSource;
 
 public class KitCommand extends Command {
@@ -34,6 +34,6 @@ public class KitCommand extends Command {
     }
 
     private static Regear regear() {
-        return Modules.get().get(Regear.class);
+        return Features.get(Regear.class);
     }
 }

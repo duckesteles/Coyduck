@@ -1,11 +1,10 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import meteordevelopment.meteorclient.events.game.ReceiveMessageEvent;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.text.MutableText;
@@ -20,7 +19,7 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class HideRich extends Module {
+public class HideRich extends Feature {
     private static final Pattern CHAT = Pattern.compile(
         "^((?:<\\d{1,2}:\\d{2}(?::\\d{2})?> )?(?:\\[[^\\]\\n]{1,40} head\\] )?)(\\[[^\\]\\n]{1,40}\\] )?(\\.?[A-Za-z0-9_]{1,16})( » )(.*)$",
         Pattern.DOTALL);
@@ -45,7 +44,7 @@ public class HideRich extends Module {
     }
 
     public HideRich() {
-        super(Coyduck.CATEGORY, "hide-rich", "Hides paid ranks in chat.");
+        super("hide-rich", "Hides paid ranks in chat.");
     }
 
     @Override

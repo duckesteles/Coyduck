@@ -1,15 +1,14 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.feature.StringListSetting;
+import dev.coyduck.feature.StringSetting;
 import dev.coyduck.utils.Trace;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.settings.StringListSetting;
-import meteordevelopment.meteorclient.settings.StringSetting;
-import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.gui.screen.ingame.GenericContainerScreen;
 import net.minecraft.client.gui.screen.ingame.ShulkerBoxScreen;
@@ -24,7 +23,7 @@ import net.minecraft.util.Identifier;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Regear extends Module {
+public class Regear extends Feature {
     private static final int TOTEM_SLOT = 8;
     private static final int SLOTS = 36;
 
@@ -69,7 +68,7 @@ public class Regear extends Module {
     );
 
     public Regear() {
-        super(Coyduck.CATEGORY, "regear", "Refills your kit from a container.");
+        super("regear", "Refills your kit from a container.");
     }
 
     public boolean save(String name) {

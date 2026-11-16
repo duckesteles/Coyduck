@@ -1,7 +1,12 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
@@ -11,12 +16,6 @@ import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.RotationManager;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
@@ -55,7 +54,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-public class KillAura extends Module {
+public class KillAura extends Feature {
     private static final double[] CRIT_OFFSETS = {1.1e-7, 1.1e-8};
     private static final int PRIORITY = 80;
     private static final float ROTATE_SPEED = 180.0f;
@@ -173,7 +172,7 @@ public class KillAura extends Module {
     private int critWait;
 
     public KillAura() {
-        super(Coyduck.CATEGORY, "kill-aura+", "Hits players in reach.");
+        super("kill-aura+", "Hits players in reach.");
     }
 
     @Override

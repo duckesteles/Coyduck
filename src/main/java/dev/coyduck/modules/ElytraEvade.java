@@ -1,9 +1,14 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.GameJoinedEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.utils.ExplosionDamage;
@@ -13,12 +18,7 @@ import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.friends.Friends;
-import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
@@ -45,7 +45,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-public class ElytraEvade extends Module {
+public class ElytraEvade extends Feature {
     private static final double GROUND_CLEARANCE = 3;
     private static final double LIFT_STEP = 2;
     private static final double MAX_LIFT = 12;
@@ -218,7 +218,7 @@ public class ElytraEvade extends Module {
     private ClientWorld world;
 
     public ElytraEvade() {
-        super(Coyduck.CATEGORY, "elytra-evade", "Dodges threats while you fly.");
+        super("elytra-evade", "Dodges threats while you fly.");
     }
 
     @Override
@@ -315,7 +315,7 @@ public class ElytraEvade extends Module {
             if (threat != null) calm("elytra-fly+ is off");
             return;
         }
-        MaceStrike mace = Modules.get().get(MaceStrike.class);
+        MaceStrike mace = Features.get(MaceStrike.class);
         if (mace != null && mace.hunting()) {
             calm("mace-strike is hunting");
             return;

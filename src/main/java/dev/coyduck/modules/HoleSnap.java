@@ -1,29 +1,29 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.systems.modules.world.Timer;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.entity.MovementType;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.registry.tag.FluidTags;
-import net.minecraft.entity.MovementType;
-import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -31,7 +31,7 @@ import net.minecraft.util.math.Vec3d;
 
 import java.util.List;
 
-public class HoleSnap extends Module {
+public class HoleSnap extends Feature {
     private static final float SAFE_RESISTANCE = 600;
     private static final double ARRIVE = 1.0E-3;
     private static final double JUMP = 0.42;
@@ -193,11 +193,11 @@ public class HoleSnap extends Module {
     private long startedAt;
 
     public HoleSnap() {
-        super(Coyduck.CATEGORY, "hole-snap", "Moves you into the nearest hole.");
+        super("hole-snap", "Moves you into the nearest hole.");
     }
 
     public static boolean snapping() {
-        HoleSnap snap = Modules.get().get(HoleSnap.class);
+        HoleSnap snap = Features.get(HoleSnap.class);
         return snap != null && snap.isActive() && snap.hole != null;
     }
 

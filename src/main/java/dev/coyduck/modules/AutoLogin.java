@@ -1,16 +1,15 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.GameJoinedEvent;
 import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.feature.StringListSetting;
+import dev.coyduck.feature.StringSetting;
 import meteordevelopment.meteorclient.events.game.ReceiveMessageEvent;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.settings.StringListSetting;
-import meteordevelopment.meteorclient.settings.StringSetting;
-import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.network.packet.s2c.common.ServerTransferS2CPacket;
 import net.minecraft.util.Util;
@@ -19,7 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
-public class AutoLogin extends Module {
+public class AutoLogin extends Feature {
     private static final long JOIN_WINDOW = 60_000;
     private static final long TRANSFER_WINDOW = 30_000;
     private static final Pattern TIMESTAMP = Pattern.compile("^<\\d{1,2}:\\d{2}(?::\\d{2})?> ");
@@ -57,7 +56,7 @@ public class AutoLogin extends Module {
     private String sessionHost;
 
     public AutoLogin() {
-        super(Coyduck.CATEGORY, "auto-login", "Logs you in on listed servers.");
+        super("auto-login", "Logs you in on listed servers.");
     }
 
     @Override

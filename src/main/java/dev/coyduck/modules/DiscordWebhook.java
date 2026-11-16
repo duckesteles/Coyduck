@@ -1,19 +1,18 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.feature.StringSetting;
 import dev.coyduck.managers.FightTracker;
 import dev.coyduck.managers.PopTracker;
 import meteordevelopment.meteorclient.events.game.ReceiveMessageEvent;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.settings.StringSetting;
 import meteordevelopment.meteorclient.systems.friends.Friends;
-import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.EntityStatuses;
 import net.minecraft.entity.player.PlayerEntity;
@@ -32,7 +31,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-public class DiscordWebhook extends Module {
+public class DiscordWebhook extends Feature {
     private static final long SEND_GAP = 2_000;
     private static final int MAX_QUEUE = 20;
     private static final Pattern COORDS = Pattern.compile("-?\\d{3,}[ ,]+-?\\d{1,3}[ ,]+-?\\d{3,}|-?\\d{3,}[ ,]+-?\\d{3,}");
@@ -135,7 +134,7 @@ public class DiscordWebhook extends Module {
     private boolean lowSent;
 
     public DiscordWebhook() {
-        super(Coyduck.CATEGORY, "discord-webhook", "Sends alerts to Discord.");
+        super("discord-webhook", "Sends alerts to Discord.");
     }
 
     @Override

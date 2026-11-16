@@ -1,19 +1,18 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.feature.StringListSetting;
+import dev.coyduck.feature.StringSetting;
 import dev.coyduck.managers.FightTracker;
 import dev.coyduck.managers.PopTracker;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.settings.StringListSetting;
-import meteordevelopment.meteorclient.settings.StringSetting;
 import meteordevelopment.meteorclient.systems.friends.Friends;
-import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.EntityStatuses;
 import net.minecraft.entity.player.PlayerEntity;
@@ -24,7 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
-public class AutoEz extends Module {
+public class AutoEz extends Feature {
     private static final String SMALL_CAPS = "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘqʀꜱᴛᴜᴠᴡxʏᴢ";
     private static final int CHAT_LIMIT = 256;
     private static final long CHAT_GAP = 1_500;
@@ -126,7 +125,7 @@ public class AutoEz extends Module {
     private record Pending(String name, long at, int pops) {}
 
     public AutoEz() {
-        super(Coyduck.CATEGORY, "auto-ez", "Sends a message when you get a kill.");
+        super("auto-ez", "Sends a message when you get a kill.");
     }
 
     @Override

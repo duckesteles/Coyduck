@@ -1,18 +1,17 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.TickRate;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
@@ -26,7 +25,7 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 
-public class AirMine extends Module {
+public class AirMine extends Feature {
     private static final double FALL_MARGIN = 0.5;
     private static final double LANDING_OFFSET = 0.2;
     private static final float AIR_PENALTY = 5.0f;
@@ -55,7 +54,7 @@ public class AirMine extends Module {
     private int windTick;
 
     public AirMine() {
-        super(Coyduck.CATEGORY, "air-mine", "Mines at full speed in the air.");
+        super("air-mine", "Mines at full speed in the air.");
         instance = this;
     }
 
@@ -91,14 +90,14 @@ public class AirMine extends Module {
         ClientPlayerEntity player = mc.player;
         if (player == null || player.isOnGround() || player.hasVehicle() || player.getAbilities().flying) return false;
         if (!player.isGliding() && !falling.get()) return false;
-        if (Modules.get().get(MaceStrike.class).hunting()) return false;
+        if (Features.get(MaceStrike.class).hunting()) return false;
         return harmless(player);
     }
 
     private boolean harmless(ClientPlayerEntity player) {
         double fall = player.fallDistance;
         if (fall <= 0) return true;
-        if (windHit || windGuard || Modules.get().get(KillAura.class).critting()) return false;
+        if (windHit || windGuard || Features.get(KillAura.class).critting()) return false;
         if (mc.world.getBlockState(BlockPos.ofFloored(player.getX(), player.getY() - LANDING_OFFSET, player.getZ())).isOf(Blocks.POINTED_DRIPSTONE)) return false;
 
         double safe = player.getAttributeValue(EntityAttributes.SAFE_FALL_DISTANCE);

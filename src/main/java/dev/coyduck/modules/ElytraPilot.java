@@ -6,6 +6,7 @@ import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.feature.Features;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.RotationManager;
 import dev.coyduck.utils.NetherRoute;
@@ -394,7 +395,7 @@ public class ElytraPilot extends Module {
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         if (mc.player != null && mc.world != null && mc.player.isAlive() && guard()) return;
-        ElytraEvade evade = Modules.get().get(ElytraEvade.class);
+        ElytraEvade evade = Features.get(ElytraEvade.class);
         if (evade != null && evade.evading()) {
             if (eating && mc.player != null) {
                 eatTick--;

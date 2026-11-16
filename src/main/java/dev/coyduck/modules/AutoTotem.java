@@ -1,23 +1,24 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.EntityAddedEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.logic.AckGate;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
-import dev.coyduck.utils.Trace;
 import dev.coyduck.utils.ExplosionDamage;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
+import dev.coyduck.utils.Trace;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
@@ -48,7 +49,7 @@ import net.minecraft.util.math.Vec3d;
 import java.util.Arrays;
 import java.util.List;
 
-public class AutoTotem extends Module {
+public class AutoTotem extends Feature {
     public enum Mainhand {
         Off,
         Smart,
@@ -205,22 +206,22 @@ public class AutoTotem extends Module {
     private boolean warned;
 
     public AutoTotem() {
-        super(Coyduck.CATEGORY, "auto-totem+", "Keeps a totem in your offhand.");
+        super("auto-totem+", "Keeps a totem in your offhand.");
     }
 
     public static boolean canAffordPop() {
-        AutoTotem module = Modules.get().get(AutoTotem.class);
+        AutoTotem module = Features.get(AutoTotem.class);
         return module != null && module.isActive() && module.canAct() && !module.pending && module.confirmed
             && !popInFlight() && isTotem(module.mc.player.getOffHandStack()) && module.totems >= 2;
     }
 
     public static int totemSlot() {
-        AutoTotem module = Modules.get().get(AutoTotem.class);
+        AutoTotem module = Features.get(AutoTotem.class);
         return module == null ? 8 : module.slot.get() - 1;
     }
 
     public static boolean wantsMainTotem() {
-        AutoTotem module = Modules.get().get(AutoTotem.class);
+        AutoTotem module = Features.get(AutoTotem.class);
         if (module == null || !module.isActive()) return false;
         return switch (module.mainhand.get()) {
             case Off -> false;
@@ -230,12 +231,12 @@ public class AutoTotem extends Module {
     }
 
     public static boolean popInFlight() {
-        AutoTotem module = Modules.get().get(AutoTotem.class);
+        AutoTotem module = Features.get(AutoTotem.class);
         return module != null && Util.getMeasuringTimeMs() < module.popExpectedUntil;
     }
 
     public static void notePop() {
-        AutoTotem module = Modules.get().get(AutoTotem.class);
+        AutoTotem module = Features.get(AutoTotem.class);
         if (module == null) return;
 
         module.popExpectedUntil = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();

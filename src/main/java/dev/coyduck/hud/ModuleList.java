@@ -1,6 +1,7 @@
 package dev.coyduck.hud;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.MeteorFeature;
 import dev.coyduck.modules.AutoLogin;
 import dev.coyduck.modules.ClickGui;
 import dev.coyduck.modules.UpdateChecker;
@@ -46,7 +47,7 @@ public class ModuleList extends HudElement {
     private final Setting<List<Module>> hidden = sgGeneral.add(new ModuleListSetting.Builder()
         .name("hidden")
         .description("Modules never listed.")
-        .defaultValue(ClickGui.class, UpdateChecker.class, AutoLogin.class)
+        .defaultValue(listed(ClickGui.class, UpdateChecker.class, AutoLogin.class))
         .build()
     );
 
@@ -235,5 +236,15 @@ public class ModuleList extends HudElement {
         double w = r.textWidth(module.title, shadow, s) + side(s, boxed) * 2;
         if (extra != null) w += r.textWidth(" [" + extra + "]", shadow, s);
         return w;
+    }
+
+    private static List<Module> listed(Class<?>... types) {
+        List<Class<?>> wanted = List.of(types);
+        List<Module> out = new ArrayList<>();
+        for (Module module : Modules.get().getAll()) {
+            Class<?> type = module instanceof MeteorFeature adapter ? adapter.feature().getClass() : module.getClass();
+            if (wanted.contains(type)) out.add(module);
+        }
+        return out;
     }
 }

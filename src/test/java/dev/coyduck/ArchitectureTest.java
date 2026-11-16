@@ -95,6 +95,31 @@ class ArchitectureTest {
     }
 
     @Test
+    void featuresAreNeverLookedUpThroughMeteor() {
+        Set<String> features = features();
+        Pattern lookup = Pattern.compile("Modules\\.get\\(\\)\\.(?:get|isActive)\\((\\w+)\\.class\\)");
+        List<String> offenders = new ArrayList<>();
+        code.forEach((name, text) -> {
+            Matcher matcher = lookup.matcher(text);
+            while (matcher.find()) {
+                if (features.contains(matcher.group(1))) offenders.add(name.substring(ROOT.length()) + " -> " + matcher.group(1));
+            }
+        });
+        assertTrue(offenders.isEmpty(), "use Features.get for migrated features:\n" + String.join("\n", offenders));
+    }
+
+    @Test
+    void featuresDoNotUseMeteorModulesOrSettings() {
+        Set<String> features = features();
+        List<String> offenders = code.entrySet().stream()
+            .filter(entry -> features.contains(entry.getKey().substring(entry.getKey().lastIndexOf('.') + 1)))
+            .filter(entry -> entry.getValue().contains("meteordevelopment.meteorclient.settings.") || Pattern.compile("\\bclass \\w+ extends Module\\b").matcher(entry.getValue()).find())
+            .map(Map.Entry::getKey)
+            .toList();
+        assertTrue(offenders.isEmpty(), "features still use Meteor modules or settings: " + offenders);
+    }
+
+    @Test
     void scannerSeesKnownLinks() {
         assertTrue(dependencies("dev.coyduck.managers.MiningManager").contains("dev.coyduck.core.Bus"));
         assertTrue(dependencies("dev.coyduck.managers.MiningManager").contains("dev.coyduck.managers.InventoryManager"));
@@ -108,6 +133,16 @@ class ArchitectureTest {
         String text = strip("String url = \"https://example.org\"; Object x = dev.coyduck.core.Bus.class; char q = '\"';");
         assertTrue(text.contains("dev.coyduck.core.Bus"));
         assertFalse(text.contains("example"));
+    }
+
+    private static Set<String> features() {
+        Pattern extendsFeature = Pattern.compile("\\bclass (\\w+) extends Feature\\b");
+        Set<String> out = new TreeSet<>();
+        for (String text : code.values()) {
+            Matcher matcher = extendsFeature.matcher(text);
+            while (matcher.find()) out.add(matcher.group(1));
+        }
+        return out;
     }
 
     private static Map<String, String> closure(Set<String> roots) {

@@ -1,18 +1,17 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.ItemListSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.utils.PacketBatch;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.ItemListSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.ShulkerBoxBlock;
 import net.minecraft.component.DataComponentTypes;
@@ -36,7 +35,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
-public class ChestSorter extends Module {
+public class ChestSorter extends Feature {
     private static final int PLAYER_SLOTS = 36;
     private static final int UNLISTED = 1_000_000;
 
@@ -113,11 +112,11 @@ public class ChestSorter extends Module {
     private int queueSync = -1;
 
     public ChestSorter() {
-        super(Coyduck.CATEGORY, "chest-sorter", "Sort, take and dump buttons for storage.");
+        super("chest-sorter", "Sort, take and dump buttons for storage.");
     }
 
     public static ChestSorter active() {
-        ChestSorter module = Modules.get() == null ? null : Modules.get().get(ChestSorter.class);
+        ChestSorter module = Features.get(ChestSorter.class);
         return module != null && module.isActive() ? module : null;
     }
 
