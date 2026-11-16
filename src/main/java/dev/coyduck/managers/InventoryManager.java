@@ -9,6 +9,7 @@ import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientPlayerEntityAccessor;
 import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
 import dev.coyduck.utils.PacketBatch;
+import dev.coyduck.utils.Trace;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
@@ -49,6 +50,7 @@ public final class InventoryManager {
     private static final int SHORT_CLICK_LIMIT = 4;
     private static final int LONG_CLICK_LIMIT = 15;
     private static final int CLICK_RESERVE = 1;
+    private static final double STILL = 0.05;
 
     public static final int HOTBAR_END = PlayerInventory.HOTBAR_SIZE;
     public static final int MAIN_END = PlayerInventory.MAIN_SIZE;
@@ -339,7 +341,8 @@ public final class InventoryManager {
             return true;
         }
 
-        if (mode == SwitchMode.Silent && !isEating()) {
+        boolean keepMine = MiningManager.get().guardsHeldTool() && standingStill() && spareClicks(2);
+        if (mode == SwitchMode.Silent && !isEating() && !keepMine) {
             int hotbar = PlayerInventory.isValidHotbarIndex(index) ? index : stage(index, selected);
             if (hotbar != -1) {
                 selectNow(hotbar);
@@ -358,12 +361,24 @@ public final class InventoryManager {
         }
 
         if (!swapWithHotbar(index, selected)) return false;
+        if (keepMine) Trace.log("mine kept by swap {}", stack(selected).getItem());
         action.run();
         swapWithHotbar(index, selected);
         return true;
     }
 
+    private boolean standingStill() {
+        if (mc.player.isUsingItem()) return false;
+        double dx = mc.player.getX() - mc.player.lastX;
+        double dz = mc.player.getZ() - mc.player.lastZ;
+        return dx * dx + dz * dz < STILL * STILL;
+    }
+
     public boolean spareClick() {
+        return spareClicks(1);
+    }
+
+    public boolean spareClicks(int count) {
         long now = Util.getMeasuringTimeMs();
         int recent = 0;
         int second = 0;
@@ -371,7 +386,7 @@ public final class InventoryManager {
             if (now - at < SHORT_CLICK_WINDOW) recent++;
             if (now - at < LONG_CLICK_WINDOW) second++;
         }
-        return recent < SHORT_CLICK_LIMIT - CLICK_RESERVE && second < LONG_CLICK_LIMIT - CLICK_RESERVE;
+        return recent + count <= SHORT_CLICK_LIMIT - CLICK_RESERVE && second + count <= LONG_CLICK_LIMIT - CLICK_RESERVE;
     }
 
     @EventHandler

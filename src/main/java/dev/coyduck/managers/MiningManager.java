@@ -193,6 +193,10 @@ public final class MiningManager {
         return holdTicks > 0;
     }
 
+    public boolean guardsHeldTool() {
+        return pos != null && !broken && !startPending && holdTicks > 0;
+    }
+
     public boolean mineTwo(Object owner, int priority, BlockPos first, BlockPos second, boolean autoStop, InventoryManager.SwitchMode switchMode, InteractionManager.SwingMode swing) {
         if (background != null || first.equals(second)) return mine(owner, priority, first, autoStop, switchMode, swing);
         if (!mine(owner, priority, second, autoStop, switchMode, swing)) return false;
