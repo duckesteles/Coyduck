@@ -832,24 +832,25 @@ public class MaceStrike extends Feature {
             learnSmash = false;
             learnMixed = false;
         }
+        boolean gliding = mc.player.isGliding() && !preStopped;
+        boolean sprinting = mc.player.isSprinting();
+        boolean toggle = gliding && unglide.get() != Unglide.Off;
+        int[] worn = {-1};
         Runnable hit = () -> {
-            boolean gliding = mc.player.isGliding() && !preStopped;
-            boolean sprinting = mc.player.isSprinting();
             if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
-            int worn = gliding && unglide.get() == Unglide.Armor ? wearChestplate() : -1;
-            boolean toggle = gliding && unglide.get() != Unglide.Off;
+            if (gliding && unglide.get() == Unglide.Armor) worn[0] = wearChestplate();
             if (toggle) glideCommand();
             mc.interactionManager.attackEntity(mc.player, victim);
             InteractionManager.get().swing(InteractionManager.SwingMode.Packet);
-            if (worn != -1) {
-                InventoryManager.get().swapWithHotbar(CHEST, worn);
-                repairSlot = worn;
-            }
-            if (toggle) glideCommand();
-            if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_SPRINTING));
         };
         if (InventoryManager.get().selectedSlot() == slot) hit.run();
         else InventoryManager.get().withItem(slot, switchMode.get(), hit);
+        if (worn[0] != -1) {
+            InventoryManager.get().swapWithHotbar(CHEST, worn[0]);
+            repairSlot = worn[0];
+        }
+        if (toggle) glideCommand();
+        if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_SPRINTING));
         lastStrike = Util.getMeasuringTimeMs();
         if (!holdMace.get()) giveBack();
     }
