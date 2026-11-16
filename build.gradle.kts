@@ -33,6 +33,10 @@ dependencies {
     modImplementation(libs.fabric.loader)
     modImplementation(libs.meteor.client)
     compileOnly(libs.nether.pathfinder)
+
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.launcher)
 }
 
 java {
@@ -63,6 +67,10 @@ tasks {
         from("LICENSE") {
             rename("LICENSE", "LICENSE_$archivesBaseName")
         }
+    }
+
+    test {
+        useJUnitPlatform()
     }
 
     withType<JavaCompile>().configureEach {
