@@ -59,47 +59,18 @@ public final class CrystalScore {
         boolean hurtsFriend(Vec3d crystal, BlockView view);
     }
 
-    public static final class Verdicts {
-        private boolean self;
-        private boolean friend;
-        private boolean balance;
-
-        public void clear() {
-            self = false;
-            friend = false;
-            balance = false;
-        }
-
-        public boolean self() {
-            return self;
-        }
-
-        public boolean friend() {
-            return friend;
-        }
-
-        public boolean balance() {
-            return balance;
-        }
-    }
-
     private final Model model;
     private final Verdicts verdicts = new Verdicts();
     private Rules rules;
     private float[] raws = new float[0];
     private float[] damages = new float[0];
 
-    public CrystalScore(Model model, Rules rules) {
+    public CrystalScore(Model model) {
         this.model = model;
-        this.rules = rules;
     }
 
     public void rules(Rules value) {
         rules = value;
-    }
-
-    public Rules rules() {
-        return rules;
     }
 
     public Verdicts verdicts() {

@@ -5,6 +5,11 @@ import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.logic.AnchorScore;
+import dev.coyduck.logic.AnchorScore.Choice;
+import dev.coyduck.logic.AnchorScore.Rules;
+import dev.coyduck.logic.AnchorScore.Spot;
+import dev.coyduck.logic.AnchorScore.Target;
 import dev.coyduck.logic.Blast;
 import dev.coyduck.logic.BlockOverlay;
 import dev.coyduck.managers.CrystalTracker;
@@ -79,20 +84,13 @@ public class AutoAnchor extends Module {
     private static final int SEARCH = 2;
     private static final int SEARCH_UP = 3;
     private static final int MAX_PREDICT_TICKS = 6;
-    private static final float LETHAL_BONUS = 100.0f;
-    private static final float FOCUS_BONUS = 1.0f;
-    private static final float AIM_BONUS = 1.0f;
     private static final float DEFENSE_THREAT = 4.0f;
     private static final float DEFENSE_FREE = 0.5f;
     private static final float LETHAL_DEFENSE_RAW_MARGIN = 2.0f;
     private static final long LETHAL_DEFENSE_TIME_MARGIN = 100;
     private static final double KNOCKBACK_LIMIT = 0.4;
-    private static final float HARMLESS = 0.5f;
     private static final float FRIEND_LIMIT = 1.0f;
     private static final double RAY_SLACK = 2.0;
-    private static final float FIRE_MARGIN = 1.0f;
-    private static final float CHARGED_TIE = 1.0f;
-    private static final float SELF_WEIGHT = 0.05f;
     private static final byte UNKNOWN = 0;
     private static final byte NO = 1;
     private static final byte YES = 2;
@@ -103,33 +101,28 @@ public class AutoAnchor extends Module {
     private static final int MISSES_TO_PAUSE = 2;
     private static final long REJECT_PAUSE = 750;
 
-    private record Target(PlayerEntity player, Box box, Vec3d feet, BlockPos block, float health, float minDamage) {}
-
-    private record Choice(BlockPos pos, Target target, float damage, float self, float score, boolean charged) {
-        float rank() {
-            return score + (charged ? CHARGED_TIE : 0) - SELF_WEIGHT * self;
-        }
-
-        boolean beats(Choice other) {
-            return other == null || rank() > other.rank();
-        }
-    }
-
     private record Danger(BlockPos pos, Vec3d center, BlockOverlay view, float raw, float full) {}
 
     private record Saved(Danger threat, Choice now) {}
 
-    private record Spot(BlockPos pos, boolean charged, float potential, float timedPotential, long reachable, long timedReachable) {}
-
     private static final class Raws {
-        final float[] target;
+        float[] target = new float[0];
         float self = Float.NaN;
         byte friend = UNKNOWN;
         byte costly = UNKNOWN;
+        BlockOverlay view;
 
-        Raws(int targets) {
-            target = new float[targets];
-            Arrays.fill(target, Float.NaN);
+        float target(int index) {
+            return index < target.length ? target[index] : Float.NaN;
+        }
+
+        void target(int index, float value) {
+            if (index >= target.length) {
+                int old = target.length;
+                target = Arrays.copyOf(target, Math.max(index + 1, old * 2));
+                Arrays.fill(target, old, target.length, Float.NaN);
+            }
+            target[index] = value;
         }
     }
 
@@ -338,8 +331,7 @@ public class AutoAnchor extends Module {
     private boolean running;
     private boolean spent;
     private boolean pending;
-    private boolean rejectedSelf;
-    private boolean rejectedFriend;
+    private final AnchorScore scorer = new AnchorScore(new ScoreModel());
 
     public AutoAnchor() {
         super(Coyduck.CATEGORY, "auto-anchor", "Places and blows up respawn anchors.");
@@ -438,6 +430,7 @@ public class AutoAnchor extends Module {
         try {
             raws.clear();
             faces.clear();
+            scorer.rules(rules());
             anchorOnStop(gap, anchorSlot, glowSlot);
         } finally {
             raws.clear();
@@ -450,15 +443,15 @@ public class AutoAnchor extends Module {
         List<Target> targets = targets();
         if (targets.isEmpty() || blocksTarget(targets, gap)) return;
 
-        float health = AutoTotem.popInFlight() ? 1.0f + FIRE_MARGIN : mc.player.getHealth() + mc.player.getAbsorptionAmount();
+        float health = AutoTotem.popInFlight() ? 1.0f + AnchorScore.FIRE_MARGIN : mc.player.getHealth() + mc.player.getAbsorptionAmount();
         long arrival = Util.getMeasuringTimeMs() + LatencyManager.get().rtt() / 2;
         long timing = hurtSync.get() ? arrival : 0;
         ownCrystals = ownCrystals();
 
-        Spot spot = spot(targets, gap, false, timing);
-        long reachable = spot == null ? 0 : timing != 0 ? spot.timedReachable : spot.reachable;
+        Spot spot = scorer.spot(targets, gap, false, timing);
+        long reachable = spot == null ? 0 : timing != 0 ? spot.timedReachable() : spot.reachable();
         if (reachable == 0) return;
-        Choice choice = evaluate(targets, gap, health, timing, arrival, false, reachable);
+        Choice choice = scorer.evaluate(targets, gap, health, timing, arrival, false, reachable);
         if (choice == null) return;
 
         InteractionManager interaction = InteractionManager.get();
@@ -487,7 +480,7 @@ public class AutoAnchor extends Module {
         interaction.notePending(gap);
         finish(gap, targets);
         mark(choice);
-        Trace.log("anchor on stop {} for {} dmg", gap, choice.damage);
+        Trace.log("anchor on stop {} for {} dmg", gap, choice.damage());
     }
 
     private BlockHitResult blindFace(BlockPos gap) {
@@ -574,6 +567,7 @@ public class AutoAnchor extends Module {
         try {
             raws.clear();
             faces.clear();
+            scorer.rules(rules());
             run();
         } finally {
             raws.clear();
@@ -610,22 +604,20 @@ public class AutoAnchor extends Module {
 
         List<Target> targets = targets();
         List<BlockPos> blocks = new ArrayList<>(targets.size());
-        for (Target target : targets) blocks.add(target.block);
+        for (Target target : targets) blocks.add(target.block());
         targetBlocks = blocks;
 
-        float health = AutoTotem.popInFlight() ? 1.0f + FIRE_MARGIN : mc.player.getHealth() + mc.player.getAbsorptionAmount();
+        float health = AutoTotem.popInFlight() ? 1.0f + AnchorScore.FIRE_MARGIN : mc.player.getHealth() + mc.player.getAbsorptionAmount();
         long now = Util.getMeasuringTimeMs();
         long arrival = now + LatencyManager.get().rtt() / 2;
         long timing = hurtSync.get() ? arrival : 0;
         ownCrystals = ownCrystals();
-        rejectedSelf = false;
-        rejectedFriend = false;
+        scorer.verdicts().clear();
 
         List<BlockPos> charged = chargedAnchors();
         saved.clear();
         if (defend.get() && defend(targets, health, charged, arrival, timing)) return;
-        rejectedSelf = false;
-        rejectedFriend = false;
+        scorer.verdicts().clear();
 
         if (targets.isEmpty()) {
             status = null;
@@ -636,93 +628,44 @@ public class AutoAnchor extends Module {
         int glowSlot = slot(Items.GLOWSTONE);
 
         List<Spot> spots = new ArrayList<>();
-        for (BlockPos pos : charged) addSpot(spots, spot(targets, pos, true, timing));
+        for (BlockPos pos : charged) addSpot(spots, scorer.spot(targets, pos, true, timing));
         if (glowSlot != -1) {
-            for (BlockPos pos : candidates(targets, anchorSlot != -1)) addSpot(spots, spot(targets, pos, false, timing));
+            for (BlockPos pos : candidates(targets, anchorSlot != -1)) addSpot(spots, scorer.spot(targets, pos, false, timing));
         }
 
-        Choice best = pick(spots, targets, health, timing, arrival);
-        if (!saved.isEmpty() && (best == null || best.damage < best.target.health)) {
+        Choice best = scorer.pick(spots, targets, health, timing, arrival);
+        if (!saved.isEmpty() && (best == null || best.damage() < best.target().health())) {
             Choice threat = null;
             for (Saved keep : saved) {
-                if (keep.now != null && keep.now.beats(threat)) threat = keep.now;
+                if (keep.now() != null && keep.now().beats(threat)) threat = keep.now();
             }
             if (threat != null) {
-                if (Trace.on() && (best == null || !best.pos.equals(threat.pos))) Trace.log("anchor uses the threat at {} for offense instead of {}", threat.pos, best == null ? null : best.pos);
+                if (Trace.on() && (best == null || !best.pos().equals(threat.pos()))) Trace.log("anchor uses the threat at {} for offense instead of {}", threat.pos(), best == null ? null : best.pos());
                 best = threat;
             }
         }
         Choice held = null;
-        if (best == null && timing != 0) held = pick(spots, targets, health, 0, arrival);
+        if (best == null && timing != 0) held = scorer.pick(spots, targets, health, 0, arrival);
 
         if (best == null) {
             if (held != null) {
                 status = "hurt-sync";
-                long release = HurtTracker.get().releaseTime(held.target.player);
+                long release = HurtTracker.get().releaseTime(held.target().player());
                 if (release > 0 && (releaseAt == 0 || release < releaseAt)) releaseAt = release;
             } else if (charged.isEmpty() && glowSlot == -1) {
                 status = anchorSlot == -1 ? "no anchors" : "no glowstone";
             } else if (spots.isEmpty()) {
                 status = anchorSlot == -1 ? "no anchors" : "no spot";
-            } else if (rejectedSelf) {
+            } else if (scorer.verdicts().self()) {
                 status = "self damage";
             } else {
-                status = rejectedFriend ? "friend" : "low damage";
+                status = scorer.verdicts().friend() ? "friend" : "low damage";
             }
             return;
         }
 
-        if (best.charged) detonate(best, targets);
+        if (best.charged()) detonate(best, targets);
         else useAnchor(best, targets, anchorSlot, glowSlot);
-    }
-
-    private static void addSpot(List<Spot> spots, Spot spot) {
-        if (spot != null) spots.add(spot);
-    }
-
-    private Spot spot(List<Target> targets, BlockPos pos, boolean charged, long timing) {
-        Vec3d center = Vec3d.ofCenter(pos);
-        float bonus = pos.equals(aimSpot) ? AIM_BONUS : 0;
-        float potential = -1;
-        float timedPotential = -1;
-        long reachable = 0;
-        long timedReachable = 0;
-        for (int i = 0; i < targets.size(); i++) {
-            Target target = targets.get(i);
-            float rawBound = ExplosionDamage.rawBound(target.player, target.feet, center, POWER);
-            float bound = ExplosionDamage.mitigate(target.player, rawBound);
-            if (bound < target.minDamage && bound < target.health) continue;
-            float extra = bonus + (target.player == focus ? FOCUS_BONUS : 0);
-            potential = Math.max(potential, bound + extra + (bound >= target.health ? LETHAL_BONUS : 0));
-            reachable |= 1L << i;
-
-            float timed = timing != 0 ? HurtTracker.get().effective(target.player, rawBound, timing) : bound;
-            if (timed < target.minDamage && timed < target.health) continue;
-            timedPotential = Math.max(timedPotential, timed + extra + (timed >= target.health ? LETHAL_BONUS : 0));
-            timedReachable |= 1L << i;
-        }
-        return reachable == 0 ? null : new Spot(pos, charged, potential, timedPotential, reachable, timedReachable);
-    }
-
-    private Choice pick(List<Spot> spots, List<Target> targets, float health, long timing, long arrival) {
-        boolean timed = timing != 0;
-        List<Spot> order = new ArrayList<>(spots.size());
-        for (Spot spot : spots) {
-            if (!timed || spot.timedReachable != 0) order.add(spot);
-        }
-        order.sort(Comparator.comparingDouble((Spot spot) -> timed ? spot.timedPotential : spot.potential).reversed());
-
-        InteractionManager interaction = InteractionManager.get();
-        Choice best = null;
-        for (Spot spot : order) {
-            float potential = timed ? spot.timedPotential : spot.potential;
-            if (best != null && potential + CHARGED_TIE <= best.rank()) break;
-            Choice choice = evaluate(targets, spot.pos, health, timing, arrival, spot.charged, timed ? spot.timedReachable : spot.reachable);
-            if (choice == null || !choice.beats(best)) continue;
-            if (!spot.charged && !mc.world.getBlockState(spot.pos).isOf(Blocks.RESPAWN_ANCHOR) && interaction.hit(spot.pos, airplace.get()) == null) continue;
-            best = choice;
-        }
-        return best;
     }
 
     private boolean defend(List<Target> targets, float health, List<BlockPos> charged, long arrival, long timing) {
@@ -734,14 +677,14 @@ public class AutoAnchor extends Module {
             float full = ExplosionDamage.mitigate(mc.player, raw);
             if (full >= DEFENSE_THREAT) threats.add(new Danger(pos, center, view, raw, full));
         }
-        threats.sort(Comparator.comparingDouble((Danger threat) -> threat.full).reversed());
+        threats.sort(Comparator.comparingDouble((Danger threat) -> threat.full()).reversed());
 
         HurtTracker hurt = HurtTracker.get();
         for (Danger threat : threats) {
-            if (hurt.effectiveOnSelf(threat.raw, arrival) > DEFENSE_FREE) continue;
-            if (threat.full + FIRE_MARGIN >= health && hurt.effectiveOnSelf(threat.raw + LETHAL_DEFENSE_RAW_MARGIN, arrival + LETHAL_DEFENSE_TIME_MARGIN) > DEFENSE_FREE) continue;
-            if (hurtsFriend(threat.center, threat.view, arrival) || destroysOwnCrystals(threat.center)) continue;
-            if (launches(threat.center, threat.view)) continue;
+            if (hurt.effectiveOnSelf(threat.raw(), arrival) > DEFENSE_FREE) continue;
+            if (threat.full() + AnchorScore.FIRE_MARGIN >= health && hurt.effectiveOnSelf(threat.raw() + LETHAL_DEFENSE_RAW_MARGIN, arrival + LETHAL_DEFENSE_TIME_MARGIN) > DEFENSE_FREE) continue;
+            if (hurtsFriend(threat.center(), threat.view(), arrival) || destroysOwnCrystals(threat.center())) continue;
+            if (launches(threat.center(), threat.view())) continue;
             Saved keep = savedForOffense(targets, threat, health, timing, arrival);
             if (keep != null) {
                 saved.add(keep);
@@ -752,34 +695,34 @@ public class AutoAnchor extends Module {
                 return false;
             }
 
-            aimSpot = threat.pos;
-            if (!rotationReady(threat.pos)) {
+            aimSpot = threat.pos();
+            if (!rotationReady(threat.pos())) {
                 status = "rotating";
                 return true;
             }
-            if (!click(threat.pos)) return false;
+            if (!click(threat.pos())) return false;
 
-            finish(threat.pos, targets);
+            finish(threat.pos(), targets);
             status = "defend";
-            Trace.log("anchor defend {} full {} raw {}", threat.pos, threat.full, threat.raw);
+            Trace.log("anchor defend {} full {} raw {}", threat.pos(), threat.full(), threat.raw());
             return true;
         }
         return false;
     }
 
     private Saved savedForOffense(List<Target> targets, Danger threat, float health, long timing, long arrival) {
-        Spot offense = spot(targets, threat.pos, true, timing);
+        Spot offense = scorer.spot(targets, threat.pos(), true, timing);
         if (offense == null) return null;
-        if (offense.timedReachable != 0) {
-            Choice now = evaluate(targets, threat.pos, health, timing, arrival, true, offense.timedReachable);
+        if (offense.timedReachable() != 0) {
+            Choice now = scorer.evaluate(targets, threat.pos(), health, timing, arrival, true, offense.timedReachable());
             if (now != null) return new Saved(threat, now);
         }
         if (timing == 0) return null;
 
-        Choice later = evaluate(targets, threat.pos, health, 0, arrival, true, offense.reachable);
+        Choice later = scorer.evaluate(targets, threat.pos(), health, 0, arrival, true, offense.reachable());
         if (later == null) return null;
-        long fires = Math.max(HurtTracker.get().releaseTime(later.target.player), Util.getMeasuringTimeMs()) + LatencyManager.get().rtt() / 2;
-        return HurtTracker.get().effectiveOnSelf(threat.raw, fires) <= DEFENSE_FREE ? new Saved(threat, null) : null;
+        long fires = Math.max(HurtTracker.get().releaseTime(later.target().player()), Util.getMeasuringTimeMs()) + LatencyManager.get().rtt() / 2;
+        return HurtTracker.get().effectiveOnSelf(threat.raw(), fires) <= DEFENSE_FREE ? new Saved(threat, null) : null;
     }
 
     private boolean launches(Vec3d center, BlockOverlay view) {
@@ -801,23 +744,23 @@ public class AutoAnchor extends Module {
             status = "no free slot";
             return;
         }
-        aimSpot = choice.pos;
-        if (!rotationReady(choice.pos)) {
+        aimSpot = choice.pos();
+        if (!rotationReady(choice.pos())) {
             status = "rotating";
             return;
         }
-        if (!click(choice.pos)) {
-            Trace.log("anchor detonate {} failed, retrying next tick", choice.pos);
+        if (!click(choice.pos())) {
+            Trace.log("anchor detonate {} failed, retrying next tick", choice.pos());
             status = "switch";
             return;
         }
 
-        finish(choice.pos, targets);
+        finish(choice.pos(), targets);
         mark(choice);
     }
 
     private void useAnchor(Choice choice, List<Target> targets, int anchorSlot, int glowSlot) {
-        BlockPos pos = choice.pos;
+        BlockPos pos = choice.pos();
         InteractionManager interaction = InteractionManager.get();
         boolean placed = mc.world.getBlockState(pos).isOf(Blocks.RESPAWN_ANCHOR);
         BlockHitResult placeHit = placed ? null : interaction.hit(pos, airplace.get());
@@ -902,8 +845,8 @@ public class AutoAnchor extends Module {
         awaiting.put(pos.asLong(), now + timeout);
         CrystalTracker.get().explodeAt(center, RANGE);
         for (Target target : targets) {
-            float hit = ExplosionDamage.raw(target.player, target.feet, target.box, center, POWER, view);
-            if (hit > 0) HurtTracker.get().expect(target.player, hit);
+            float hit = ExplosionDamage.raw(target.player(), target.feet(), target.box(), center, POWER, view);
+            if (hit > 0) HurtTracker.get().expect(target.player(), hit);
         }
         spent = true;
         aimSpot = null;
@@ -911,65 +854,10 @@ public class AutoAnchor extends Module {
     }
 
     private void mark(Choice choice) {
-        if (Trace.on()) Trace.log("anchor {} {} at {} for {} dmg, self {}", choice.charged ? "detonate" : "place", choice.target.player.getName().getString(), choice.pos, choice.damage, choice.self);
-        focus = choice.target.player;
-        status = String.format("%.1f dmg", choice.damage);
-        renderDamage = choice.damage;
-    }
-
-    private Raws raws(BlockPos pos, int targets) {
-        return raws.computeIfAbsent(pos.asLong(), key -> new Raws(targets));
-    }
-
-    private Choice evaluate(List<Target> targets, BlockPos pos, float health, long timing, long arrival, boolean charged, long reachable) {
-        Vec3d center = Vec3d.ofCenter(pos);
-        Raws cached = raws(pos, targets.size());
-        BlockOverlay view = null;
-        if (cached.costly == UNKNOWN) cached.costly = destroysOwnCrystals(center) ? YES : NO;
-        float bonus = pos.equals(aimSpot) ? AIM_BONUS : 0;
-
-        Choice best = null;
-        for (int i = 0; i < targets.size(); i++) {
-            if ((reachable & 1L << i) == 0) continue;
-            Target target = targets.get(i);
-
-            if (Float.isNaN(cached.target[i])) {
-                if (view == null) view = overlay(pos);
-                cached.target[i] = ExplosionDamage.raw(target.player, target.feet, target.box, center, POWER, view);
-            }
-            float raw = cached.target[i];
-            float damage = timing != 0 ? HurtTracker.get().effective(target.player, raw, timing) : ExplosionDamage.mitigate(target.player, raw);
-            if (damage < target.minDamage && damage < target.health) continue;
-            if (cached.costly == YES && damage < target.health) continue;
-
-            float score = damage + bonus + (target.player == focus ? FOCUS_BONUS : 0) + (damage >= target.health ? LETHAL_BONUS : 0);
-            Choice choice = new Choice(pos, target, damage, 0, score, charged);
-            if (choice.beats(best)) best = choice;
-        }
-        if (best == null) return null;
-
-        if (Float.isNaN(cached.self)) {
-            if (view == null) view = overlay(pos);
-            cached.self = ExplosionDamage.raw(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), center, POWER, view);
-        }
-        float full = ExplosionDamage.mitigate(mc.player, cached.self);
-        float self = HurtTracker.get().effectiveOnSelf(cached.self, arrival);
-        boolean finishing = best.damage >= best.target.health;
-        if (full + FIRE_MARGIN >= health || self > maxSelfDamage.get() || self >= HARMLESS && !finishing && health - self - FIRE_MARGIN < minHealth.get()) {
-            rejectedSelf = true;
-            return null;
-        }
-
-        if (cached.friend == UNKNOWN) {
-            if (view == null) view = overlay(pos);
-            cached.friend = hurtsFriend(center, view, arrival) ? YES : NO;
-        }
-        if (cached.friend == YES) {
-            rejectedFriend = true;
-            return null;
-        }
-
-        return new Choice(pos, best.target, best.damage, self, best.score, charged);
+        if (Trace.on()) Trace.log("anchor {} {} at {} for {} dmg, self {}", choice.charged() ? "detonate" : "place", choice.target().player().getName().getString(), choice.pos(), choice.damage(), choice.self());
+        focus = choice.target().player();
+        status = String.format("%.1f dmg", choice.damage());
+        renderDamage = choice.damage();
     }
 
     private List<Vec3d> ownCrystals() {
@@ -1013,7 +901,7 @@ public class AutoAnchor extends Module {
 
             float full = ExplosionDamage.mitigate(player, raw);
             float effective = HurtTracker.get().effective(player, raw, arrival);
-            if (full + FIRE_MARGIN >= player.getHealth() + player.getAbsorptionAmount() || effective > FRIEND_LIMIT) return true;
+            if (full + AnchorScore.FIRE_MARGIN >= player.getHealth() + player.getAbsorptionAmount() || effective > FRIEND_LIMIT) return true;
         }
         return false;
     }
@@ -1031,10 +919,10 @@ public class AutoAnchor extends Module {
             Vec3d feet = new Vec3d((box.minX + box.maxX) / 2, box.minY, (box.minZ + box.maxZ) / 2);
             float health = player.getHealth() + player.getAbsorptionAmount();
             float min = health <= facePlaceHealth.get() ? facePlaceDamage.get().floatValue() : minDamage.get().floatValue();
-            targets.add(new Target(player, box, feet, BlockPos.ofFloored(feet), health, min));
+            targets.add(new Target(player, box, feet, BlockPos.ofFloored(feet), health, min, Blast.Defense.of(player), player == focus));
         }
         if (targets.size() > MAX_TARGETS) {
-            targets.sort(Comparator.comparingDouble(target -> target.player.squaredDistanceTo(mc.player)));
+            targets.sort(Comparator.comparingDouble(target -> target.player().squaredDistanceTo(mc.player)));
             return new ArrayList<>(targets.subList(0, MAX_TARGETS));
         }
         return targets;
@@ -1048,7 +936,7 @@ public class AutoAnchor extends Module {
 
         BlockPos.Mutable pos = new BlockPos.Mutable();
         for (Target target : targets) {
-            BlockPos base = target.block;
+            BlockPos base = target.block();
             for (int dx = -SEARCH; dx <= SEARCH; dx++) {
                 for (int dz = -SEARCH; dz <= SEARCH; dz++) {
                     for (int dy = -1; dy <= SEARCH_UP; dy++) {
@@ -1074,7 +962,7 @@ public class AutoAnchor extends Module {
     private boolean blocksTarget(List<Target> targets, BlockPos pos) {
         Box cell = new Box(pos);
         for (Target target : targets) {
-            if (target.box.intersects(cell)) return true;
+            if (target.box().intersects(cell)) return true;
         }
         return mc.player.getBoundingBox().intersects(cell);
     }
@@ -1177,8 +1065,89 @@ public class AutoAnchor extends Module {
         return InventoryManager.get().find(stack -> stack.isOf(item), 0, InventoryManager.MAIN_END);
     }
 
+    private Rules rules() {
+        return new Rules(maxSelfDamage.get(), minHealth.get());
+    }
+
+    private static void addSpot(List<Spot> spots, Spot spot) {
+        if (spot != null) spots.add(spot);
+    }
+
+    private Raws raws(BlockPos pos) {
+        return raws.computeIfAbsent(pos.asLong(), key -> new Raws());
+    }
+
+    private BlockOverlay view(Raws cached, BlockPos pos) {
+        if (cached.view == null) cached.view = overlay(pos);
+        return cached.view;
+    }
+
     private boolean canAct() {
         return mc.player != null && mc.world != null && mc.interactionManager != null && mc.getNetworkHandler() != null
             && mc.player.isAlive() && !mc.player.isSpectator();
+    }
+
+    private final class ScoreModel implements AnchorScore.Model {
+        @Override
+        public float rawBound(Target target, Vec3d center) {
+            return ExplosionDamage.rawBound(target.player(), target.feet(), center, POWER);
+        }
+
+        @Override
+        public float raw(BlockPos pos, int index, Target target) {
+            Raws cached = raws(pos);
+            float raw = cached.target(index);
+            if (Float.isNaN(raw)) {
+                raw = ExplosionDamage.raw(target.player(), target.feet(), target.box(), Vec3d.ofCenter(pos), POWER, view(cached, pos));
+                cached.target(index, raw);
+            }
+            return raw;
+        }
+
+        @Override
+        public float timed(Target target, float raw, long timing) {
+            return HurtTracker.get().effective(target.player(), target.defense(), raw, timing);
+        }
+
+        @Override
+        public float selfRaw(BlockPos pos) {
+            Raws cached = raws(pos);
+            if (Float.isNaN(cached.self)) cached.self = ExplosionDamage.raw(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), Vec3d.ofCenter(pos), POWER, view(cached, pos));
+            return cached.self;
+        }
+
+        @Override
+        public float selfFull(float raw) {
+            return ExplosionDamage.mitigate(mc.player, raw);
+        }
+
+        @Override
+        public float selfTimed(float raw, long arrival) {
+            return HurtTracker.get().effectiveOnSelf(raw, arrival);
+        }
+
+        @Override
+        public boolean costly(BlockPos pos) {
+            Raws cached = raws(pos);
+            if (cached.costly == UNKNOWN) cached.costly = destroysOwnCrystals(Vec3d.ofCenter(pos)) ? YES : NO;
+            return cached.costly == YES;
+        }
+
+        @Override
+        public boolean hurtsFriend(BlockPos pos, long arrival) {
+            Raws cached = raws(pos);
+            if (cached.friend == UNKNOWN) cached.friend = AutoAnchor.this.hurtsFriend(Vec3d.ofCenter(pos), view(cached, pos), arrival) ? YES : NO;
+            return cached.friend == YES;
+        }
+
+        @Override
+        public boolean aimed(BlockPos pos) {
+            return pos.equals(aimSpot);
+        }
+
+        @Override
+        public boolean placeable(Spot spot) {
+            return spot.charged() || mc.world.getBlockState(spot.pos()).isOf(Blocks.RESPAWN_ANCHOR) || InteractionManager.get().hit(spot.pos(), airplace.get()) != null;
+        }
     }
 }

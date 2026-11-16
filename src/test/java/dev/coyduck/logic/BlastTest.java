@@ -114,10 +114,10 @@ class BlastTest {
 
     @Test
     void slabsShieldOnlyTheirHalf() {
-        Terrain slabs = new Terrain().fill(2, 0, -2, 2, 0, 2, Blocks.OBSIDIAN.getDefaultState());
+        Terrain solid = new Terrain().fill(2, 0, -2, 2, 0, 2, Blocks.OBSIDIAN.getDefaultState());
         Terrain halves = new Terrain().fill(2, 0, -2, 2, 0, 2, Blocks.STONE_SLAB.getDefaultState());
         Vec3d source = new Vec3d(3.5, 0.6, 0.0);
-        float full = Blast.exposure(source, PLAYER, slabs, CONTEXT);
+        float full = Blast.exposure(source, PLAYER, solid, CONTEXT);
         float half = Blast.exposure(source, PLAYER, halves, CONTEXT);
         assertTrue(full < half && half < 1.0f, full + " " + half);
     }

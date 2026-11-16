@@ -5,6 +5,7 @@ import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.logic.Blast;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
@@ -159,11 +160,15 @@ public final class HurtTracker {
     }
 
     public float effective(LivingEntity entity, float raw, long arrival) {
-        return damage(entity, raw, arrival, false);
+        return damage(entity, null, raw, arrival, false);
+    }
+
+    public float effective(LivingEntity entity, Blast.Defense defense, float raw, long arrival) {
+        return damage(entity, defense, raw, arrival, false);
     }
 
     public float effectiveOnSelf(float raw, long arrival) {
-        return damage(mc.player, raw, arrival, true);
+        return damage(mc.player, null, raw, arrival, true);
     }
 
     public long releaseTime(LivingEntity entity) {
@@ -176,20 +181,23 @@ public final class HurtTracker {
         return Math.max(2L * LatencyManager.get().jitter(), MARGIN / 2);
     }
 
-    private float damage(LivingEntity entity, float raw, long arrival, boolean self) {
-        float full = ExplosionDamage.mitigate(entity, raw);
-
+    private float damage(LivingEntity entity, Blast.Defense defense, float raw, long arrival, boolean self) {
         Window current = window(entity, arrival);
-        if (current == null) return full;
+        if (current == null) return reduce(entity, defense, raw);
 
         boolean immune = self
             ? arrival < current.start + SELF_WINDOW - tick() - MARGIN - LatencyManager.get().jitter()
             : arrival < current.start + window() + targetMargin();
-        if (!immune) return full;
+        if (!immune) return reduce(entity, defense, raw);
 
-        if (Float.isNaN(current.raw)) return self || !current.explosion ? full : 0;
+        if (Float.isNaN(current.raw)) return self || !current.explosion ? reduce(entity, defense, raw) : 0;
         if (raw <= current.raw) return 0;
-        return ExplosionDamage.mitigate(entity, raw - current.raw);
+        return reduce(entity, defense, raw - current.raw);
+    }
+
+    private static float reduce(LivingEntity entity, Blast.Defense defense, float raw) {
+        if (raw <= 0) return 0;
+        return (defense != null ? defense : Blast.Defense.of(entity)).reduce(raw);
     }
 
     private Window window(LivingEntity entity, long arrival) {

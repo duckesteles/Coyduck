@@ -82,8 +82,14 @@ class CrystalScoreTest {
         return new Target(null, new Box(0, 0, 0, 1, 2, 1), Vec3d.ZERO, health, minDamage, gaps, null, focused, totem);
     }
 
+    private static CrystalScore scorer(Model model, Rules rules) {
+        CrystalScore score = new CrystalScore(model);
+        score.rules(rules);
+        return score;
+    }
+
     private static Choice evaluate(Model model, Rules rules, List<Target> targets, float health) {
-        return new CrystalScore(model, rules).evaluate(targets, CRYSTAL, health, 0, null);
+        return scorer(model, rules).evaluate(targets, CRYSTAL, health, 0, null);
     }
 
     @Test
@@ -104,7 +110,7 @@ class CrystalScoreTest {
         Target enemy = target(20, 4);
         Model model = new Model().hit(enemy, 30);
         model.self = 20;
-        CrystalScore score = new CrystalScore(model, STANDARD);
+        CrystalScore score = scorer(model, STANDARD);
         assertNull(score.evaluate(List.of(enemy), CRYSTAL, 20, 0, null));
         assertTrue(score.verdicts().self());
     }
@@ -114,7 +120,7 @@ class CrystalScoreTest {
         Target enemy = target(20, 4);
         Model model = new Model().hit(enemy, 15);
         model.friend = true;
-        CrystalScore score = new CrystalScore(model, STANDARD);
+        CrystalScore score = scorer(model, STANDARD);
         assertNull(score.evaluate(List.of(enemy), CRYSTAL, 36, 0, null));
         assertTrue(score.verdicts().friend());
     }
@@ -122,7 +128,7 @@ class CrystalScoreTest {
     @Test
     void ignoresWeakHits() {
         Target enemy = target(36, 6);
-        CrystalScore score = new CrystalScore(new Model().hit(enemy, 5), STANDARD);
+        CrystalScore score = scorer(new Model().hit(enemy, 5), STANDARD);
         assertNull(score.evaluate(List.of(enemy), CRYSTAL, 36, 0, null));
         assertFalse(score.verdicts().self() || score.verdicts().friend() || score.verdicts().balance());
     }
@@ -165,7 +171,7 @@ class CrystalScoreTest {
         Target enemy = target(36, 6);
         Model model = new Model().hit(enemy, 20);
         model.self = 13;
-        CrystalScore score = new CrystalScore(model, STANDARD);
+        CrystalScore score = scorer(model, STANDARD);
         assertNull(score.evaluate(List.of(enemy), CRYSTAL, 36, 0, null));
         assertTrue(score.verdicts().self());
 
@@ -194,7 +200,7 @@ class CrystalScoreTest {
         Target enemy = target(36, 4);
         Model model = new Model().hit(enemy, 5);
         model.self = 3;
-        CrystalScore score = new CrystalScore(model, rules(false, 2, false, false));
+        CrystalScore score = scorer(model, rules(false, 2, false, false));
         assertNull(score.evaluate(List.of(enemy), CRYSTAL, 36, 0, null));
         assertTrue(score.verdicts().balance());
         model.self = 2;
@@ -230,7 +236,7 @@ class CrystalScoreTest {
     void hopelessSpotsSkipRaycasts() {
         Target enemy = target(36, 4);
         Model model = new Model().hit(enemy, 10);
-        assertNull(new CrystalScore(model, STANDARD).evaluate(List.of(enemy), CRYSTAL, 36, 0, null, 1000));
+        assertNull(scorer(model, STANDARD).evaluate(List.of(enemy), CRYSTAL, 36, 0, null, 1000));
         assertEquals(0, model.raycasts);
     }
 
@@ -248,7 +254,7 @@ class CrystalScoreTest {
             }
             model.self = random.nextFloat() * 14;
             float health = 1 + random.nextInt(36);
-            CrystalScore score = new CrystalScore(model, rules);
+            CrystalScore score = scorer(model, rules);
             Choice full = score.evaluate(List.of(targets), CRYSTAL, health, 0, null);
             if (full == null) continue;
             Choice pruned = score.evaluate(List.of(targets), CRYSTAL, health, 0, null, full.score() - CrystalScore.TIE);

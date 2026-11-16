@@ -36,7 +36,10 @@ public final class TickRate {
     }
 
     public float tickLength() {
-        float rate = tickRate();
+        return length(tickRate());
+    }
+
+    static float length(float rate) {
         return 1000.0f / (rate > 0 ? Math.min(rate, FULL) : FULL);
     }
 

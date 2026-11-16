@@ -61,4 +61,13 @@ class TickRateTest {
         rate.sample(now + 5000);
         assertEquals(4.0f, rate.rate(now + 5000), EPSILON);
     }
+
+    @Test
+    void tickLengthNeverDropsBelowFiftyMillis() {
+        assertEquals(50.0f, TickRate.length(20.0f), EPSILON);
+        assertEquals(50.0f, TickRate.length(25.0f), EPSILON);
+        assertEquals(100.0f, TickRate.length(10.0f), EPSILON);
+        assertEquals(50.0f, TickRate.length(0.0f), EPSILON);
+        assertEquals(50.0f, TickRate.length(Float.NaN), EPSILON);
+    }
 }
