@@ -31,7 +31,10 @@
     "PlayerEntityMixin",
     "RenderLayerAccessor",
     "RenderSetupAccessor",
-    "SodiumWorldRendererMixin"
+    "SodiumWorldRendererMixin",
+    "MinecraftClientMixin",
+    "ClientWorldMixin",
+    "PlayerInteractEntityC2SPacketAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -1,15 +1,14 @@
 package dev.coyduck.managers;
 
+import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.PacketEvent;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-import meteordevelopment.meteorclient.events.game.GameLeftEvent;
-import meteordevelopment.meteorclient.events.packets.PacketEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
-import meteordevelopment.meteorclient.utils.world.TickRate;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.entity.LivingEntity;
@@ -29,7 +28,7 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
 public final class HurtTracker {
     private static final HurtTracker INSTANCE = new HurtTracker();
@@ -345,13 +344,13 @@ public final class HurtTracker {
     }
 
     private static long tick() {
-        float rate = TickRate.INSTANCE.getTickRate();
+        float rate = TickRate.get().tickRate();
         if (!(rate > 0)) rate = 20.0f;
         return (long) (1000 / Math.min(rate, 20.0f));
     }
 
     private static long window() {
-        float rate = TickRate.INSTANCE.getTickRate();
+        float rate = TickRate.get().tickRate();
         if (!(rate > 0)) rate = 20.0f;
         return (long) (IMMUNITY_TICKS * 1000 / Math.min(rate, 20.0f));
     }

@@ -1,10 +1,10 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.events.GameLeftEvent;
+import dev.coyduck.events.PacketEvent;
+import dev.coyduck.events.TickEvent;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
-import meteordevelopment.meteorclient.events.game.GameLeftEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
-import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;

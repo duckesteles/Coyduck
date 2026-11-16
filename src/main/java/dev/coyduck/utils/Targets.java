@@ -1,12 +1,10 @@
 package dev.coyduck.utils;
 
+import dev.coyduck.core.Core;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.MotionTracker;
-import dev.coyduck.modules.AutoCrystal;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import meteordevelopment.meteorclient.systems.friends.Friends;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.decoration.EndCrystalEntity;
@@ -25,7 +23,7 @@ import net.minecraft.world.BlockView;
 import java.util.ArrayList;
 import java.util.List;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
 public final class Targets {
     private static final double EDGE = 1.0E-4;
@@ -38,8 +36,7 @@ public final class Targets {
     }
 
     public static PlayerEntity find(double range) {
-        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
-        PlayerEntity preferred = autoCrystal == null ? null : autoCrystal.target();
+        PlayerEntity preferred = Core.host().preferredTarget();
         if (valid(preferred, range)) return preferred;
 
         PlayerEntity best = null;
@@ -58,7 +55,7 @@ public final class Targets {
 
     public static boolean valid(PlayerEntity player, double range) {
         return player != null && player != mc.player && player.isAlive() && !player.isRemoved()
-            && !Friends.get().isFriend(player) && !ExplosionDamage.isInvulnerable(player)
+            && !Core.host().isFriend(player) && !ExplosionDamage.isInvulnerable(player)
             && player.squaredDistanceTo(mc.player) <= range * range;
     }
 
@@ -182,13 +179,12 @@ public final class Targets {
     public static boolean safe(Vec3d crystal, BlockView view, double maxSelfDamage) {
         float self = ExplosionDamage.crystal(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), crystal, view);
         float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
-        AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
-        double keep = autoCrystal != null ? autoCrystal.minHealth() : 0;
+        double keep = Core.host().keepHealth();
         if (self >= health || self > maxSelfDamage || (self > 0 && health - self < keep)) return false;
 
         double range = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
         for (PlayerEntity player : mc.world.getPlayers()) {
-            if (player == mc.player || !Friends.get().isFriend(player) || player.squaredDistanceTo(crystal) > range) continue;
+            if (player == mc.player || !Core.host().isFriend(player) || player.squaredDistanceTo(crystal) > range) continue;
             float damage = ExplosionDamage.crystal(player, player.getEntityPos(), player.getBoundingBox(), crystal, view);
             if (damage >= player.getHealth() + player.getAbsorptionAmount() || damage > maxSelfDamage) return false;
         }

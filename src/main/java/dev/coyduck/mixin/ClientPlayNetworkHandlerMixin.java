@@ -4,13 +4,16 @@ import com.llamalad7.mixinextras.injector.v2.WrapWithCondition;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Share;
+import com.llamalad7.mixinextras.sugar.ref.LocalBooleanRef;
 import com.llamalad7.mixinextras.sugar.ref.LocalFloatRef;
 import dev.coyduck.Coyduck;
+import dev.coyduck.core.Bus;
+import dev.coyduck.events.GameJoinedEvent;
+import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.modules.NoExplosion;
 import dev.coyduck.modules.NoRotate;
-import meteordevelopment.meteorclient.MeteorClient;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.client.network.PlayerListEntry;
@@ -18,6 +21,8 @@ import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.listener.PacketListener;
 import net.minecraft.network.packet.Packet;
+import net.minecraft.network.packet.s2c.play.EnterReconfigurationS2CPacket;
+import net.minecraft.network.packet.s2c.play.GameJoinS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerRotationS2CPacket;
 import net.minecraft.particle.BlockParticleEffect;
@@ -40,6 +45,9 @@ public abstract class ClientPlayNetworkHandlerMixin {
     @Final
     private Map<UUID, PlayerListEntry> playerListEntries;
 
+    @Shadow
+    private ClientWorld world;
+
     @Inject(method = "getCaseInsensitivePlayerInfo", at = @At("HEAD"), cancellable = true)
     private void coyduck$safePlayerLookup(String name, CallbackInfoReturnable<PlayerListEntry> info) {
         for (int attempt = 0; attempt < 3; attempt++) {
@@ -58,16 +66,32 @@ public abstract class ClientPlayNetworkHandlerMixin {
         info.setReturnValue(null);
     }
 
+    @Inject(method = "onGameJoin", at = @At("HEAD"))
+    private void coyduck$joinHead(GameJoinS2CPacket packet, CallbackInfo ci, @Share("inWorld") LocalBooleanRef inWorld) {
+        inWorld.set(world != null);
+    }
+
+    @Inject(method = "onGameJoin", at = @At("TAIL"))
+    private void coyduck$joinTail(GameJoinS2CPacket packet, CallbackInfo ci, @Share("inWorld") LocalBooleanRef inWorld) {
+        if (inWorld.get()) Bus.post(GameLeftEvent.INSTANCE);
+        Bus.post(GameJoinedEvent.INSTANCE);
+    }
+
+    @Inject(method = "onEnterReconfiguration", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/NetworkThreadUtils;forceMainThread(Lnet/minecraft/network/packet/Packet;Lnet/minecraft/network/listener/PacketListener;Lnet/minecraft/network/PacketApplyBatcher;)V", shift = At.Shift.AFTER))
+    private void coyduck$reconfigure(EnterReconfigurationS2CPacket packet, CallbackInfo ci) {
+        Bus.post(GameLeftEvent.INSTANCE);
+    }
+
     @Inject(method = {"onGameJoin", "onPlayerRespawn"}, at = @At("TAIL"))
     private void coyduck$onWorldReset(CallbackInfo ci) {
-        MeteorClient.EVENT_BUS.post(WorldResetEvent.INSTANCE);
+        Bus.post(WorldResetEvent.INSTANCE);
     }
 
     @WrapOperation(method = "onBundle", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/packet/Packet;apply(Lnet/minecraft/network/listener/PacketListener;)V"))
     private void coyduck$wrapBundled(Packet<?> packet, PacketListener listener, Operation<Void> original) {
         boolean cancelled = false;
         try {
-            cancelled = MeteorClient.EVENT_BUS.post(PacketApplyEvent.Pre.get(packet)).isCancelled();
+            cancelled = Bus.post(PacketApplyEvent.Pre.get(packet)).isCancelled();
         } catch (RuntimeException e) {
             Coyduck.LOG.error("Packet handler failed", e);
         }
@@ -75,7 +99,7 @@ public abstract class ClientPlayNetworkHandlerMixin {
 
         original.call(packet, listener);
         try {
-            MeteorClient.EVENT_BUS.post(PacketApplyEvent.Post.get(packet));
+            Bus.post(PacketApplyEvent.Post.get(packet));
         } catch (RuntimeException e) {
             Coyduck.LOG.error("Packet handler failed", e);
         }

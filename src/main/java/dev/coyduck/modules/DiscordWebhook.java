@@ -1,12 +1,12 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.managers.FightTracker;
 import dev.coyduck.managers.PopTracker;
-import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.game.ReceiveMessageEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;

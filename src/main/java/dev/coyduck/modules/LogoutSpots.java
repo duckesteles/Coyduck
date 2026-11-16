@@ -1,15 +1,15 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.hud.CoyHud;
 import dev.coyduck.managers.PopTracker;
 import dev.coyduck.utils.DuckRender;
-import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.renderer.Renderer2D;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.renderer.text.TextRenderer;

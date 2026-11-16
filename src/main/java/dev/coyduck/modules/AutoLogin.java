@@ -1,10 +1,10 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
-import meteordevelopment.meteorclient.events.game.GameJoinedEvent;
+import dev.coyduck.events.GameJoinedEvent;
+import dev.coyduck.events.PacketEvent;
+import dev.coyduck.events.TickEvent;
 import meteordevelopment.meteorclient.events.game.ReceiveMessageEvent;
-import meteordevelopment.meteorclient.events.packets.PacketEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;

@@ -1,11 +1,11 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.events.TickEvent;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.renderer.Renderer3D;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;

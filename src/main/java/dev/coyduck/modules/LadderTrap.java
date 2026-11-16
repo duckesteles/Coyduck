@@ -2,6 +2,7 @@ package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.MiningManager;
@@ -10,7 +11,6 @@ import dev.coyduck.utils.BlockRules;
 import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;

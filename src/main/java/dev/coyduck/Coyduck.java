@@ -2,6 +2,8 @@ package dev.coyduck;
 
 import dev.coyduck.commands.KitCommand;
 import dev.coyduck.commands.PilotCommand;
+import dev.coyduck.core.Core;
+import dev.coyduck.gui.ConfigSaver;
 import dev.coyduck.gui.CoyduckTheme;
 import dev.coyduck.hud.ClockHud;
 import dev.coyduck.hud.InfoHud;
@@ -10,18 +12,6 @@ import dev.coyduck.hud.ItemsHud;
 import dev.coyduck.hud.ModuleList;
 import dev.coyduck.hud.PlayersHud;
 import dev.coyduck.hud.Watermark;
-import dev.coyduck.managers.FightTracker;
-import dev.coyduck.managers.ConfigSaver;
-import dev.coyduck.managers.CrystalTracker;
-import dev.coyduck.managers.HurtTracker;
-import dev.coyduck.managers.InteractionManager;
-import dev.coyduck.managers.InventoryManager;
-import dev.coyduck.managers.LatencyManager;
-import dev.coyduck.managers.MiningManager;
-import dev.coyduck.managers.MiningTracker;
-import dev.coyduck.managers.MotionTracker;
-import dev.coyduck.managers.PopTracker;
-import dev.coyduck.managers.RotationManager;
 import dev.coyduck.modules.SuffocationGuard;
 import dev.coyduck.modules.ChestSorter;
 import dev.coyduck.modules.ChestSearch;
@@ -101,17 +91,7 @@ public class Coyduck extends MeteorAddon {
         Hud.get().register(ItemsHud.INFO);
 
         MeteorClient.EVENT_BUS.subscribe(ConfigSaver.get());
-        MeteorClient.EVENT_BUS.subscribe(LatencyManager.get());
-        MeteorClient.EVENT_BUS.subscribe(InventoryManager.get());
-        MeteorClient.EVENT_BUS.subscribe(InteractionManager.get());
-        MeteorClient.EVENT_BUS.subscribe(MiningTracker.get());
-        MeteorClient.EVENT_BUS.subscribe(CrystalTracker.get());
-        MeteorClient.EVENT_BUS.subscribe(MotionTracker.get());
-        MeteorClient.EVENT_BUS.subscribe(HurtTracker.get());
-        MeteorClient.EVENT_BUS.subscribe(RotationManager.get());
-        MeteorClient.EVENT_BUS.subscribe(MiningManager.get());
-        MeteorClient.EVENT_BUS.subscribe(PopTracker.get());
-        MeteorClient.EVENT_BUS.subscribe(FightTracker.get());
+        Core.start(MeteorClient.EVENT_BUS, new MeteorHost());
 
         Modules.get().add(new AutoTotem());
         Modules.get().add(new Surround());

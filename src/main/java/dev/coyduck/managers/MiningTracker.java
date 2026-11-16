@@ -1,12 +1,12 @@
 package dev.coyduck.managers;
 
+import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
-import meteordevelopment.meteorclient.events.game.GameLeftEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
@@ -16,7 +16,7 @@ import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
 public final class MiningTracker {
     private static final MiningTracker INSTANCE = new MiningTracker();

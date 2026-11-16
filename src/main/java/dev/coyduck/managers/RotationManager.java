@@ -1,15 +1,14 @@
 package dev.coyduck.managers;
 
-import meteordevelopment.meteorclient.events.game.GameLeftEvent;
-import meteordevelopment.meteorclient.events.packets.PacketEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
+import dev.coyduck.core.Core;
+import dev.coyduck.events.GameLeftEvent;
+import dev.coyduck.events.PacketEvent;
+import dev.coyduck.events.TickEvent;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.entity.Entity;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientPlayerEntityAccessor;
-import dev.coyduck.modules.MaceStrike;
-import dev.coyduck.modules.NoRotate;
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.util.PlayerInput;
@@ -22,7 +21,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
 public final class RotationManager {
     private static final RotationManager INSTANCE = new RotationManager();
@@ -74,8 +73,8 @@ public final class RotationManager {
     }
 
     public boolean lookNow(Vec3d target, int priority) {
-        if (mc.player == null || mc.getNetworkHandler() == null || MaceStrike.blocksMoves()) return false;
-        if (NoRotate.frozen()) return true;
+        if (mc.player == null || mc.getNetworkHandler() == null || Core.host().holdsMovement()) return false;
+        if (Core.host().freezesRotation()) return true;
         if (current != null && current.priority > priority || pending != null && pending.priority > priority) return false;
         Vec3d eye = mc.player.getEyePos();
         double dx = target.x - eye.x;
@@ -93,8 +92,8 @@ public final class RotationManager {
     }
 
     public boolean afterRotation(Vec3d target, int priority, Runnable action) {
-        if (mc.player == null || mc.getNetworkHandler() == null || MaceStrike.blocksMoves()) return false;
-        if (NoRotate.frozen()) {
+        if (mc.player == null || mc.getNetworkHandler() == null || Core.host().holdsMovement()) return false;
+        if (Core.host().freezesRotation()) {
             action.run();
             return true;
         }
@@ -130,7 +129,7 @@ public final class RotationManager {
 
     public boolean isLookingAt(Box box, double range) {
         Vec3d eye = mc.player.getEyePos();
-        if (box.contains(eye) || NoRotate.frozen()) return true;
+        if (box.contains(eye) || Core.host().freezesRotation()) return true;
 
         float yaw = known ? serverYaw : mc.player.getYaw();
         float pitch = known ? serverPitch : mc.player.getPitch();

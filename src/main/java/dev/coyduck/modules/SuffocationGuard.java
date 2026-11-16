@@ -1,10 +1,10 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.utils.Trace;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;

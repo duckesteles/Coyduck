@@ -1,14 +1,14 @@
 package dev.coyduck.managers;
 
-import dev.coyduck.modules.AutoTotem;
+import dev.coyduck.core.Core;
+import dev.coyduck.events.GameLeftEvent;
+import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
 import dev.coyduck.utils.PacketBatch;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
-import meteordevelopment.meteorclient.events.game.GameLeftEvent;
-import meteordevelopment.meteorclient.events.packets.PacketEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.component.DataComponentTypes;
@@ -36,7 +36,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.function.Predicate;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
 public final class InventoryManager {
     private static final InventoryManager INSTANCE = new InventoryManager();
@@ -196,7 +196,7 @@ public final class InventoryManager {
     }
 
     public int spareHotbar(int avoid) {
-        int reserved = AutoTotem.totemSlot();
+        int reserved = Core.host().totemSlot();
         for (int i = 0; i < HOTBAR_END; i++) {
             if (i != avoid && i != reserved && stack(i).isEmpty()) return i;
         }
@@ -251,7 +251,7 @@ public final class InventoryManager {
 
         Item item = stack(index).getItem();
         Integer home = homes.get(item);
-        int reserved = item == Items.TOTEM_OF_UNDYING ? -1 : AutoTotem.totemSlot();
+        int reserved = item == Items.TOTEM_OF_UNDYING ? -1 : Core.host().totemSlot();
         int target = home != null && home != selected && home != reserved && stack(home).isEmpty() ? home : -1;
         for (int i = 0; target == -1 && i < HOTBAR_END; i++) {
             if (i != selected && i != reserved && stack(i).isEmpty()) target = i;
@@ -264,7 +264,7 @@ public final class InventoryManager {
     }
 
     private void remember(Item item, int slot) {
-        if (item == Items.AIR || item != Items.TOTEM_OF_UNDYING && slot == AutoTotem.totemSlot()) return;
+        if (item == Items.AIR || item != Items.TOTEM_OF_UNDYING && slot == Core.host().totemSlot()) return;
         homes.values().removeIf(home -> home == slot);
         homes.put(item, slot);
     }
@@ -309,7 +309,7 @@ public final class InventoryManager {
                 selectNow(selected);
                 return true;
             }
-            int spare = selected == AutoTotem.totemSlot() ? spareHotbar(selected) : -1;
+            int spare = selected == Core.host().totemSlot() ? spareHotbar(selected) : -1;
             if (spare != -1 && swapWithHotbar(index, spare)) {
                 selectNow(spare);
                 action.run();

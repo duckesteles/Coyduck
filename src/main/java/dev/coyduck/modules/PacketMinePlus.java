@@ -1,6 +1,7 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
@@ -8,7 +9,6 @@ import dev.coyduck.managers.MiningManager;
 import dev.coyduck.utils.DuckRender;
 import meteordevelopment.meteorclient.events.entity.player.StartBreakingBlockEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;

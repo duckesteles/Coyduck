@@ -5,7 +5,7 @@ import net.minecraft.util.Util;
 import net.minecraft.util.math.Vec2f;
 import net.minecraft.util.math.Vec3d;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
 public final class MoveInput {
     private static final long FRESH = 120;

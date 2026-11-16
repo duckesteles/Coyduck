@@ -1,6 +1,5 @@
 package dev.coyduck.events;
 
-import meteordevelopment.meteorclient.events.Cancellable;
 import net.minecraft.network.packet.Packet;
 
 public final class PacketApplyEvent {

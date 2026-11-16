@@ -1,12 +1,12 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MotionTracker;
 import dev.coyduck.utils.Targets;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BlockListSetting;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;

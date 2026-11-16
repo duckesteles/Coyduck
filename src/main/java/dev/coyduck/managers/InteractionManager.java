@@ -1,11 +1,14 @@
 package dev.coyduck.managers;
 
+import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.utils.Trace;
 import net.minecraft.registry.Registries;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
 import net.minecraft.block.Block;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.PacketEvent;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientWorldAccessor;
 import net.minecraft.client.network.PendingUpdateManager;
@@ -15,9 +18,6 @@ import dev.coyduck.utils.PacketBatch;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
-import meteordevelopment.meteorclient.events.game.GameLeftEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
-import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.AbstractFireBlock;
@@ -56,7 +56,7 @@ import net.minecraft.world.RaycastContext;
 import java.util.ArrayDeque;
 import java.util.List;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
 public final class InteractionManager {
     public static final int CLEAR_PRIORITY = 125;

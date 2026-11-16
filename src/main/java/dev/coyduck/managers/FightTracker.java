@@ -1,12 +1,12 @@
 package dev.coyduck.managers;
 
+import dev.coyduck.core.Core;
+import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.PacketEvent;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
-import meteordevelopment.meteorclient.events.game.GameLeftEvent;
-import meteordevelopment.meteorclient.events.packets.PacketEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
-import meteordevelopment.meteorclient.mixininterface.IPlayerInteractEntityC2SPacket;
-import meteordevelopment.meteorclient.systems.friends.Friends;
+import dev.coyduck.mixin.PlayerInteractEntityC2SPacketAccessor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
@@ -27,7 +27,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
 public final class FightTracker {
     private static final FightTracker INSTANCE = new FightTracker();
@@ -54,7 +54,7 @@ public final class FightTracker {
         if (mc.world == null || mc.player == null) return;
 
         if (event.packet instanceof PlayerInteractEntityC2SPacket packet && isAttack(packet)) {
-            Entity target = ((IPlayerInteractEntityC2SPacket) packet).meteor$getEntity();
+            Entity target = mc.world.getEntityById(((PlayerInteractEntityC2SPacketAccessor) packet).coyduck$getEntityId());
             if (target instanceof PlayerEntity player) engage(player);
             else if (target instanceof EndCrystalEntity crystal) engageNear(crystal.getEntityPos());
         } else if (event.packet instanceof PlayerInteractBlockC2SPacket packet) {
@@ -97,7 +97,7 @@ public final class FightTracker {
     }
 
     private void engage(PlayerEntity player) {
-        if (player != mc.player && !Friends.get().isFriend(player)) engaged.put(player.getUuid(), Util.getMeasuringTimeMs());
+        if (player != mc.player && !Core.host().isFriend(player)) engaged.put(player.getUuid(), Util.getMeasuringTimeMs());
     }
 
     private void engageNear(Vec3d center) {

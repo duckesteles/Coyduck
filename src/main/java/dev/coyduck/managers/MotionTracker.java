@@ -1,11 +1,11 @@
 package dev.coyduck.managers;
 
+import dev.coyduck.events.GameLeftEvent;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntSet;
-import meteordevelopment.meteorclient.events.game.GameLeftEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -16,7 +16,7 @@ import net.minecraft.util.math.Vec3d;
 import java.util.ArrayDeque;
 import java.util.List;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
 public final class MotionTracker {
     private static final MotionTracker INSTANCE = new MotionTracker();

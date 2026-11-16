@@ -32,7 +32,7 @@ import net.minecraft.world.BlockView;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.RaycastContext;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
 public final class ExplosionDamage {
     public static final float CRYSTAL_POWER = 6.0f;

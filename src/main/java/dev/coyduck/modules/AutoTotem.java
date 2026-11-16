@@ -1,16 +1,16 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.events.EntityAddedEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.PacketEvent;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.utils.Trace;
 import dev.coyduck.utils.ExplosionDamage;
-import meteordevelopment.meteorclient.events.entity.EntityAddedEvent;
-import meteordevelopment.meteorclient.events.packets.PacketEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;

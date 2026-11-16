@@ -1,15 +1,13 @@
 package dev.coyduck.managers;
 
-import dev.coyduck.Coyduck;
+import dev.coyduck.core.Core;
+import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.PacketEvent;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientWorldAccessor;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
-import meteordevelopment.meteorclient.events.game.GameLeftEvent;
-import meteordevelopment.meteorclient.events.packets.PacketEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.network.packet.Packet;
@@ -22,7 +20,7 @@ import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.network.packet.s2c.query.PingResultS2CPacket;
 import net.minecraft.util.Util;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
 public final class LatencyManager {
     private static final LatencyManager INSTANCE = new LatencyManager();
@@ -132,7 +130,7 @@ public final class LatencyManager {
     private void onTick(TickEvent.Post event) {
         if (mc.getNetworkHandler() == null) return;
 
-        if (++probeTimer >= PROBE_INTERVAL && Modules.get().getGroup(Coyduck.CATEGORY).stream().anyMatch(Module::isActive)) {
+        if (++probeTimer >= PROBE_INTERVAL && Core.host().anyModuleActive()) {
             probeTimer = 0;
             mc.getNetworkHandler().sendPacket(new QueryPingC2SPacket(Util.getMeasuringTimeMs()));
         }

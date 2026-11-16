@@ -1,6 +1,6 @@
 package dev.coyduck.utils;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
 public final class PacketBatch {
     private static int depth;

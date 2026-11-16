@@ -1,6 +1,7 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
@@ -11,7 +12,6 @@ import dev.coyduck.managers.RotationManager;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.utils.BlockRules;
 import dev.coyduck.utils.ExplosionDamage;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;

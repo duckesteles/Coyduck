@@ -1,10 +1,10 @@
-package dev.coyduck.managers;
+package dev.coyduck.gui;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.events.GameLeftEvent;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.utils.Targets;
-import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.game.OpenScreenEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.gui.WidgetScreen;
 import meteordevelopment.meteorclient.systems.Systems;
 import meteordevelopment.orbit.EventHandler;

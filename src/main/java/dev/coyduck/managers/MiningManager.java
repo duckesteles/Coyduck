@@ -1,21 +1,17 @@
 package dev.coyduck.managers;
 
+import dev.coyduck.core.Bus;
+import dev.coyduck.core.Core;
+import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.PacketEvent;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
-import dev.coyduck.modules.AirMine;
-import dev.coyduck.modules.AutoCity;
-import dev.coyduck.modules.NoRotate;
-import dev.coyduck.modules.AutoTotem;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.PacketBatch;
 import dev.coyduck.utils.Trace;
-import meteordevelopment.meteorclient.MeteorClient;
-import meteordevelopment.meteorclient.events.game.GameLeftEvent;
-import meteordevelopment.meteorclient.events.packets.PacketEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
-import meteordevelopment.meteorclient.utils.world.TickRate;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.Block;
@@ -44,7 +40,7 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Vec3d;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
 public final class MiningManager {
     private static final MiningManager INSTANCE = new MiningManager();
@@ -253,7 +249,7 @@ public final class MiningManager {
     }
 
     private boolean readyUnheld(BlockState state, int tool) {
-        float raw = delta(state, pos, InventoryManager.get().stack(tool), mc.player.isOnGround() || AirMine.spoofing(), false);
+        float raw = delta(state, pos, InventoryManager.get().stack(tool), mc.player.isOnGround() || Core.host().spoofsGround(), false);
         float margin = (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
         return raw * (elapsed() - margin) >= STOP_THRESHOLD;
     }
@@ -297,12 +293,12 @@ public final class MiningManager {
         brokenSinceStop = false;
         stops++;
 
-        MeteorClient.EVENT_BUS.post(MineStopEvent.get(pos));
+        Bus.post(MineStopEvent.get(pos));
         return true;
     }
 
     private void faceForStop() {
-        if (NoRotate.frozen()) return;
+        if (Core.host().freezesRotation()) return;
         Direction face = side != null ? side : facing(pos);
         Vec3d point = Vec3d.ofCenter(pos).add(face.getOffsetX() * 0.5, face.getOffsetY() * 0.5, face.getOffsetZ() * 0.5);
         RotationManager rotations = RotationManager.get();
@@ -322,7 +318,7 @@ public final class MiningManager {
     }
 
     private boolean guardsOwn(BlockPos cell) {
-        return !(owner instanceof RebreaksOwn) && ownBlock(cell) && !AutoCity.isFiller(mc.world.getBlockState(cell));
+        return !(owner instanceof RebreaksOwn) && ownBlock(cell) && !Core.host().keepsBlock(mc.world.getBlockState(cell));
     }
 
     private boolean ownBlock(BlockPos cell) {
@@ -340,7 +336,7 @@ public final class MiningManager {
     }
 
     public float delta(BlockState state, BlockPos at, ItemStack tool) {
-        return delta(state, at, tool, mc.player.isOnGround() || AirMine.spoofing());
+        return delta(state, at, tool, mc.player.isOnGround() || Core.host().spoofsGround());
     }
 
     public float groundDelta(BlockState state, BlockPos at, ItemStack tool, boolean efficiencyCounts) {
@@ -539,7 +535,7 @@ public final class MiningManager {
         int tool = bestTool(state, background);
         float delta = delta(state, background, tool == -1 ? mc.player.getMainHandStack() : InventoryManager.get().stack(tool), mc.player.isOnGround());
         float margin = (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
-        float rate = Math.min(TickRate.INSTANCE.getTickRate() / 20.0f, 1.0f);
+        float rate = Math.min(TickRate.get().tickRate() / 20.0f, 1.0f);
         return delta * ((Util.getMeasuringTimeMs() - backgroundStartTime) / 50.0f * rate - margin) >= BACKGROUND_THRESHOLD;
     }
 
@@ -568,7 +564,7 @@ public final class MiningManager {
         if (!displaced.contains(DataComponentTypes.DEATH_PROTECTION)) return true;
 
         float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
-        return health > HOLD_MIN_HEALTH || (AutoTotem.canAffordPop() && !lethalCrystalNear(health));
+        return health > HOLD_MIN_HEALTH || (Core.host().canAffordPop() && !lethalCrystalNear(health));
     }
 
     private boolean lethalCrystalNear(float health) {
@@ -675,7 +671,7 @@ public final class MiningManager {
 
     private float elapsed() {
         if (startPending) return 0;
-        float rate = Math.min(TickRate.INSTANCE.getTickRate() / 20.0f, 1.0f);
+        float rate = Math.min(TickRate.get().tickRate() / 20.0f, 1.0f);
         return (Util.getMeasuringTimeMs() - startTime) / 50.0f * rate;
     }
 

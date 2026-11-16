@@ -1,7 +1,8 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.events.GameLeftEvent;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
-import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import dev.coyduck.utils.Trace;
 import dev.coyduck.Coyduck;
 import dev.coyduck.managers.InteractionManager;
@@ -9,7 +10,6 @@ import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.RotationManager;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.Setting;

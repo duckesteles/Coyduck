@@ -1,15 +1,15 @@
 package dev.coyduck.managers;
 
+import dev.coyduck.events.AttackEntityEvent;
+import dev.coyduck.events.EntityAddedEvent;
+import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.utils.ExplosionDamage;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
-import meteordevelopment.meteorclient.events.entity.EntityAddedEvent;
-import meteordevelopment.meteorclient.events.entity.player.AttackEntityEvent;
-import meteordevelopment.meteorclient.events.game.GameLeftEvent;
-import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.ShapeContext;
@@ -26,7 +26,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
 public final class CrystalTracker {
     private static final CrystalTracker INSTANCE = new CrystalTracker();
