@@ -29,11 +29,7 @@ import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.EquippableComponent;
 import net.minecraft.enchantment.Enchantments;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.player.PlayerEntity;
@@ -57,8 +53,6 @@ import java.util.ArrayDeque;
 
 public class MaceStrike extends Feature {
     private static final int PRIORITY = 85;
-    private static final long ELYTRA_GRACE = 2_000;
-    private int repairSlot = -1;
     private static final float ROTATE_SPEED = 180.0f;
     private static final double MIN_DROP = 2.0;
     private static final double HEIGHT_STEP = 0.5;
@@ -125,7 +119,6 @@ public class MaceStrike extends Feature {
     }
 
     public enum Unglide {
-        Armor,
         Command,
         Off
     }
@@ -192,8 +185,8 @@ public class MaceStrike extends Feature {
 
     private final Setting<Unglide> unglide = sgGeneral.add(new EnumSetting.Builder<Unglide>()
         .name("unglide")
-        .description("How the dive stops gliding: chestplate swap or glide toggle.")
-        .defaultValue(Unglide.Armor)
+        .description("Toggles the glide off for the hit so it counts as a smash.")
+        .defaultValue(Unglide.Command)
         .build()
     );
 
@@ -365,7 +358,6 @@ public class MaceStrike extends Feature {
         if (mc.world != null) {
             trackHeals();
             learn();
-            keepElytra();
         }
         if (phase != Phase.Idle) return;
         if (Util.getMeasuringTimeMs() < pausedUntil) return;
@@ -731,7 +723,7 @@ public class MaceStrike extends Feature {
                 }
                 path(x, y, y + lift, z, collision);
                 path(x, y + lift, y, z, collision);
-                strike(false);
+                strike();
             }
             case Ground -> {
                 move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, true, collision));
@@ -741,7 +733,7 @@ public class MaceStrike extends Feature {
                 serverY = Math.max(strikeY, serverY - step.get());
                 move(new PlayerMoveC2SPacket.PositionAndOnGround(x, serverY, z, false, collision));
                 if (serverY > strikeY) return;
-                if (ready() && inReachFrom(new Vec3d(x, serverY, z))) strike(false);
+                if (ready() && inReachFrom(new Vec3d(x, serverY, z))) strike();
                 phase = Phase.Ascend;
             }
             case Ascend -> {
@@ -760,16 +752,8 @@ public class MaceStrike extends Feature {
                     move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, false, collision));
                     return;
                 }
-                boolean gliding = mc.player.isGliding() && unglide.get() != Unglide.Off;
-                int worn = gliding && unglide.get() == Unglide.Armor ? wearChestplate() : -1;
-                if (gliding) glideCommand();
                 path(x, y, strikeY, z, collision);
-                strike(gliding);
-                if (worn != -1) {
-                    swapChest(worn);
-                    repairSlot = worn;
-                }
-                if (gliding) glideCommand();
+                strike();
                 path(x, strikeY, y, z, collision);
                 if (stopGlide.get() && mc.player.isGliding()) {
                     mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
@@ -807,7 +791,7 @@ public class MaceStrike extends Feature {
         return maceSlot() != -1 && target != null && target.isAlive() && !target.isRemoved();
     }
 
-    private void strike(boolean preStopped) {
+    private void strike() {
         PlayerEntity victim = target;
         int slot = maceSlot(InventoryManager.MAIN_END);
         if (slot == -1 || victim == null) return;
@@ -824,25 +808,18 @@ public class MaceStrike extends Feature {
             learnSmash = false;
             learnMixed = false;
         }
-        boolean gliding = mc.player.isGliding() && !preStopped;
-        boolean sprinting = mc.player.isSprinting();
-        boolean toggle = gliding && unglide.get() != Unglide.Off;
-        int[] worn = {-1};
         Runnable hit = () -> {
+            boolean toggle = unglide.get() == Unglide.Command && mc.player.isGliding();
+            boolean sprinting = mc.player.isSprinting();
             if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
-            if (gliding && unglide.get() == Unglide.Armor) worn[0] = wearChestplate();
             if (toggle) glideCommand();
             mc.interactionManager.attackEntity(mc.player, victim);
             InteractionManager.get().swing(InteractionManager.SwingMode.Packet);
+            if (toggle) glideCommand();
+            if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_SPRINTING));
         };
         if (InventoryManager.get().selectedSlot() == slot) hit.run();
         else InventoryManager.get().withItem(slot, switchMode.get(), hit);
-        if (worn[0] != -1) {
-            swapChest(worn[0]);
-            repairSlot = worn[0];
-        }
-        if (toggle) glideCommand();
-        if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_SPRINTING));
         lastStrike = Util.getMeasuringTimeMs();
         if (!holdMace.get()) giveBack();
     }
@@ -958,33 +935,6 @@ public class MaceStrike extends Feature {
         double fall = popped ? Math.max(countedFall(), high) : high;
         learnedFall = Double.isNaN(learnedFall) ? fall : learnedFall + (fall - learnedFall) * LEARN_WEIGHT;
         Trace.log("mace learned counted fall {} from {} damage{}", learnedFall, observed, popped ? " (popped, at least)" : "");
-    }
-
-    private int wearChestplate() {
-        if (!LivingEntity.canGlideWith(mc.player.getEquippedStack(EquipmentSlot.CHEST), EquipmentSlot.CHEST)) return -1;
-        int slot = InventoryManager.get().find(MaceStrike::isChestplate, 0, InventoryManager.MAIN_END);
-        return slot != -1 && swapChest(slot) ? slot : -1;
-    }
-
-    private static boolean swapChest(int slot) {
-        InventoryManager inventory = InventoryManager.get();
-        return slot < InventoryManager.HOTBAR_END ? inventory.swapWithHotbar(InventoryManager.CHEST, slot) : inventory.move(slot, InventoryManager.CHEST);
-    }
-
-    private void keepElytra() {
-        if (repairSlot == -1) return;
-        if (Util.getMeasuringTimeMs() - lastStrike > ELYTRA_GRACE || mc.player.isOnGround()) {
-            repairSlot = -1;
-            return;
-        }
-        if (!isChestplate(mc.player.getEquippedStack(EquipmentSlot.CHEST)) || !LivingEntity.canGlideWith(InventoryManager.get().stack(repairSlot), EquipmentSlot.CHEST)) return;
-        swapChest(repairSlot);
-        repairSlot = -1;
-    }
-
-    private static boolean isChestplate(ItemStack stack) {
-        EquippableComponent equippable = stack.get(DataComponentTypes.EQUIPPABLE);
-        return equippable != null && equippable.slot() == EquipmentSlot.CHEST && !stack.contains(DataComponentTypes.GLIDER);
     }
 
     private void glideCommand() {
