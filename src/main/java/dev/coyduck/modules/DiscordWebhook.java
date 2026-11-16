@@ -1,10 +1,11 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.core.Core;
+import dev.coyduck.events.DeathEvent;
 import dev.coyduck.events.GameLeftEvent;
-import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.ReceiveMessageEvent;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.events.TotemPopEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.Feature;
 import dev.coyduck.feature.IntSetting;
@@ -12,11 +13,8 @@ import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.feature.StringSetting;
 import dev.coyduck.managers.FightTracker;
-import dev.coyduck.managers.PopTracker;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.entity.EntityStatuses;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
 import net.minecraft.util.Util;
 
 import java.net.URI;
@@ -171,21 +169,27 @@ public class DiscordWebhook extends Feature {
     }
 
     @EventHandler
-    private void onPacket(PacketApplyEvent.Pre event) {
-        if (!(event.packet instanceof EntityStatusS2CPacket packet) || mc.world == null || mc.player == null) return;
-        boolean pop = packet.getStatus() == EntityStatuses.USE_TOTEM_OF_UNDYING;
-        boolean died = packet.getStatus() == EntityStatuses.PLAY_DEATH_SOUND_OR_ADD_PROJECTILE_HIT_PARTICLES;
-        if (!pop && !died || !(packet.getEntity(mc.world) instanceof PlayerEntity player)) return;
-        if (player == mc.player) {
-            if (pop && pops.get()) send(true, "Totem popped", "You popped a totem.", YELLOW);
-            if (died && death.get()) send(true, "Death", "You died.", RED);
+    private void onPop(TotemPopEvent event) {
+        if (mc.player == null) return;
+        if (event.player == mc.player) {
+            if (pops.get()) send(true, "Totem popped", "You popped a totem.", YELLOW);
             return;
         }
-        if (Core.host().isFriend(player) || !FightTracker.get().engaged(player)) return;
-        String name = player.getName().getString();
-        int count = PopTracker.get().pops(player);
-        if (pop && enemyPops.get()) send(false, "Enemy pop", name + " popped " + times(Math.max(1, count)) + ".", PURPLE);
-        if (died && kills.get()) send(false, "Kill", "You killed " + name + (count > 0 ? " after " + times(count) + "." : "."), GREEN);
+        if (enemyPops.get() && enemy(event.player)) send(false, "Enemy pop", event.player.getName().getString() + " popped " + times(Math.max(1, event.pops)) + ".", PURPLE);
+    }
+
+    @EventHandler
+    private void onDeath(DeathEvent event) {
+        if (mc.player == null) return;
+        if (event.player == mc.player) {
+            if (death.get()) send(true, "Death", "You died.", RED);
+            return;
+        }
+        if (kills.get() && enemy(event.player)) send(false, "Kill", "You killed " + event.player.getName().getString() + (event.pops > 0 ? " after " + times(event.pops) + "." : "."), GREEN);
+    }
+
+    private static boolean enemy(PlayerEntity player) {
+        return !Core.host().isFriend(player) && FightTracker.get().engaged(player);
     }
 
     @EventHandler

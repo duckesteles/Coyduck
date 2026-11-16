@@ -5,6 +5,7 @@ import dev.coyduck.events.EntityAddedEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.events.TotemPopEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.DoubleSetting;
@@ -24,14 +25,12 @@ import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityStatuses;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
-import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
 import net.minecraft.network.packet.s2c.play.InventoryS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
 import net.minecraft.network.packet.s2c.play.ScreenHandlerSlotUpdateS2CPacket;
@@ -320,12 +319,16 @@ public class AutoTotem extends Feature {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
+    private void onPop(TotemPopEvent event) {
+        if (canAct() && event.player == mc.player) onPop();
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
     private void onPacket(PacketApplyEvent.Post event) {
         if (!canAct()) return;
 
         if (event.packet instanceof PlayerActionResponseS2CPacket packet) mainGate.ack(packet.sequence());
         switch (event.packet) {
-            case EntityStatusS2CPacket packet when packet.getStatus() == EntityStatuses.USE_TOTEM_OF_UNDYING && packet.getEntity(mc.world) == mc.player -> onPop();
             case PlayerActionResponseS2CPacket packet when pending && packet.sequence() >= barrier -> onBarrier();
             case ScreenHandlerSlotUpdateS2CPacket packet when packet.getSyncId() == 0 && packet.getSlot() == PlayerScreenHandler.OFFHAND_ID -> onOffhandUpdate();
             case SetPlayerInventoryS2CPacket packet when packet.slot() == InventoryManager.OFFHAND -> onOffhandUpdate();

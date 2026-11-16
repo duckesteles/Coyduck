@@ -1,8 +1,11 @@
 package dev.coyduck.managers;
 
+import dev.coyduck.core.Bus;
+import dev.coyduck.events.DeathEvent;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.events.TotemPopEvent;
 import dev.coyduck.events.WorldResetEvent;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
@@ -47,10 +50,12 @@ public final class PopTracker {
         if (!(packet.getEntity(mc.world) instanceof PlayerEntity player)) return;
 
         if (packet.getStatus() == EntityStatuses.USE_TOTEM_OF_UNDYING) {
-            pops.addTo(player.getUuid(), 1);
+            int count = pops.addTo(player.getUuid(), 1) + 1;
             lastPop.put(player.getUuid(), Util.getMeasuringTimeMs());
+            Bus.post(TotemPopEvent.get(player, count));
         } else if (packet.getStatus() == EntityStatuses.PLAY_DEATH_SOUND_OR_ADD_PROJECTILE_HIT_PARTICLES) {
             died.add(player.getUuid());
+            Bus.post(DeathEvent.get(player, pops(player)));
         }
     }
 

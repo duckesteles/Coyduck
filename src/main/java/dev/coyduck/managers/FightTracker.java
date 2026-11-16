@@ -1,8 +1,8 @@
 package dev.coyduck.managers;
 
 import dev.coyduck.core.Core;
+import dev.coyduck.events.DeathEvent;
 import dev.coyduck.events.GameLeftEvent;
-import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
@@ -10,12 +10,10 @@ import dev.coyduck.mixin.PlayerInteractEntityC2SPacketAccessor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityStatuses;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.packet.c2s.play.PlayerInteractBlockC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket;
-import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
@@ -64,10 +62,8 @@ public final class FightTracker {
     }
 
     @EventHandler
-    private void onPacket(PacketApplyEvent.Pre event) {
-        if (!(event.packet instanceof EntityStatusS2CPacket packet) || mc.world == null) return;
-        if (packet.getStatus() != EntityStatuses.PLAY_DEATH_SOUND_OR_ADD_PROJECTILE_HIT_PARTICLES) return;
-        if (packet.getEntity(mc.world) instanceof PlayerEntity player) died.add(player.getUuid());
+    private void onDeath(DeathEvent event) {
+        died.add(event.player.getUuid());
     }
 
     @EventHandler

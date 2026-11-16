@@ -1,9 +1,10 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.core.Core;
+import dev.coyduck.events.DeathEvent;
 import dev.coyduck.events.GameLeftEvent;
-import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.events.TotemPopEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.Feature;
 import dev.coyduck.feature.IntSetting;
@@ -12,11 +13,8 @@ import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.feature.StringListSetting;
 import dev.coyduck.feature.StringSetting;
 import dev.coyduck.managers.FightTracker;
-import dev.coyduck.managers.PopTracker;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.entity.EntityStatuses;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
 import net.minecraft.util.Util;
 
 import java.util.ArrayList;
@@ -139,22 +137,24 @@ public class AutoEz extends Feature {
     }
 
     @EventHandler
-    private void onPacket(PacketApplyEvent.Pre event) {
-        if (!(event.packet instanceof EntityStatusS2CPacket packet) || mc.world == null || mc.player == null) return;
-        boolean pop = packet.getStatus() == EntityStatuses.USE_TOTEM_OF_UNDYING;
-        if (!pop && packet.getStatus() != EntityStatuses.PLAY_DEATH_SOUND_OR_ADD_PROJECTILE_HIT_PARTICLES) return;
-        if (!(packet.getEntity(mc.world) instanceof PlayerEntity player) || player == mc.player || Core.host().isFriend(player)) return;
+    private void onPop(TotemPopEvent event) {
+        if (!onPop.get() || !enemy(event.player) || !FightTracker.get().engaged(event.player) || pending.size() >= MAX_PENDING) return;
+        String name = event.player.getName().getString();
+        pending.removeIf(entry -> entry.pops > 0 && entry.name.equals(name));
+        pending.add(new Pending(name, Util.getMeasuringTimeMs() + delay.get() * 50L, Math.max(1, event.pops)));
+    }
 
-        boolean fought = FightTracker.get().engaged(player);
-        if (pop) {
-            if (!onPop.get() || !fought || pending.size() >= MAX_PENDING) return;
-            pending.removeIf(entry -> entry.pops > 0 && entry.name.equals(player.getName().getString()));
-            pending.add(new Pending(player.getName().getString(), Util.getMeasuringTimeMs() + delay.get() * 50L, Math.max(1, PopTracker.get().pops(player))));
-            return;
-        }
-        pending.removeIf(entry -> entry.pops > 0 && entry.name.equals(player.getName().getString()));
-        if (!fought || pending.size() >= MAX_PENDING) return;
-        pending.add(new Pending(player.getName().getString(), Util.getMeasuringTimeMs() + delay.get() * 50L, 0));
+    @EventHandler
+    private void onDeath(DeathEvent event) {
+        if (!enemy(event.player)) return;
+        String name = event.player.getName().getString();
+        pending.removeIf(entry -> entry.pops > 0 && entry.name.equals(name));
+        if (!FightTracker.get().engaged(event.player) || pending.size() >= MAX_PENDING) return;
+        pending.add(new Pending(name, Util.getMeasuringTimeMs() + delay.get() * 50L, 0));
+    }
+
+    private boolean enemy(PlayerEntity player) {
+        return mc.player != null && player != mc.player && !Core.host().isFriend(player);
     }
 
     @EventHandler

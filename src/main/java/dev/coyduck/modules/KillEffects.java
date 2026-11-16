@@ -1,7 +1,7 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.core.Core;
-import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.DeathEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.DoubleSetting;
 import dev.coyduck.feature.Feature;
@@ -11,11 +11,9 @@ import dev.coyduck.feature.SettingGroup;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.client.sound.PositionedSoundInstance;
-import net.minecraft.entity.EntityStatuses;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LightningEntity;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
 import net.minecraft.sound.SoundEvents;
 
 public class KillEffects extends Feature {
@@ -73,16 +71,15 @@ public class KillEffects extends Feature {
     }
 
     @EventHandler(priority = EventPriority.HIGH)
-    private void onPacket(PacketApplyEvent.Pre event) {
-        if (!(event.packet instanceof EntityStatusS2CPacket packet) || mc.world == null || mc.player == null) return;
-        if (packet.getStatus() != EntityStatuses.PLAY_DEATH_SOUND_OR_ADD_PROJECTILE_HIT_PARTICLES) return;
-        if (packet.getEntity(mc.world) == mc.player) {
+    private void onDeath(DeathEvent event) {
+        if (mc.player == null || mc.world == null) return;
+        if (event.player == mc.player) {
             kills = 0;
             return;
         }
-        if (!(packet.getEntity(mc.world) instanceof PlayerEntity player) || Core.host().isFriend(player)) return;
-        if (player.squaredDistanceTo(mc.player) > range.get() * range.get()) return;
-        if (onlyPopped.get() && PopCounter.pops(player) == 0) return;
+        PlayerEntity player = event.player;
+        if (Core.host().isFriend(player) || player.squaredDistanceTo(mc.player) > range.get() * range.get()) return;
+        if (onlyPopped.get() && event.pops == 0) return;
 
         kills++;
         for (int i = 0; i < bolts.get(); i++) {
