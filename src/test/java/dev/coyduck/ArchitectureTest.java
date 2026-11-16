@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ArchitectureTest {
-    private static final Path SOURCES = Path.of("src/main/java");
+    private static final Path SOURCES = Path.of(System.getProperty("coyduck.sources", "src/main/java"));
     private static final String ROOT = "dev.coyduck.";
     private static final Set<String> CORE_PACKAGES = Set.of("dev.coyduck.core", "dev.coyduck.events", "dev.coyduck.managers");
     private static final Set<String> LOGIC_PACKAGES = Set.of("dev.coyduck.logic");

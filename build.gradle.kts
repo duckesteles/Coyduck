@@ -73,6 +73,10 @@ tasks {
     test {
         useJUnitPlatform()
         systemProperty("fabric.debug.disableModIds", "meteor-client,coyduck")
+        systemProperty("coyduck.sources", file("src/main/java").absolutePath)
+        val runDir = layout.buildDirectory.dir("test-run").get().asFile
+        workingDir = runDir
+        doFirst { runDir.mkdirs() }
     }
 
     withType<JavaCompile>().configureEach {
