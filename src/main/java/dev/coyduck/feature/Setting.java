@@ -4,13 +4,17 @@ import java.util.Objects;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
-public abstract sealed class Setting<T> permits BoolSetting, IntSetting, DoubleSetting, EnumSetting, StringSetting, ListSetting {
+public abstract sealed class Setting<T> permits BoolSetting, IntSetting, DoubleSetting, EnumSetting, StringSetting, ListSetting, ColorSetting, KeybindSetting {
     public interface Backend<T> {
         T get();
 
         boolean set(T value);
 
         void reset();
+
+        default Object handle() {
+            return null;
+        }
     }
 
     public final String name;
@@ -61,6 +65,10 @@ public abstract sealed class Setting<T> permits BoolSetting, IntSetting, DoubleS
 
     public Consumer<T> onChanged() {
         return onChanged;
+    }
+
+    public Object handle() {
+        return backend == null ? null : backend.handle();
     }
 
     public void bind(Backend<T> target) {

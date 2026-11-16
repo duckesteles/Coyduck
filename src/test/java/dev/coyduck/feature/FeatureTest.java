@@ -193,6 +193,35 @@ class FeatureTest {
     }
 
     @Test
+    void colorsStayInByteRange() {
+        ColorSetting color = new ColorSetting.Builder().name("color").defaultValue(new Rgba(185, 74, 230, 200)).build();
+        assertEquals(new Rgba(185, 74, 230, 200, false), color.get());
+        assertFalse(color.set(new Rgba(256, 0, 0, 255)));
+        assertFalse(color.set(new Rgba(0, 0, 0, -1)));
+        assertTrue(color.set(new Rgba(0, 0, 0, 0, true)));
+        assertTrue(color.get().rainbow());
+        assertEquals(0xC8B94AE6, new Rgba(185, 74, 230, 200).packed());
+        assertNull(color.handle());
+    }
+
+    @Test
+    void keybindsCarryTheirAction() {
+        int[] runs = {0};
+        KeybindSetting bind = new KeybindSetting.Builder().name("bind").action(() -> runs[0]++).build();
+        assertSame(Bind.NONE, bind.get());
+        assertFalse(bind.get().isSet());
+        bind.action.run();
+        assertEquals(1, runs[0]);
+        assertTrue(Bind.key(71).isSet());
+        assertFalse(Bind.button(1).key());
+    }
+
+    @Test
+    void runInMainMenuDefaultsOff() {
+        assertFalse(new Sample().runsInMainMenu());
+    }
+
+    @Test
     void registryFindsFeaturesByType() {
         final class Unique extends Feature {
             Unique() {

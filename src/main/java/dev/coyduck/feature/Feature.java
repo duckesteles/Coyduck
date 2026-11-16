@@ -9,6 +9,7 @@ public abstract class Feature {
     public final String title;
     public final String description;
     public final Settings settings = new Settings();
+    protected boolean runInMainMenu;
     private Shell shell = Shell.DETACHED;
 
     protected Feature(String name, String description) {
@@ -38,6 +39,12 @@ public abstract class Feature {
     public final void toggle() {
         shell.toggle();
     }
+
+    public boolean runsInMainMenu() {
+        return runInMainMenu;
+    }
+
+    public void onLoad() {}
 
     public void onActivate() {}
 
