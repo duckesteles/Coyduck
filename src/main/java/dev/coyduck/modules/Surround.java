@@ -636,14 +636,14 @@ public class Surround extends Module {
         List<BlockPos> ready = new ArrayList<>();
         for (BlockPos pos : Targets.ring(anchored, 0)) {
             if (ready.size() >= budget || preSent.containsKey(pos.asLong()) && ticks - preSent.get(pos.asLong()) < preInterval() || !aboutToBreak(pos)) continue;
-            if (interaction.hit(pos, airplace.get()) != null) ready.add(pos);
+            if (interaction.hit(pos, airplace.get(), true) != null) ready.add(pos);
         }
         if (ready.isEmpty()) return;
 
         InventoryManager.get().withItemWhileEating(slot, switchMode.get(), () -> {
             for (BlockPos pos : ready) {
                 if (budget <= 0 || !isBlock(mc.player.getMainHandStack())) break;
-                BlockHitResult hit = interaction.hit(pos, airplace.get());
+                BlockHitResult hit = interaction.hit(pos, airplace.get(), true);
                 if (hit == null) continue;
 
                 mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
@@ -681,7 +681,7 @@ public class Surround extends Module {
 
     private int cost(BlockPos pos) {
         InteractionManager interaction = InteractionManager.get();
-        if (interaction.hit(pos, airplace.get()) != null) return 1;
+        if (interaction.hit(pos, airplace.get(), true) != null) return 1;
         if (airplace.get()) return 0;
 
         BlockPos support = pos.down();
@@ -692,7 +692,7 @@ public class Surround extends Module {
         InteractionManager interaction = InteractionManager.get();
         if (!force && !interaction.canPlace(pos)) return;
 
-        BlockHitResult hit = interaction.hit(pos, airplace.get());
+        BlockHitResult hit = interaction.hit(pos, airplace.get(), true);
         if (hit == null && !airplace.get()) {
             BlockPos support = pos.down();
             BlockHitResult supportHit = interaction.canPlace(support) && interaction.obstructions(support).isEmpty() ? interaction.hit(support, false) : null;

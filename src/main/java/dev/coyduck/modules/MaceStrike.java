@@ -2,66 +2,67 @@ package dev.coyduck.modules;
 
 import dev.coyduck.core.Core;
 import dev.coyduck.events.GameLeftEvent;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.BlockState;
-import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.world.RaycastContext;
-import dev.coyduck.events.WorldResetEvent;
-import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.TickEvent;
+import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.RotationManager;
 import dev.coyduck.utils.ExplosionDamage;
-import dev.coyduck.utils.Trace;
 import dev.coyduck.utils.Targets;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
+import dev.coyduck.utils.Trace;
+import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.orbit.EventHandler;
-import meteordevelopment.orbit.EventPriority;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.player.PlayerEntity;
 import meteordevelopment.meteorclient.utils.Utils;
 import meteordevelopment.meteorclient.utils.entity.DamageUtils;
+import meteordevelopment.orbit.EventHandler;
+import meteordevelopment.orbit.EventPriority;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.EquippableComponent;
 import net.minecraft.enchantment.Enchantments;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.entity.damage.DamageTypes;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.network.packet.c2s.play.ClientTickEndC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
-import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.network.packet.s2c.play.EntityDamageS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.util.Util;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.RaycastContext;
 
 import java.util.ArrayDeque;
 
-public class MaceStrike extends Module {
+public class MaceStrike extends Feature {
     private static final int PRIORITY = 85;
     private static final int CHEST = PlayerInventory.MAIN_SIZE + EquipmentSlot.CHEST.getEntitySlotId();
     private static final long ELYTRA_GRACE = 2_000;
+    private int repairSlot = -1;
     private static final float ROTATE_SPEED = 180.0f;
     private static final double MIN_DROP = 2.0;
     private static final double HEIGHT_STEP = 0.5;
@@ -332,7 +333,7 @@ public class MaceStrike extends Module {
     private long pausedUntil;
 
     public MaceStrike() {
-        super(Coyduck.CATEGORY, "mace-strike", "Smashes players with a mace.");
+        super("mace-strike", "Smashes players with a mace.");
     }
 
     @Override
@@ -362,7 +363,7 @@ public class MaceStrike extends Module {
     }
 
     public static boolean blocksMoves() {
-        MaceStrike module = Modules.get() == null ? null : Modules.get().get(MaceStrike.class);
+        MaceStrike module = Features.get(MaceStrike.class);
         return module != null && module.isActive() && (module.owed > 0 || module.phase != Phase.Idle);
     }
 
@@ -833,15 +834,18 @@ public class MaceStrike extends Module {
         }
         Runnable hit = () -> {
             boolean gliding = mc.player.isGliding() && !preStopped;
-            int worn = gliding && unglide.get() == Unglide.Armor ? wearChestplate() : -1;
-            boolean toggle = gliding && worn == -1 && unglide.get() != Unglide.Off;
             boolean sprinting = mc.player.isSprinting();
             if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
+            int worn = gliding && unglide.get() == Unglide.Armor ? wearChestplate() : -1;
+            boolean toggle = gliding && unglide.get() != Unglide.Off;
             if (toggle) glideCommand();
             mc.interactionManager.attackEntity(mc.player, victim);
             InteractionManager.get().swing(InteractionManager.SwingMode.Packet);
+            if (worn != -1) {
+                InventoryManager.get().swapWithHotbar(CHEST, worn);
+                repairSlot = worn;
+            }
             if (toggle) glideCommand();
-            if (worn != -1) InventoryManager.get().swapWithHotbar(CHEST, worn);
             if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_SPRINTING));
         };
         if (InventoryManager.get().selectedSlot() == slot) hit.run();
@@ -976,22 +980,24 @@ public class MaceStrike extends Module {
         if (hotbar != -1 || unglide.get() != Unglide.Armor) return hotbar;
         int stored = inventory.find(MaceStrike::isChestplate, InventoryManager.HOTBAR_END, InventoryManager.MAIN_END);
         int free = inventory.find(ItemStack::isEmpty, 0, InventoryManager.HOTBAR_END);
-        if (stored != -1 && free != -1 && free != Core.host().totemSlot()) inventory.swapWithHotbar(stored, free);
+        if (stored != -1 && free != -1 && free != Core.host().totemSlot() && free != inventory.selectedSlot()) inventory.swapWithHotbar(stored, free);
         return -1;
     }
 
     private void keepElytra() {
-        if (mc.player == null || mc.player.isOnGround() || unglide.get() != Unglide.Armor) return;
-        if (LivingEntity.canGlideWith(mc.player.getEquippedStack(EquipmentSlot.CHEST), EquipmentSlot.CHEST)) return;
-        int elytra = InventoryManager.get().find(stack -> LivingEntity.canGlideWith(stack, EquipmentSlot.CHEST), 0, InventoryManager.HOTBAR_END);
-        if (elytra != -1 && isChestplate(mc.player.getEquippedStack(EquipmentSlot.CHEST)) && Util.getMeasuringTimeMs() - lastStrike < ELYTRA_GRACE) {
-            InventoryManager.get().swapWithHotbar(CHEST, elytra);
+        if (repairSlot == -1) return;
+        if (Util.getMeasuringTimeMs() - lastStrike > ELYTRA_GRACE || mc.player.isOnGround()) {
+            repairSlot = -1;
+            return;
         }
+        if (!isChestplate(mc.player.getEquippedStack(EquipmentSlot.CHEST)) || !LivingEntity.canGlideWith(InventoryManager.get().stack(repairSlot), EquipmentSlot.CHEST)) return;
+        InventoryManager.get().swapWithHotbar(CHEST, repairSlot);
+        repairSlot = -1;
     }
 
     private static boolean isChestplate(ItemStack stack) {
         EquippableComponent equippable = stack.get(DataComponentTypes.EQUIPPABLE);
-        return equippable != null && equippable.slot() == EquipmentSlot.CHEST && !LivingEntity.canGlideWith(stack, EquipmentSlot.CHEST);
+        return equippable != null && equippable.slot() == EquipmentSlot.CHEST && !stack.contains(DataComponentTypes.GLIDER);
     }
 
     private void glideCommand() {

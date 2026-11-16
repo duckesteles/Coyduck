@@ -146,6 +146,10 @@ public final class InteractionManager {
     }
 
     public BlockHitResult hit(BlockPos pos, boolean airplace) {
+        return hit(pos, airplace, false);
+    }
+
+    public BlockHitResult hit(BlockPos pos, boolean airplace, boolean openAir) {
         Vec3d eye = mc.player.getEyePos();
         double reach = mc.player.getBlockInteractionRange() - REACH_MARGIN;
         double reachSquared = reach * reach;
@@ -185,7 +189,7 @@ public final class InteractionManager {
 
         if (seen != null) return seen;
         boolean reachable = new Box(pos).squaredMagnitude(eye) < reachSquared && centerReach(pos);
-        if (airplace && reachable) {
+        if (airplace && reachable && (openAir || !support)) {
             for (Direction direction : Direction.values()) {
                 Vec3d point = visiblePoint(pos, direction, eye, reachSquared);
                 if (point != null) return new BlockHitResult(point, direction, pos, false);
