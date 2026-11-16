@@ -29,6 +29,11 @@ public abstract class ClientPlayerEntityMixin {
         if (NoRotate.frozen()) info.cancel();
     }
 
+    @Inject(method = "pushOutOfBlocks", at = @At("HEAD"), cancellable = true)
+    private void coyduck$stayInBlock(double x, double z, CallbackInfo info) {
+        if (NoRotate.frozen()) info.cancel();
+    }
+
     @Inject(method = "sendMovementPackets", at = @At("TAIL"))
     private void coyduck$afterMovement(CallbackInfo info) {
         RotationManager.get().afterMovement();
