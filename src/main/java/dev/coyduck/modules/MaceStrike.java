@@ -196,16 +196,8 @@ public class MaceStrike extends Feature {
 
     private final Setting<Unglide> unglide = sgGeneral.add(new EnumSetting.Builder<Unglide>()
         .name("unglide")
-        .description("How the hit stops gliding: a chestplate swap or a glide toggle.")
+        .description("How the dive stops gliding: chestplate swap or glide toggle.")
         .defaultValue(Unglide.Armor)
-        .build()
-    );
-
-    private final Setting<Boolean> stopFirst = sgGeneral.add(new BoolSetting.Builder()
-        .name("stop-first")
-        .description("Experimental. Stops gliding before the dive instead.")
-        .defaultValue(false)
-        .visible(() -> unglide.get() == Unglide.Command)
         .build()
     );
 
@@ -773,11 +765,16 @@ public class MaceStrike extends Feature {
                     move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, false, collision));
                     return;
                 }
-                boolean stopped = unglide.get() == Unglide.Command && stopFirst.get() && mc.player.isGliding();
-                if (stopped) glideCommand();
+                boolean gliding = mc.player.isGliding() && unglide.get() != Unglide.Off;
+                int worn = gliding && unglide.get() == Unglide.Armor ? wearChestplate() : -1;
+                if (gliding) glideCommand();
                 path(x, y, strikeY, z, collision);
-                strike(stopped);
-                if (stopped) glideCommand();
+                strike(gliding);
+                if (worn != -1) {
+                    InventoryManager.get().swapWithHotbar(CHEST, worn);
+                    repairSlot = worn;
+                }
+                if (gliding) glideCommand();
                 path(x, strikeY, y, z, collision);
                 if (stopGlide.get() && mc.player.isGliding()) {
                     mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
