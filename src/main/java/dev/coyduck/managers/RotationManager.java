@@ -37,10 +37,11 @@ public final class RotationManager {
 
     private record Request(int priority, float yaw, float pitch, float speed, boolean moveFix) {}
 
-    private record Deferred(float yaw, float pitch, Runnable action, int expires) {}
+    private record Deferred(Vec3d target, int priority, Runnable action, int expires) {}
 
     private static final int DEFER_TICKS = 3;
     private static final float DEFER_TOLERANCE = 1.0f;
+    private static final float DEFER_SPEED = 180.0f;
     private static final long RETURN_MS = 50;
 
     private final ArrayList<Deferred> deferred = new ArrayList<>();
@@ -72,13 +73,17 @@ public final class RotationManager {
 
     public void request(int priority, Vec3d target, float speed, boolean moveFix) {
         Vec3d eye = mc.player.getEyePos();
-        double dx = target.x - eye.x;
-        double dy = target.y - eye.y;
-        double dz = target.z - eye.z;
+        request(priority, yawTo(eye, target), pitchTo(eye, target), speed, moveFix);
+    }
 
-        float yaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90.0f;
-        float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
-        request(priority, yaw, pitch, speed, moveFix);
+    private static float yawTo(Vec3d eye, Vec3d target) {
+        return (float) Math.toDegrees(Math.atan2(target.z - eye.z, target.x - eye.x)) - 90.0f;
+    }
+
+    private static float pitchTo(Vec3d eye, Vec3d target) {
+        double dx = target.x - eye.x;
+        double dz = target.z - eye.z;
+        return MathHelper.clamp((float) -Math.toDegrees(Math.atan2(target.y - eye.y, Math.sqrt(dx * dx + dz * dz))), -90.0f, 90.0f);
     }
 
     public void request(int priority, float yaw, float pitch, float speed, boolean moveFix) {
@@ -90,11 +95,8 @@ public final class RotationManager {
         if (Core.host().freezesRotation()) return true;
         if (current != null && current.priority > priority || pending != null && pending.priority > priority) return false;
         Vec3d eye = mc.player.getEyePos();
-        double dx = target.x - eye.x;
-        double dy = target.y - eye.y;
-        double dz = target.z - eye.z;
-        float wantYaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90.0f;
-        float wantPitch = MathHelper.clamp((float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz))), -90.0f, 90.0f);
+        float wantYaw = yawTo(eye, target);
+        float wantPitch = pitchTo(eye, target);
         float base = known ? serverYaw : mc.player.getYaw();
         float basePitch = known ? serverPitch : mc.player.getPitch();
         float gcd = gcd();
@@ -121,14 +123,8 @@ public final class RotationManager {
             return true;
         }
         if (current != null && current.priority > priority || pending != null && pending.priority > priority) return false;
-        Vec3d eye = mc.player.getEyePos();
-        double dx = target.x - eye.x;
-        double dy = target.y - eye.y;
-        double dz = target.z - eye.z;
-        float wantYaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90.0f;
-        float wantPitch = MathHelper.clamp((float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz))), -90.0f, 90.0f);
-        request(priority, wantYaw, wantPitch, 180, false);
-        deferred.add(new Deferred(wantYaw, wantPitch, action, ticks + DEFER_TICKS));
+        request(priority, target, DEFER_SPEED, false);
+        deferred.add(new Deferred(target, priority, action, ticks + DEFER_TICKS));
         return true;
     }
 
@@ -137,15 +133,20 @@ public final class RotationManager {
         if (deferred.isEmpty()) return;
         float yawNow = serverYaw();
         float pitchNow = serverPitch();
+        Vec3d eye = mc.player.getEyePos();
         Iterator<Deferred> iterator = deferred.iterator();
         List<Runnable> ready = new ArrayList<>();
         while (iterator.hasNext()) {
             Deferred entry = iterator.next();
-            if (Math.abs(MathHelper.wrapDegrees(entry.yaw - yawNow)) <= DEFER_TOLERANCE && Math.abs(entry.pitch - pitchNow) <= DEFER_TOLERANCE) {
+            float yaw = yawTo(eye, entry.target);
+            float pitch = pitchTo(eye, entry.target);
+            if (Math.abs(MathHelper.wrapDegrees(yaw - yawNow)) <= DEFER_TOLERANCE && Math.abs(pitch - pitchNow) <= DEFER_TOLERANCE) {
                 ready.add(entry.action);
                 iterator.remove();
             } else if (ticks >= entry.expires) {
                 iterator.remove();
+            } else {
+                request(entry.priority, yaw, pitch, DEFER_SPEED, false);
             }
         }
         for (Runnable action : ready) action.run();
