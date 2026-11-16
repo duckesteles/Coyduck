@@ -123,6 +123,14 @@ public class AutoTrap extends Feature {
         .build()
     );
 
+    private final Setting<Boolean> look = sgGeneral.add(new BoolSetting.Builder()
+        .name("look")
+        .description("Sends a look at each block right before placing it.")
+        .defaultValue(true)
+        .visible(() -> !rotate.get())
+        .build()
+    );
+
     private final Setting<InteractionManager.SwingMode> swing = sgGeneral.add(new EnumSetting.Builder<InteractionManager.SwingMode>()
         .name("swing")
         .description("How the hand swing is shown.")
@@ -295,7 +303,7 @@ public class AutoTrap extends Feature {
         BlockHitResult hit = known != null ? known : hitFor(pos);
         if (hit == null) return false;
 
-        if (!interaction.place(pos, hit, swing.get(), rotate.get(), InteractionManager.TRAP_PRIORITY)) {
+        if (!interaction.place(pos, hit, swing.get(), rotate.get(), look.get(), InteractionManager.TRAP_PRIORITY)) {
             budget = 0;
             return false;
         }
