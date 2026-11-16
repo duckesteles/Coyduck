@@ -324,6 +324,7 @@ public class Surround extends Module {
     private long feetSeen;
     private long feetHit;
     private int ticks;
+    private long tickStartedAt;
     private final Long2LongOpenHashMap preSent = new Long2LongOpenHashMap();
 
     @Override
@@ -354,6 +355,7 @@ public class Surround extends Module {
     private void onTick(TickEvent.Pre event) {
         budget = blocksPerTick.get();
         ticks++;
+        tickStartedAt = Util.getMeasuringTimeMs();
         preSent.long2LongEntrySet().removeIf(entry -> ticks - entry.getLongValue() > 20);
         clearWeak();
         pass();
@@ -537,6 +539,10 @@ public class Surround extends Module {
                 if (tracing) note(pos, "we mine it");
                 continue;
             }
+            if (!retry && tickStartedAt != 0 && interaction.rejectedAt(pos) >= tickStartedAt) {
+                if (tracing) note(pos, "rejected, next tick");
+                continue;
+            }
 
             int needed = cost(pos);
             if (needed == 0 || cost + needed > budget) {
@@ -588,7 +594,7 @@ public class Surround extends Module {
         InteractionManager interaction = InteractionManager.get();
         List<BlockPos> ready = new ArrayList<>();
         for (BlockPos pos : Targets.ring(anchored, 0)) {
-            if (ready.size() >= budget || preSent.get(pos.asLong()) == ticks || !aboutToBreak(pos)) continue;
+            if (ready.size() >= budget || preSent.containsKey(pos.asLong()) && ticks - preSent.get(pos.asLong()) < preInterval() || !aboutToBreak(pos)) continue;
             if (interaction.hit(pos, airplace.get()) != null) ready.add(pos);
         }
         if (ready.isEmpty()) return;
@@ -606,6 +612,10 @@ public class Surround extends Module {
                 budget--;
             }
         });
+    }
+
+    private static int preInterval() {
+        return Math.clamp(Math.round(LatencyManager.get().rtt() / 100f), 2, 6);
     }
 
     private boolean aboutToBreak(BlockPos pos) {
