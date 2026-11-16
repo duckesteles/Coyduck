@@ -12,6 +12,7 @@ import dev.coyduck.feature.Features;
 import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.managers.MoveBudget;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
@@ -181,11 +182,15 @@ public class HoleSnap extends Feature {
         .build()
     );
 
+    private static final long SETBACK_PAUSE = 250;
+    private static final double WALK_SPEED = 0.221;
+
     private record Hole(List<BlockPos> cells, Vec3d middle) {}
 
     private Hole hole;
     private int collided;
     private int pulled;
+    private volatile long pausedUntil;
     private int jumpTicks;
     private int boostLeft;
     private long startedAt;
@@ -203,6 +208,7 @@ public class HoleSnap extends Feature {
     public void onActivate() {
         collided = 0;
         pulled = 0;
+        pausedUntil = 0;
         jumpTicks = 0;
         boostLeft = boost.get() ? boostMoves.get() : 0;
         startedAt = Util.getMeasuringTimeMs();
@@ -217,8 +223,9 @@ public class HoleSnap extends Feature {
 
     @EventHandler
     private void onReceive(PacketEvent.Receive event) {
-        if (!(event.packet instanceof PlayerPositionLookS2CPacket) || rubberbands.get() == 0) return;
-        if (++pulled >= rubberbands.get()) mc.execute(() -> stop("Pulled back by the server."));
+        if (!(event.packet instanceof PlayerPositionLookS2CPacket)) return;
+        pausedUntil = Util.getMeasuringTimeMs() + SETBACK_PAUSE;
+        if (rubberbands.get() > 0 && ++pulled >= rubberbands.get()) mc.execute(() -> stop("Pulled back by the server."));
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -247,10 +254,15 @@ public class HoleSnap extends Feature {
             return;
         }
 
-        Core.host().timer(timer.get());
+        if (Util.getMeasuringTimeMs() < pausedUntil) {
+            Core.host().timer(1);
+            return;
+        }
+        Core.host().timer(MoveBudget.get().spare() ? timer.get() : 1);
 
         double distance = Math.sqrt(dx * dx + dz * dz);
-        double step = Math.min(boostLeft-- > 0 ? boostSpeed.get() : speed.get(), distance);
+        double walk = mc.player.isSprinting() ? speed.get() : Math.min(speed.get(), WALK_SPEED);
+        double step = Math.min(boostLeft-- > 0 ? boostSpeed.get() : walk, distance);
         double x = dx / distance * step;
         double z = dz / distance * step;
 
