@@ -36,6 +36,7 @@ dependencies {
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
+    testImplementation(libs.fabric.loader.junit)
     testRuntimeOnly(libs.junit.launcher)
 }
 
@@ -71,6 +72,7 @@ tasks {
 
     test {
         useJUnitPlatform()
+        systemProperty("fabric.debug.disableModIds", "meteor-client,coyduck")
     }
 
     withType<JavaCompile>().configureEach {

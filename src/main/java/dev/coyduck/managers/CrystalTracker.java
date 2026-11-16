@@ -6,6 +6,7 @@ import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.logic.Blast;
 import dev.coyduck.utils.ExplosionDamage;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
@@ -124,7 +125,7 @@ public final class CrystalTracker {
                 if (distance <= range) kill(entity, duration);
             }
             else if ((entity instanceof ItemEntity || entity instanceof ExperienceOrbEntity) && distance <= dropRange
-                && ExplosionDamage.exposure(center, entity.getBoundingBox(), mc.world, ShapeContext.absent()) > 0) kill(entity, duration);
+                && Blast.exposure(center, entity.getBoundingBox(), mc.world, ShapeContext.absent()) > 0) kill(entity, duration);
         }
     }
 

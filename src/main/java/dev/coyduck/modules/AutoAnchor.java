@@ -5,6 +5,8 @@ import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.logic.Blast;
+import dev.coyduck.logic.BlockOverlay;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
@@ -13,7 +15,6 @@ import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MotionTracker;
 import dev.coyduck.managers.RotationManager;
-import dev.coyduck.utils.BlockOverlay;
 import dev.coyduck.utils.DuckRender;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.PacketBatch;
@@ -786,7 +787,7 @@ public class AutoAnchor extends Module {
         double distance = mc.player.getEntityPos().distanceTo(center) / RANGE;
         if (distance >= 1) return false;
 
-        double exposure = ExplosionDamage.exposure(center, box, view, ShapeContext.of(mc.player));
+        double exposure = Blast.exposure(center, box, view, ShapeContext.of(mc.player));
         double resistance = mc.player.getAttributeValue(EntityAttributes.EXPLOSION_KNOCKBACK_RESISTANCE);
         double knockback = (1 - distance) * exposure * (1 - resistance);
         if (knockback <= KNOCKBACK_LIMIT) return false;

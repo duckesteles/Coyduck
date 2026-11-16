@@ -28,6 +28,7 @@ class ArchitectureTest {
     private static final Path SOURCES = Path.of("src/main/java");
     private static final String ROOT = "dev.coyduck.";
     private static final Set<String> CORE_PACKAGES = Set.of("dev.coyduck.core", "dev.coyduck.events", "dev.coyduck.managers");
+    private static final Set<String> LOGIC_PACKAGES = Set.of("dev.coyduck.logic");
     private static final Set<String> SHELL_PACKAGES = Set.of("dev.coyduck.modules", "dev.coyduck.hud", "dev.coyduck.gui", "dev.coyduck.commands", "dev.coyduck.dev");
     private static final Pattern IMPORT = Pattern.compile("^import (?:static )?(dev\\.coyduck\\.[\\w.]+);", Pattern.MULTILINE);
     private static final Pattern QUALIFIED = Pattern.compile("\\bdev\\.coyduck\\.[a-z][\\w.]*?\\.[A-Z]\\w*");
@@ -35,6 +36,7 @@ class ArchitectureTest {
 
     private static Map<String, String> sources;
     private static Map<String, String> reachedFrom;
+    private static Map<String, String> logicReaches;
 
     @BeforeAll
     static void scan() {
@@ -44,7 +46,8 @@ class ArchitectureTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-        reachedFrom = closure();
+        reachedFrom = closure(CORE_PACKAGES);
+        logicReaches = closure(LOGIC_PACKAGES);
     }
 
     @Test
@@ -56,7 +59,7 @@ class ArchitectureTest {
     void coreDoesNotUseMeteor() {
         List<String> offenders = reachedFrom.keySet().stream()
             .filter(name -> sources.get(name).contains("import meteordevelopment.meteorclient") || sources.get(name).contains("import static meteordevelopment.meteorclient"))
-            .map(ArchitectureTest::chain)
+            .map(name -> chain(reachedFrom, name))
             .toList();
         assertTrue(offenders.isEmpty(), "core reaches Meteor:\n" + String.join("\n", offenders));
     }
@@ -65,9 +68,19 @@ class ArchitectureTest {
     void coreDoesNotUseShell() {
         List<String> offenders = reachedFrom.keySet().stream()
             .filter(name -> SHELL_PACKAGES.contains(packageOf(name)) || name.equals("dev.coyduck.Coyduck") || name.equals("dev.coyduck.MeteorHost"))
-            .map(ArchitectureTest::chain)
+            .map(name -> chain(reachedFrom, name))
             .toList();
         assertTrue(offenders.isEmpty(), "core reaches the Meteor shell:\n" + String.join("\n", offenders));
+    }
+
+    @Test
+    void logicIsSelfContained() {
+        assertTrue(logicReaches.keySet().stream().anyMatch(name -> LOGIC_PACKAGES.contains(packageOf(name))));
+        List<String> offenders = logicReaches.keySet().stream()
+            .filter(name -> !LOGIC_PACKAGES.contains(packageOf(name)) && LOGIC_PACKAGES.contains(packageOf(logicReaches.get(name))))
+            .map(name -> chain(logicReaches, name))
+            .toList();
+        assertTrue(offenders.isEmpty(), "logic depends on stateful code:\n" + String.join("\n", offenders));
     }
 
     @Test
@@ -77,11 +90,11 @@ class ArchitectureTest {
         assertFalse(dependencies("dev.coyduck.managers.PopTracker").contains("dev.coyduck.modules.AutoTotem"));
     }
 
-    private static Map<String, String> closure() {
+    private static Map<String, String> closure(Set<String> roots) {
         Map<String, String> parent = new LinkedHashMap<>();
         Deque<String> queue = new ArrayDeque<>();
         for (String name : sources.keySet()) {
-            if (!CORE_PACKAGES.contains(packageOf(name))) continue;
+            if (!roots.contains(packageOf(name))) continue;
             parent.put(name, null);
             queue.add(name);
         }
@@ -123,9 +136,9 @@ class ArchitectureTest {
         return Optional.empty();
     }
 
-    private static String chain(String name) {
+    private static String chain(Map<String, String> parents, String name) {
         List<String> path = new ArrayList<>();
-        for (String at = name; at != null; at = reachedFrom.get(at)) path.add(0, at.substring(ROOT.length()));
+        for (String at = name; at != null; at = parents.get(at)) path.add(0, at.substring(ROOT.length()));
         return "  " + String.join(" -> ", path);
     }
 
