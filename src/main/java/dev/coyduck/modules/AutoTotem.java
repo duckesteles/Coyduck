@@ -6,6 +6,7 @@ import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.logic.AckGate;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
@@ -184,8 +185,7 @@ public class AutoTotem extends Module {
     private int skipMask;
     private int pendingSyncId;
     private int barrier;
-    private int mainBarrier;
-    private long mainPendingUntil;
+    private final AckGate mainGate = new AckGate();
     private long pendingUntil;
     private int attempts;
     private boolean confirmed;
@@ -253,7 +253,7 @@ public class AutoTotem extends Module {
     private void reset() {
         gapple = false;
         mainMissing = 0;
-        mainPendingUntil = 0;
+        mainGate.reset();
         clearPending();
         attempts = 0;
         confirmed = false;
@@ -324,7 +324,7 @@ public class AutoTotem extends Module {
     private void onPacket(PacketApplyEvent.Post event) {
         if (!canAct()) return;
 
-        if (mainPendingUntil != 0 && event.packet instanceof PlayerActionResponseS2CPacket packet && packet.sequence() >= mainBarrier) mainPendingUntil = 0;
+        if (event.packet instanceof PlayerActionResponseS2CPacket packet) mainGate.ack(packet.sequence());
         switch (event.packet) {
             case EntityStatusS2CPacket packet when packet.getStatus() == EntityStatuses.USE_TOTEM_OF_UNDYING && packet.getEntity(mc.world) == mc.player -> onPop();
             case PlayerActionResponseS2CPacket packet when pending && packet.sequence() >= barrier -> onBarrier();
@@ -519,7 +519,8 @@ public class AutoTotem extends Module {
 
     private void updateGapple() {
         InventoryManager inventory = InventoryManager.get();
-        boolean mainTotem = isTotem(mc.player.getMainHandStack()) && Util.getMeasuringTimeMs() >= mainPendingUntil;
+        if (mainGate.expired(Util.getMeasuringTimeMs())) awaitMain();
+        boolean mainTotem = isTotem(mc.player.getMainHandStack()) && mainGate.open();
 
         if (gapple) {
             mainMissing = mainTotem ? 0 : mainMissing + 1;
@@ -574,8 +575,7 @@ public class AutoTotem extends Module {
     }
 
     private void awaitMain() {
-        mainBarrier = InventoryManager.get().barrier();
-        mainPendingUntil = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
+        mainGate.await(InventoryManager.get().barrier(), Util.getMeasuringTimeMs(), LatencyManager.get().timeout());
     }
 
     private int gappleSource() {
