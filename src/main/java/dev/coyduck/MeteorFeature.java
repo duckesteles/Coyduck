@@ -19,6 +19,7 @@ import dev.coyduck.feature.StringListSetting;
 import dev.coyduck.feature.StringSetting;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.systems.modules.Module;
+import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.misc.Keybind;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import net.minecraft.nbt.NbtCompound;
@@ -51,6 +52,16 @@ public final class MeteorFeature extends Module implements Shell {
     public void onDeactivate() {
         MeteorClient.EVENT_BUS.unsubscribe(feature);
         feature.onDeactivate();
+    }
+
+    @Override
+    public void displace(String reason, String... rivals) {
+        for (String rival : rivals) {
+            Module module = Modules.get().get(rival);
+            if (module == null || module == this || !module.isActive()) continue;
+            module.toggle();
+            info("Disabled %s, %s", module.title, reason);
+        }
     }
 
     @Override
@@ -133,11 +144,6 @@ public final class MeteorFeature extends Module implements Shell {
             public int argb() {
                 return theirs.get().getPacked();
             }
-
-            @Override
-            public Object handle() {
-                return theirs.get();
-            }
         });
         return theirs;
     }
@@ -163,11 +169,6 @@ public final class MeteorFeature extends Module implements Shell {
             @Override
             public void reset() {
                 theirs.reset();
-            }
-
-            @Override
-            public Object handle() {
-                return theirs.get();
             }
         });
         return theirs;

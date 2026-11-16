@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.core.Core;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.TickEvent;
@@ -12,8 +13,6 @@ import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
-import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.systems.modules.world.Timer;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
@@ -214,7 +213,7 @@ public class HoleSnap extends Feature {
     @Override
     public void onDeactivate() {
         hole = null;
-        Modules.get().get(Timer.class).setOverride(Timer.OFF);
+        Core.host().timer(1);
     }
 
     @EventHandler
@@ -249,7 +248,7 @@ public class HoleSnap extends Feature {
             return;
         }
 
-        Modules.get().get(Timer.class).setOverride(timer.get());
+        Core.host().timer(timer.get());
 
         double distance = Math.sqrt(dx * dx + dz * dz);
         double step = Math.min(boostLeft-- > 0 ? boostSpeed.get() : speed.get(), distance);

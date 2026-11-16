@@ -1,6 +1,7 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.MeteorColors;
+import dev.coyduck.core.Core;
+import dev.coyduck.events.RenderScreenEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.ColorSetting;
@@ -13,9 +14,6 @@ import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.utils.ShaderGlow;
 import meteordevelopment.meteorclient.MeteorClient;
-import meteordevelopment.meteorclient.events.render.Render2DEvent;
-import meteordevelopment.meteorclient.systems.friends.Friends;
-import meteordevelopment.meteorclient.utils.player.PlayerUtils;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.render.entity.state.EntityRenderState;
@@ -46,7 +44,7 @@ public class Esp extends Feature implements ShaderGlow.Source {
         .build()
     );
 
-    private final Setting<Rgba> outlineColor = sgOutline.add(new ColorSetting.Builder()
+    private final ColorSetting outlineColor = sgOutline.add(new ColorSetting.Builder()
         .name("players-color")
         .description("Color for players without a name color.")
         .defaultValue(new Rgba(255, 255, 255, 255))
@@ -139,17 +137,15 @@ public class Esp extends Feature implements ShaderGlow.Source {
     }
 
     @Override
-    public Color maskColor() {
-        Color color = MeteorColors.of(outlineColor);
-        return new Color(color.r, color.g, color.b, 255);
+    public int maskColor() {
+        return outlineColor.argb() | 0xFF000000;
     }
 
     @Override
-    public Color color(EntityRenderState state) {
+    public int color(EntityRenderState state) {
         if (!nameColor.get() || !(state instanceof PlayerEntityRenderState player) || mc.world == null) return maskColor();
         if (!(mc.world.getEntityById(player.id) instanceof PlayerEntity entity)) return maskColor();
-        Color color = PlayerUtils.getPlayerColor(entity, MeteorColors.of(outlineColor));
-        return new Color(color.r, color.g, color.b, 255);
+        return Core.host().playerColor(entity, outlineColor.argb()) | 0xFF000000;
     }
 
     @Override
@@ -168,15 +164,17 @@ public class Esp extends Feature implements ShaderGlow.Source {
     }
 
     @EventHandler
-    private void onRender2D(Render2DEvent event) {
-        if (outline.get()) ShaderGlow.esp().render();
+    private void onRender2D(RenderScreenEvent event) {
+        if (!outline.get()) return;
+        event.overlay.flush();
+        ShaderGlow.esp().render();
     }
 
     public static boolean shows(Entity entity) {
         if (!(entity instanceof PlayerEntity player) || player == MeteorClient.mc.player) return false;
         Esp module = Features.get(Esp.class);
         if (module == null || !module.isActive() || !module.fullBody.get() && !module.outline.get()) return false;
-        if (!module.friends.get() && Friends.get().isFriend(player)) return false;
+        if (!module.friends.get() && Core.host().isFriend(player)) return false;
         return module.invisible.get() || !player.isInvisible();
     }
 

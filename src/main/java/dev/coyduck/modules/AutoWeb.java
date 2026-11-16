@@ -20,8 +20,6 @@ import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -124,11 +122,7 @@ public class AutoWeb extends Feature {
 
     @Override
     public void onActivate() {
-        Module meteor = Modules.get().get(meteordevelopment.meteorclient.systems.modules.combat.AutoWeb.class);
-        if (meteor != null && meteor.isActive()) {
-            meteor.toggle();
-            info("Disabled %s, it webs the same target.", meteor.title);
-        }
+        displace("it webs the same target.", "auto-web");
 
         reset();
         budget = websPerTick.get();

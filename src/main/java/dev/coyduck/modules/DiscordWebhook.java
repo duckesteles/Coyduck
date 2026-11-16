@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.core.Core;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
@@ -12,7 +13,6 @@ import dev.coyduck.feature.StringSetting;
 import dev.coyduck.managers.FightTracker;
 import dev.coyduck.managers.PopTracker;
 import meteordevelopment.meteorclient.events.game.ReceiveMessageEvent;
-import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.EntityStatuses;
 import net.minecraft.entity.player.PlayerEntity;
@@ -151,7 +151,7 @@ public class DiscordWebhook extends Feature {
             if (players.get()) {
                 Set<UUID> now = new HashSet<>();
                 for (PlayerEntity player : mc.world.getPlayers()) {
-                    if (player == mc.player || Friends.get().isFriend(player)) continue;
+                    if (player == mc.player || Core.host().isFriend(player)) continue;
                     now.add(player.getUuid());
                     if (!inView.contains(player.getUuid())) send(true, "Player in view", player.getName().getString() + " came into view.", BLUE);
                 }
@@ -181,7 +181,7 @@ public class DiscordWebhook extends Feature {
             if (died && death.get()) send(true, "Death", "You died.", RED);
             return;
         }
-        if (Friends.get().isFriend(player) || !FightTracker.get().engaged(player)) return;
+        if (Core.host().isFriend(player) || !FightTracker.get().engaged(player)) return;
         String name = player.getName().getString();
         int count = PopTracker.get().pops(player);
         if (pop && enemyPops.get()) send(false, "Enemy pop", name + " popped " + times(Math.max(1, count)) + ".", PURPLE);

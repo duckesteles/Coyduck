@@ -95,6 +95,7 @@ public class Coyduck extends MeteorAddon {
         MeteorClient.EVENT_BUS.subscribe(ConfigSaver.get());
         Core.start(MeteorClient.EVENT_BUS, new MeteorHost());
         MeteorClient.EVENT_BUS.subscribe(MeteorCanvas.BRIDGE);
+        MeteorClient.EVENT_BUS.subscribe(MeteorOverlay.BRIDGE);
 
         add(new AutoTotem());
         add(new Surround());

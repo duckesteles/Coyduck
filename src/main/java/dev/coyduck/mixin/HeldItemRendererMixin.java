@@ -24,7 +24,7 @@ public abstract class HeldItemRendererMixin {
 
         ShaderGlow shader = ShaderGlow.get();
         shader.submitVertices(() -> {
-            original.call(tickDelta, matrices, new HandQueue(queue, module.maskColor().getPacked()), player, light);
+            original.call(tickDelta, matrices, new HandQueue(queue, module.maskColor()), player, light);
             shader.vertexConsumerProvider.draw();
         });
     }

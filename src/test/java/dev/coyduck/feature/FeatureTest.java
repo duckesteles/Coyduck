@@ -219,12 +219,12 @@ class FeatureTest {
     void colorsStayInByteRange() {
         ColorSetting color = new ColorSetting.Builder().name("color").defaultValue(new Rgba(185, 74, 230, 200)).build();
         assertEquals(new Rgba(185, 74, 230, 200, false), color.get());
+        assertEquals(0xC8B94AE6, color.argb());
         assertFalse(color.set(new Rgba(256, 0, 0, 255)));
         assertFalse(color.set(new Rgba(0, 0, 0, -1)));
         assertTrue(color.set(new Rgba(0, 0, 0, 0, true)));
         assertTrue(color.get().rainbow());
         assertEquals(0xC8B94AE6, new Rgba(185, 74, 230, 200).packed());
-        assertNull(color.handle());
     }
 
     @Test

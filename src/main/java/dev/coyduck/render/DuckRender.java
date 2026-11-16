@@ -41,6 +41,14 @@ public final class DuckRender {
         if (mode.lines()) canvas.boxLines(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ, Argb.shade(line, 0, 1, alpha));
     }
 
+    public static void label(Overlay overlay, Vec3d at, String text, int argb, double alpha) {
+        if (at == null || alpha <= 0.01 || !overlay.project(at.x, at.y, at.z, 1.0)) return;
+        double width = overlay.textWidth(text, false);
+        double height = overlay.textHeight(false);
+        overlay.text(text, -width / 2, -height / 2, Argb.alpha(argb, (int) (Argb.a(argb) * alpha)), true);
+        overlay.unproject();
+    }
+
     public static int progress(double t, int alphaOf) {
         int alpha = Argb.a(alphaOf);
         return Argb.lerp(Argb.alpha(PROGRESS_START, alpha), Argb.alpha(PROGRESS_END, alpha), t);

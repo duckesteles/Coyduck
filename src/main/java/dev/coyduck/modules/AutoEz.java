@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.core.Core;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
@@ -12,7 +13,6 @@ import dev.coyduck.feature.StringListSetting;
 import dev.coyduck.feature.StringSetting;
 import dev.coyduck.managers.FightTracker;
 import dev.coyduck.managers.PopTracker;
-import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.EntityStatuses;
 import net.minecraft.entity.player.PlayerEntity;
@@ -143,7 +143,7 @@ public class AutoEz extends Feature {
         if (!(event.packet instanceof EntityStatusS2CPacket packet) || mc.world == null || mc.player == null) return;
         boolean pop = packet.getStatus() == EntityStatuses.USE_TOTEM_OF_UNDYING;
         if (!pop && packet.getStatus() != EntityStatuses.PLAY_DEATH_SOUND_OR_ADD_PROJECTILE_HIT_PARTICLES) return;
-        if (!(packet.getEntity(mc.world) instanceof PlayerEntity player) || player == mc.player || Friends.get().isFriend(player)) return;
+        if (!(packet.getEntity(mc.world) instanceof PlayerEntity player) || player == mc.player || Core.host().isFriend(player)) return;
 
         boolean fought = FightTracker.get().engaged(player);
         if (pop) {

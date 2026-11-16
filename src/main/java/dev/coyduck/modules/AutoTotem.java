@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.core.Core;
 import dev.coyduck.events.EntityAddedEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.PacketEvent;
@@ -19,10 +20,6 @@ import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Trace;
-import meteordevelopment.meteorclient.systems.friends.Friends;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.systems.modules.combat.Offhand;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.component.DataComponentTypes;
@@ -47,7 +44,6 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.Arrays;
-import java.util.List;
 
 public class AutoTotem extends Feature {
     public enum Mainhand {
@@ -781,7 +777,7 @@ public class AutoTotem extends Feature {
         boolean hurt = hp <= health.get() || now - lastHurtAt < HURT_WINDOW;
         double enemyRange = combatRange.get() * combatRange.get();
         for (PlayerEntity player : mc.world.getPlayers()) {
-            if (player == mc.player || !player.isAlive() || Friends.get().isFriend(player) || ExplosionDamage.isInvulnerable(player)) continue;
+            if (player == mc.player || !player.isAlive() || Core.host().isFriend(player) || ExplosionDamage.isInvulnerable(player)) continue;
             if (hurt && player.squaredDistanceTo(mc.player) <= enemyRange) return true;
             if (diver(player, enemyRange)) return true;
         }
@@ -805,13 +801,7 @@ public class AutoTotem extends Feature {
     }
 
     private void disableConflicts() {
-        for (Class<? extends Module> conflict : List.of(meteordevelopment.meteorclient.systems.modules.combat.AutoTotem.class, Offhand.class)) {
-            Module module = Modules.get().get(conflict);
-            if (module != null && module.isActive()) {
-                module.toggle();
-                info("Disabled %s, it fights over the offhand.", module.title);
-            }
-        }
+        displace("it fights over the offhand.", "auto-totem", "offhand");
     }
 
     private void clearPending() {

@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.core.Core;
 import dev.coyduck.events.EntityAddedEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.RenderWorldEvent;
@@ -36,9 +37,6 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
-import meteordevelopment.meteorclient.systems.friends.Friends;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
@@ -351,11 +349,7 @@ public class Surround extends Feature {
 
     @Override
     public void onActivate() {
-        Module meteor = Modules.get().get(meteordevelopment.meteorclient.systems.modules.combat.Surround.class);
-        if (meteor != null && meteor.isActive()) {
-            meteor.toggle();
-            info("Disabled %s, it places over the same blocks.", meteor.title);
-        }
+        displace("it places over the same blocks.", "surround");
 
         rendered.clear();
         cellStatus.clear();
@@ -877,7 +871,7 @@ public class Surround extends Feature {
         if (mc.world.getRegistryKey() == World.NETHER || mc.world.getDimensionEntry().matchesKey(DimensionTypes.THE_NETHER)) return false;
         long now = Util.getMeasuringTimeMs();
         for (PlayerEntity player : mc.world.getPlayers()) {
-            if (player == mc.player || !player.isAlive() || Friends.get().isFriend(player) || player.squaredDistanceTo(mc.player) > FACE_ENEMY_RANGE * FACE_ENEMY_RANGE) continue;
+            if (player == mc.player || !player.isAlive() || Core.host().isFriend(player) || player.squaredDistanceTo(mc.player) > FACE_ENEMY_RANGE * FACE_ENEMY_RANGE) continue;
             if (holdsAnchorGear(player.getMainHandStack()) || holdsAnchorGear(player.getOffHandStack())) anchorSeen.put(player.getId(), now + ANCHOR_MEMORY);
         }
         if (!anchorSeen.isEmpty()) anchorSeen.int2LongEntrySet().removeIf(entry -> entry.getLongValue() <= now);
@@ -916,7 +910,7 @@ public class Surround extends Feature {
 
     private boolean scanMaceAbove() {
         for (PlayerEntity player : mc.world.getPlayers()) {
-            if (player == mc.player || !player.isAlive() || player.isSpectator() || Friends.get().isFriend(player)) continue;
+            if (player == mc.player || !player.isAlive() || player.isSpectator() || Core.host().isFriend(player)) continue;
             double dy = player.getY() - mc.player.getY();
             if (dy < MACE_MIN_HEIGHT || dy > MACE_MAX_HEIGHT) continue;
             double dx = player.getX() - mc.player.getX();
@@ -969,7 +963,7 @@ public class Surround extends Feature {
     private boolean isThreatened(BlockPos pos) {
         MiningTracker mining = MiningTracker.get();
         if (mining.stage(pos) >= 0 || mining.wasBroken(pos, HOT_TIME)) return true;
-        return !mc.world.getOtherEntities(mc.player, new Box(pos), entity -> entity instanceof PlayerEntity player && !Friends.get().isFriend(player)).isEmpty();
+        return !mc.world.getOtherEntities(mc.player, new Box(pos), entity -> entity instanceof PlayerEntity player && !Core.host().isFriend(player)).isEmpty();
     }
 
     private boolean updateAnchor() {

@@ -15,6 +15,6 @@ public abstract class SkyRenderingMixin {
     @Inject(method = "updateRenderState", at = @At("TAIL"))
     private void coyduck$skyColor(ClientWorld world, float tickProgress, Camera camera, SkyRenderState state, CallbackInfo info) {
         Shaders module = Shaders.atmosphere();
-        if (module != null) state.skyColor = module.maskColor().getPacked();
+        if (module != null) state.skyColor = module.maskColor();
     }
 }

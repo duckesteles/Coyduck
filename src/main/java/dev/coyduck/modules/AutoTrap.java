@@ -24,8 +24,6 @@ import dev.coyduck.render.Shape;
 import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
@@ -175,11 +173,7 @@ public class AutoTrap extends Feature {
 
     @Override
     public void onActivate() {
-        Module meteor = Modules.get().get(meteordevelopment.meteorclient.systems.modules.combat.AutoTrap.class);
-        if (meteor != null && meteor.isActive()) {
-            meteor.toggle();
-            info("Disabled %s, it places over the same blocks.", meteor.title);
-        }
+        displace("it places over the same blocks.", "auto-trap");
 
         reset();
         budget = blocksPerTick.get();

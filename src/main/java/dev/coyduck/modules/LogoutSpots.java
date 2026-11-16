@@ -1,7 +1,9 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.core.Core;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.RenderScreenEvent;
 import dev.coyduck.events.RenderWorldEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
@@ -13,28 +15,19 @@ import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.Rgba;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
-import dev.coyduck.hud.CoyHud;
 import dev.coyduck.managers.PopTracker;
 import dev.coyduck.render.Argb;
 import dev.coyduck.render.DuckRender;
+import dev.coyduck.render.Overlay;
 import dev.coyduck.render.Palette;
 import dev.coyduck.render.Shape;
-import meteordevelopment.meteorclient.events.render.Render2DEvent;
-import meteordevelopment.meteorclient.renderer.Renderer2D;
-import meteordevelopment.meteorclient.renderer.text.TextRenderer;
-import meteordevelopment.meteorclient.systems.config.Config;
-import meteordevelopment.meteorclient.systems.friends.Friends;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.utils.render.NametagUtils;
-import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.packet.s2c.play.PlayerListS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerRemoveS2CPacket;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.Box;
-import org.joml.Vector3d;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.HashMap;
 import java.util.Locale;
@@ -88,8 +81,6 @@ public class LogoutSpots extends Feature {
 
     private final Map<UUID, Seen> seen = new HashMap<>();
     private final Map<UUID, Spot> spots = new HashMap<>();
-    private final Vector3d pos = new Vector3d();
-    private final Color background = new Color();
 
     public LogoutSpots() {
         super("logout-spots+", "Marks where players logged out.");
@@ -97,11 +88,7 @@ public class LogoutSpots extends Feature {
 
     @Override
     public void onActivate() {
-        Module meteor = Modules.get().get(meteordevelopment.meteorclient.systems.modules.render.LogoutSpots.class);
-        if (meteor != null && meteor.isActive()) {
-            meteor.toggle();
-            info("Disabled %s, it marks the same spots.", meteor.title);
-        }
+        displace("it marks the same spots.", "logout-spots");
         seen.clear();
         spots.clear();
     }
@@ -111,7 +98,7 @@ public class LogoutSpots extends Feature {
         if (mc.world == null || mc.player == null) return;
         seen.clear();
         for (PlayerEntity player : mc.world.getPlayers()) {
-            if (player == mc.player || !friends.get() && Friends.get().isFriend(player)) continue;
+            if (player == mc.player || !friends.get() && Core.host().isFriend(player)) continue;
             seen.put(player.getUuid(), new Seen(player.getName().getString(), player.getBoundingBox(), player.getHealth() + player.getAbsorptionAmount(), PopTracker.get().pops(player)));
         }
         if (keep.get() > 0) {
@@ -146,35 +133,27 @@ public class LogoutSpots extends Feature {
     }
 
     @EventHandler
-    private void onRender2D(Render2DEvent event) {
+    private void onRender2D(RenderScreenEvent event) {
         if (spots.isEmpty()) return;
-        boolean shadow = Config.get().customFont.get();
-        TextRenderer text = TextRenderer.get();
-        background.set(CoyHud.color(Palette.BACKGROUND));
+        Overlay overlay = event.overlay;
+        boolean shadow = overlay.customFont();
         long now = Util.getMeasuringTimeMs();
         for (Spot spot : spots.values()) {
-            pos.set(spot.box.getCenter().x, spot.box.maxY + 0.5, spot.box.getCenter().z);
-            if (!NametagUtils.to2D(pos, scale.get())) continue;
-            NametagUtils.begin(pos, event.drawContext);
+            Vec3d center = spot.box.getCenter();
+            if (!overlay.project(center.x, spot.box.maxY + 0.5, center.z, scale.get())) continue;
             String name = spot.name;
             String hp = " " + Math.round(spot.health);
             String pops = spot.pops > 0 ? " -" + spot.pops : "";
             String ago = " " + age(now - spot.at);
-            text.beginBig();
-            double width = text.getWidth(name + hp + pops + ago, shadow);
-            double height = text.getHeight(shadow);
-            text.end();
-            Renderer2D.COLOR.begin();
-            Renderer2D.COLOR.quad(-width / 2 - 3, -height - 3, width + 6, height + 6, background);
-            Renderer2D.COLOR.render();
-            text.beginBig();
+            double width = overlay.textWidth(name + hp + pops + ago, shadow);
+            double height = overlay.textHeight(shadow);
+            overlay.rect(-width / 2 - 3, -height - 3, width + 6, height + 6, Palette.BACKGROUND);
             double x = -width / 2;
-            x = text.render(name, x, -height, CoyHud.color(Palette.TEXT), shadow);
-            x = text.render(hp, x, -height, CoyHud.color(Palette.health(Math.min(1, spot.health / 20))), shadow);
-            if (!pops.isEmpty()) x = text.render(pops, x, -height, CoyHud.color(Palette.WARN), shadow);
-            text.render(ago, x, -height, CoyHud.color(Palette.SUBTLE), shadow);
-            text.end();
-            NametagUtils.end(event.drawContext);
+            x = overlay.text(name, x, -height, Palette.TEXT, shadow);
+            x = overlay.text(hp, x, -height, Palette.health(Math.min(1, spot.health / 20)), shadow);
+            if (!pops.isEmpty()) x = overlay.text(pops, x, -height, Palette.WARN, shadow);
+            overlay.text(ago, x, -height, Palette.SUBTLE, shadow);
+            overlay.unproject();
         }
     }
 

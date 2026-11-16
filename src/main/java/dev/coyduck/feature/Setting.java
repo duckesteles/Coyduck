@@ -11,10 +11,6 @@ public abstract sealed class Setting<T> permits BoolSetting, IntSetting, DoubleS
         boolean set(T value);
 
         void reset();
-
-        default Object handle() {
-            return null;
-        }
     }
 
     public final String name;
@@ -65,10 +61,6 @@ public abstract sealed class Setting<T> permits BoolSetting, IntSetting, DoubleS
 
     public Consumer<T> onChanged() {
         return onChanged;
-    }
-
-    public Object handle() {
-        return backend == null ? null : backend.handle();
     }
 
     protected final Backend<T> backend() {

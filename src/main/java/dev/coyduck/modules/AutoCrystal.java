@@ -1,9 +1,11 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.core.Clock;
+import dev.coyduck.core.Core;
 import dev.coyduck.events.EntityAddedEvent;
 import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.RenderScreenEvent;
 import dev.coyduck.events.RenderWorldEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
@@ -36,7 +38,6 @@ import dev.coyduck.managers.RotationManager;
 import dev.coyduck.render.DuckRender;
 import dev.coyduck.render.Shape;
 import dev.coyduck.utils.ExplosionDamage;
-import dev.coyduck.utils.Labels;
 import dev.coyduck.utils.Targets;
 import dev.coyduck.utils.Trace;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
@@ -46,13 +47,8 @@ import it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.world.BlockUpdateEvent;
 import meteordevelopment.meteorclient.events.world.ChunkDataEvent;
-import meteordevelopment.meteorclient.systems.friends.Friends;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.systems.modules.combat.CrystalAura;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -535,11 +531,7 @@ public class AutoCrystal extends Feature {
 
     @Override
     public void onActivate() {
-        Module meteor = Modules.get().get(CrystalAura.class);
-        if (meteor != null && meteor.isActive()) {
-            meteor.toggle();
-            info("Disabled %s, it fights over the same crystals.", meteor.title);
-        }
+        displace("it fights over the same crystals.", "crystal-aura");
 
         placeBudget = placesPerTick.get();
         gapBudget = GAP_PLACES;
@@ -742,9 +734,9 @@ public class AutoCrystal extends Feature {
     }
 
     @EventHandler
-    private void onRender2D(Render2DEvent event) {
+    private void onRender2D(RenderScreenEvent event) {
         if (!render.get() || !damageText.get() || renderDamage <= 0) return;
-        Labels.damage(slide.center(), String.format("%.1f", renderDamage), 0xFFFFFFFF, slide.alpha());
+        DuckRender.label(event.overlay, slide.center(), String.format("%.1f", renderDamage), 0xFFFFFFFF, slide.alpha());
     }
 
     @EventHandler
@@ -800,7 +792,7 @@ public class AutoCrystal extends Feature {
         friends.clear();
         double range = Math.max(breakRange.get(), placeRange.get()) + 2 + ExplosionDamage.CRYSTAL_RANGE;
         for (PlayerEntity player : mc.world.getPlayers()) {
-            if (player != mc.player && player.squaredDistanceTo(mc.player) <= range * range && Friends.get().isFriend(player)) friends.add(player);
+            if (player != mc.player && player.squaredDistanceTo(mc.player) <= range * range && Core.host().isFriend(player)) friends.add(player);
         }
 
         Box area = box.expand(Math.max(breakRange.get(), placeRange.get()) + ExplosionDamage.CRYSTAL_RANGE + 1);
@@ -1398,7 +1390,7 @@ public class AutoCrystal extends Feature {
 
         double friendRange = ExplosionDamage.CRYSTAL_RANGE * ExplosionDamage.CRYSTAL_RANGE;
         for (PlayerEntity player : mc.world.getPlayers()) {
-            if (player != mc.player && Friends.get().isFriend(player) && player.squaredDistanceTo(mc.player) <= friendRange) return false;
+            if (player != mc.player && Core.host().isFriend(player) && player.squaredDistanceTo(mc.player) <= friendRange) return false;
         }
 
         float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
@@ -1527,7 +1519,7 @@ public class AutoCrystal extends Feature {
         int ticks = predictTicks();
 
         for (PlayerEntity player : mc.world.getPlayers()) {
-            if (player == mc.player || !player.isAlive() || Friends.get().isFriend(player)) continue;
+            if (player == mc.player || !player.isAlive() || Core.host().isFriend(player)) continue;
             if (ExplosionDamage.isInvulnerable(player) || player.squaredDistanceTo(mc.player) > range) continue;
             targets.add(makeTarget(player, ticks));
         }

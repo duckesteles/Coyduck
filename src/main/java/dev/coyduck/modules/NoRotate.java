@@ -7,8 +7,6 @@ import dev.coyduck.feature.Features;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.utils.Trace;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
@@ -48,11 +46,7 @@ public class NoRotate extends Feature {
 
     @Override
     public void onActivate() {
-        Module meteor = Modules.get().get(meteordevelopment.meteorclient.systems.modules.player.NoRotate.class);
-        if (meteor != null && meteor.isActive()) {
-            meteor.toggle();
-            info("Disabled %s, it handles the same packets.", meteor.title);
-        }
+        displace("it handles the same packets.", "no-rotate");
         frozen = false;
     }
 

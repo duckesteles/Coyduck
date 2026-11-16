@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.core.Core;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.RenderWorldEvent;
@@ -22,7 +23,6 @@ import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.world.ChunkDataEvent;
-import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.orbit.EventHandler;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
@@ -490,7 +490,7 @@ public class ElytraPilot extends Feature {
 
     private PlayerEntity stranger(double range) {
         for (PlayerEntity player : mc.world.getPlayers()) {
-            if (player == mc.player || Friends.get().isFriend(player) || !player.isAlive()) continue;
+            if (player == mc.player || Core.host().isFriend(player) || !player.isAlive()) continue;
             if (player.distanceTo(mc.player) <= range) return player;
         }
         return null;

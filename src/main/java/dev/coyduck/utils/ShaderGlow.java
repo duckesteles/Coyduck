@@ -6,6 +6,7 @@ import com.mojang.blaze3d.platform.DepthTestFunction;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.coyduck.modules.Esp;
 import dev.coyduck.modules.Shaders;
+import dev.coyduck.render.Argb;
 import meteordevelopment.meteorclient.mixininterface.IWorldRenderer;
 import meteordevelopment.meteorclient.renderer.ExtendedRenderPipelineBuilder;
 import meteordevelopment.meteorclient.renderer.MeshRenderer;
@@ -52,9 +53,9 @@ public final class ShaderGlow extends EntityShader {
 
         boolean shows(EntityRenderState state);
 
-        Color maskColor();
+        int maskColor();
 
-        default Color color(EntityRenderState state) {
+        default int color(EntityRenderState state) {
             return maskColor();
         }
 
@@ -69,6 +70,7 @@ public final class ShaderGlow extends EntityShader {
     private static ShaderGlow espInstance;
 
     private final OutlineRenderCommandQueue queue = new OutlineRenderCommandQueue();
+    private final Color tint = new Color();
     private final Supplier<Source> source;
     private RenderDispatcher dispatcher;
 
@@ -126,14 +128,14 @@ public final class ShaderGlow extends EntityShader {
                 NoopOutlineVertexConsumerProvider.INSTANCE, NoopImmediateVertexConsumerProvider.INSTANCE, mc.textRenderer);
         }
 
-        queue.setColor(module.maskColor());
+        queue.setColor(meteor(module.maskColor()));
         EntityRenderManager manager = mc.getEntityRenderDispatcher();
         Vec3d camera = world.cameraRenderState.pos;
         boolean empty = true;
 
         for (EntityRenderState state : world.entityRenderStates) {
             if (!module.shows(state)) continue;
-            queue.setColor(module.color(state));
+            queue.setColor(meteor(module.color(state)));
 
             var renderer = manager.getRenderer(state);
             Vec3d offset = renderer.getPositionOffset(state);
@@ -151,5 +153,13 @@ public final class ShaderGlow extends EntityShader {
         dispatcher.render();
         queue.onNextFrame();
         target.meteor$popEntityOutlineFramebuffer();
+    }
+
+    private Color meteor(int argb) {
+        tint.r = Argb.r(argb);
+        tint.g = Argb.g(argb);
+        tint.b = Argb.b(argb);
+        tint.a = Argb.a(argb);
+        return tint;
     }
 }

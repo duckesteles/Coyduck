@@ -1,6 +1,6 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.MeteorColors;
+import dev.coyduck.events.RenderScreenEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.ColorSetting;
 import dev.coyduck.feature.DoubleSetting;
@@ -12,8 +12,6 @@ import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.render.Argb;
 import dev.coyduck.utils.ShaderGlow;
-import meteordevelopment.meteorclient.events.render.Render2DEvent;
-import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.render.entity.state.EndCrystalEntityRenderState;
 import net.minecraft.client.render.entity.state.EntityRenderState;
@@ -198,9 +196,8 @@ public class Shaders extends Feature implements ShaderGlow.Source {
     }
 
     @Override
-    public Color maskColor() {
-        Color global = MeteorColors.of(color);
-        return new Color(global.r, global.g, global.b, 255);
+    public int maskColor() {
+        return color.argb() | 0xFF000000;
     }
 
     @Override
@@ -219,7 +216,8 @@ public class Shaders extends Feature implements ShaderGlow.Source {
     }
 
     @EventHandler
-    private void onRender2D(Render2DEvent event) {
+    private void onRender2D(RenderScreenEvent event) {
+        event.overlay.flush();
         ShaderGlow.get().render();
     }
 }

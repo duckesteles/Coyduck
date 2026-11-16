@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.core.Core;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
@@ -19,9 +20,6 @@ import dev.coyduck.utils.Trace;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.systems.modules.player.ChestSwap;
 import meteordevelopment.meteorclient.utils.player.FindItemResult;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.orbit.EventHandler;
@@ -504,11 +502,7 @@ public class ElytraFly extends Feature {
 
     @Override
     public void onActivate() {
-        Module meteor = Modules.get().get(meteordevelopment.meteorclient.systems.modules.movement.elytrafly.ElytraFly.class);
-        if (meteor != null && meteor.isActive()) {
-            meteor.toggle();
-            info("Disabled %s, it controls the same flight.", meteor.title);
-        }
+        displace("it controls the same flight.", "elytra-fly");
 
         afterwards.stop();
         fluidFlight = false;
@@ -967,8 +961,7 @@ public class ElytraFly extends Feature {
     }
 
     private void swapChest() {
-        ChestSwap swap = Modules.get().get(ChestSwap.class);
-        if (swap != null) swap.swap();
+        Core.host().swapChest();
     }
 
     private void useFirework() {

@@ -12,8 +12,6 @@ import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.RotationManager;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -116,11 +114,7 @@ public class SpeedPlus extends Feature {
 
     @Override
     public void onActivate() {
-        Module meteor = Modules.get().get(meteordevelopment.meteorclient.systems.modules.movement.speed.Speed.class);
-        if (meteor != null && meteor.isActive()) {
-            meteor.toggle();
-            info("Disabled %s, it moves you the same way.", meteor.title);
-        }
+        displace("it moves you the same way.", "speed");
         reset();
         liquidTicks = 0;
         pauseTicks = 0;

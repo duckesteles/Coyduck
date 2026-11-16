@@ -17,8 +17,6 @@ import dev.coyduck.managers.MiningManager;
 import dev.coyduck.render.DuckRender;
 import dev.coyduck.render.Shape;
 import meteordevelopment.meteorclient.events.entity.player.StartBreakingBlockEvent;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
@@ -108,11 +106,7 @@ public class PacketMinePlus extends Feature implements MiningManager.HidesMining
 
     @Override
     public void onActivate() {
-        Module meteor = Modules.get().get(meteordevelopment.meteorclient.systems.modules.world.PacketMine.class);
-        if (meteor != null && meteor.isActive()) {
-            meteor.toggle();
-            info("Disabled %s, it handles the same clicks.", meteor.title);
-        }
+        displace("it handles the same clicks.", "packet-mine");
         target = null;
         brokenAt = 0;
     }

@@ -65,4 +65,8 @@ public abstract class Feature {
     public final void error(String message, Object... args) {
         shell.error(message, args);
     }
+
+    protected final void displace(String reason, String... rivals) {
+        shell.displace(reason, rivals);
+    }
 }

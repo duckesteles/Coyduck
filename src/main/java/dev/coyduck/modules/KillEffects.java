@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.core.Core;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.DoubleSetting;
@@ -7,7 +8,6 @@ import dev.coyduck.feature.Feature;
 import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
-import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.client.sound.PositionedSoundInstance;
@@ -80,7 +80,7 @@ public class KillEffects extends Feature {
             kills = 0;
             return;
         }
-        if (!(packet.getEntity(mc.world) instanceof PlayerEntity player) || Friends.get().isFriend(player)) return;
+        if (!(packet.getEntity(mc.world) instanceof PlayerEntity player) || Core.host().isFriend(player)) return;
         if (player.squaredDistanceTo(mc.player) > range.get() * range.get()) return;
         if (onlyPopped.get() && PopCounter.pops(player) == 0) return;
 

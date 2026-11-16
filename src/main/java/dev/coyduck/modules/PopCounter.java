@@ -1,12 +1,12 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.core.Core;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.Feature;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.PopTracker;
-import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.utils.player.ChatUtils;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.EntityStatuses;
@@ -55,7 +55,7 @@ public class PopCounter extends Feature {
     private void onPacket(PacketApplyEvent.Pre event) {
         if (!(event.packet instanceof EntityStatusS2CPacket packet) || mc.world == null || mc.player == null) return;
         if (!(packet.getEntity(mc.world) instanceof PlayerEntity player) || player == mc.player) return;
-        if (!friends.get() && Friends.get().isFriend(player)) return;
+        if (!friends.get() && Core.host().isFriend(player)) return;
 
         String name = player.getName().getString();
         if (packet.getStatus() == EntityStatuses.USE_TOTEM_OF_UNDYING) {

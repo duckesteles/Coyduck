@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.core.Core;
 import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
@@ -15,7 +16,6 @@ import dev.coyduck.managers.MiningManager;
 import dev.coyduck.utils.Trace;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -139,7 +139,7 @@ public class AntiRegear extends Feature {
         double max = nearPlayer.get() * nearPlayer.get();
         Vec3d center = Vec3d.ofCenter(pos);
         for (PlayerEntity player : mc.world.getPlayers()) {
-            if (player == mc.player || Friends.get().isFriend(player) || !player.isAlive()) continue;
+            if (player == mc.player || Core.host().isFriend(player) || !player.isAlive()) continue;
             if (player.squaredDistanceTo(center) <= max) return true;
         }
         return false;

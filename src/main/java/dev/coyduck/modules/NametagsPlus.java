@@ -1,6 +1,7 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.MeteorColors;
+import dev.coyduck.core.Core;
+import dev.coyduck.events.RenderScreenEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.ColorSetting;
 import dev.coyduck.feature.DoubleSetting;
@@ -11,21 +12,11 @@ import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.hud.CoyHud;
 import dev.coyduck.mixin.PlayerLikeEntityAccessor;
+import dev.coyduck.render.Overlay;
 import dev.coyduck.render.Palette;
-import meteordevelopment.meteorclient.events.render.Render2DEvent;
-import meteordevelopment.meteorclient.renderer.Renderer2D;
-import meteordevelopment.meteorclient.renderer.text.TextRenderer;
-import meteordevelopment.meteorclient.systems.config.Config;
-import meteordevelopment.meteorclient.systems.friends.Friends;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.systems.modules.render.Nametags;
-import meteordevelopment.meteorclient.utils.Utils;
-import meteordevelopment.meteorclient.utils.render.NametagUtils;
-import meteordevelopment.meteorclient.utils.render.RenderUtils;
-import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.gl.RenderPipelines;
+import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.component.DataComponentTypes;
@@ -33,7 +24,7 @@ import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
-import org.joml.Vector3d;
+import net.minecraft.util.math.MathHelper;
 
 public class NametagsPlus extends Feature {
     public static final int MARK = 0x80;
@@ -123,7 +114,7 @@ public class NametagsPlus extends Feature {
         .build()
     );
 
-    private final Setting<Rgba> fill = sgGeneral.add(new ColorSetting.Builder()
+    private final ColorSetting fill = sgGeneral.add(new ColorSetting.Builder()
         .name("fill")
         .description("Tag background.")
         .defaultValue(new Rgba(15, 15, 20, 165))
@@ -139,14 +130,8 @@ public class NametagsPlus extends Feature {
         .build()
     );
 
-    private static final Color BAR_BACKGROUND = new Color(0, 0, 0, 200);
+    private static final int BAR_BACKGROUND = 0xC8000000;
 
-    private final Vector3d pos = new Vector3d();
-    private final Color line = new Color();
-    private final Color nameColor = new Color();
-    private final Color healthColor = new Color();
-    private final Color pingColor = new Color();
-    private final Color barColor = new Color();
     private final ItemStack[] shown = new ItemStack[ITEMS.length];
 
     public NametagsPlus() {
@@ -169,58 +154,54 @@ public class NametagsPlus extends Feature {
 
     @Override
     public void onActivate() {
-        Module meteor = Modules.get().get(Nametags.class);
-        if (meteor != null && meteor.isActive()) {
-            meteor.toggle();
-            info("Disabled %s, it draws the same tags.", meteor.title);
-        }
+        displace("it draws the same tags.", "nametags");
     }
 
     @EventHandler
-    private void onRender2D(Render2DEvent event) {
+    private void onRender2D(RenderScreenEvent event) {
         if (mc.world == null || mc.player == null) return;
-        boolean shadow = !background.get() || Config.get().customFont.get();
+        Overlay overlay = event.overlay;
+        boolean shadow = !background.get() || overlay.customFont();
         boolean thirdPerson = mc.options.getPerspective() != Perspective.FIRST_PERSON;
 
         for (PlayerEntity player : mc.world.getPlayers()) {
             if (!player.isAlive() || player.isInvisible() && !invisible.get()) continue;
             if (player == mc.player && (!self.get() || !thirdPerson)) continue;
 
-            Utils.set(pos, player, event.tickDelta);
-            pos.add(0, player.getEyeHeight(player.getPose()) + 0.5, 0);
-            if (!NametagUtils.to2D(pos, scale.get())) continue;
-            draw(event, player, shadow);
+            double x = MathHelper.lerp(event.tickDelta, player.lastRenderX, player.getX());
+            double y = MathHelper.lerp(event.tickDelta, player.lastRenderY, player.getY()) + player.getEyeHeight(player.getPose()) + 0.5;
+            double z = MathHelper.lerp(event.tickDelta, player.lastRenderZ, player.getZ());
+            if (!overlay.project(x, y, z, scale.get())) continue;
+            draw(overlay, player, shadow);
+            overlay.unproject();
         }
     }
 
-    private void draw(Render2DEvent event, PlayerEntity player, boolean shadow) {
-        TextRenderer text = TextRenderer.get();
-        NametagUtils.begin(pos, event.drawContext);
-
+    private void draw(Overlay overlay, PlayerEntity player, boolean shadow) {
         String name = player.getName().getString();
         String healthText = null;
         String pingText = null;
+        int healthColor = 0;
+        int pingColor = 0;
         if (health.get()) {
             float total = player.getHealth() + player.getAbsorptionAmount();
             healthText = " " + Math.round(total);
-            healthColor.set(CoyHud.color(Palette.health(Math.min(1, player.getHealth() / Math.max(1, player.getMaxHealth())))));
+            healthColor = Palette.health(Math.min(1, player.getHealth() / Math.max(1, player.getMaxHealth())));
         }
         if (ping.get() && mc.getNetworkHandler() != null) {
             PlayerListEntry entry = mc.getNetworkHandler().getPlayerListEntry(player.getUuid());
             if (entry != null && entry.getLatency() > 0) {
                 int latency = entry.getLatency();
                 pingText = " " + latency + "ms";
-                pingColor.set(CoyHud.color(latency > 250 ? Palette.BAD : latency > 150 ? Palette.WARN : Palette.SUBTLE));
+                pingColor = latency > 250 ? Palette.BAD : latency > 150 ? Palette.WARN : Palette.SUBTLE;
             }
         }
-        nameColor.set(CoyHud.color(Friends.get().isFriend(player) ? Palette.GOOD : Palette.TEXT));
+        int nameColor = Core.host().isFriend(player) ? Palette.GOOD : Palette.TEXT;
 
-        text.beginBig();
-        double height = text.getHeight(shadow);
-        double textWidth = text.getWidth(name, shadow);
-        if (healthText != null) textWidth += text.getWidth(healthText, shadow);
-        if (pingText != null) textWidth += text.getWidth(pingText, shadow);
-        text.end();
+        double height = overlay.textHeight(shadow);
+        double textWidth = overlay.textWidth(name, shadow);
+        if (healthText != null) textWidth += overlay.textWidth(healthText, shadow);
+        if (pingText != null) textWidth += overlay.textWidth(pingText, shadow);
 
         boolean duck = mascot.get() && usesCoyduck(player);
         double icon = duck ? height + PAD : 0;
@@ -230,41 +211,35 @@ public class NametagsPlus extends Feature {
         double left = -width / 2;
         double top = -height - bar;
 
-        Renderer2D.COLOR.begin();
-        if (background.get()) Renderer2D.COLOR.quad(left - PAD, top - PAD, width + PAD * 2, height + bar + PAD * 2, MeteorColors.of(fill));
+        if (background.get()) overlay.rect(left - PAD, top - PAD, width + PAD * 2, height + bar + PAD * 2, fill.argb());
         if (progress >= 0) {
             double barY = top + height + 1;
-            barColor.set(CoyHud.color(Palette.health(1 - progress)));
-            Renderer2D.COLOR.quad(left, barY, width, EAT_BAR, BAR_BACKGROUND);
-            Renderer2D.COLOR.quad(left, barY, width * progress, EAT_BAR, barColor);
+            overlay.rect(left, barY, width, EAT_BAR, BAR_BACKGROUND);
+            overlay.rect(left, barY, width * progress, EAT_BAR, Palette.health(1 - progress));
         }
         if (background.get() && outline.get()) {
-            line.set(CoyHud.color(CoyHud.accent()));
+            int line = CoyHud.accent();
             double x0 = left - PAD;
             double y0 = top - PAD;
             double w = width + PAD * 2;
             double h = height + bar + PAD * 2;
-            Renderer2D.COLOR.quad(x0, y0, w, 1, line);
-            Renderer2D.COLOR.quad(x0, y0 + h - 1, w, 1, line);
-            Renderer2D.COLOR.quad(x0, y0, 1, h, line);
-            Renderer2D.COLOR.quad(x0 + w - 1, y0, 1, h, line);
+            overlay.rect(x0, y0, w, 1, line);
+            overlay.rect(x0, y0 + h - 1, w, 1, line);
+            overlay.rect(x0, y0, 1, h, line);
+            overlay.rect(x0 + w - 1, y0, 1, h, line);
         }
-        Renderer2D.COLOR.render();
 
         if (duck) {
             int size = (int) Math.round(height);
-            event.drawContext.drawTexture(RenderPipelines.GUI_TEXTURED, MASCOT, (int) Math.round(left), (int) Math.round(top), 0, 0, size, size, size, size);
+            overlay.context().drawTexture(RenderPipelines.GUI_TEXTURED, MASCOT, (int) Math.round(left), (int) Math.round(top), 0, 0, size, size, size, size);
         }
 
-        text.beginBig();
         double x = left + icon;
-        x = text.render(name, x, top, nameColor, shadow);
-        if (healthText != null) x = text.render(healthText, x, top, healthColor, shadow);
-        if (pingText != null) text.render(pingText, x, top, pingColor, shadow);
-        text.end();
+        x = overlay.text(name, x, top, nameColor, shadow);
+        if (healthText != null) x = overlay.text(healthText, x, top, healthColor, shadow);
+        if (pingText != null) overlay.text(pingText, x, top, pingColor, shadow);
 
-        if (items.get()) drawItems(event, player, top - PAD - ROW_GAP);
-        NametagUtils.end(event.drawContext);
+        if (items.get()) drawItems(overlay, player, top - PAD - ROW_GAP);
     }
 
     private static double eatProgress(PlayerEntity player) {
@@ -276,7 +251,7 @@ public class NametagsPlus extends Feature {
         return Math.min(1, player.getItemUseTime() / (double) total);
     }
 
-    private void drawItems(Render2DEvent event, PlayerEntity player, double bottom) {
+    private void drawItems(Overlay overlay, PlayerEntity player, double bottom) {
         int count = 0;
         for (EquipmentSlot slot : ITEMS) {
             ItemStack stack = player.getEquippedStack(slot);
@@ -288,23 +263,24 @@ public class NametagsPlus extends Feature {
         double y = bottom - ITEM_SIZE - 3;
         double x = -total / 2;
         boolean bars = false;
+        DrawContext context = overlay.context();
+        context.getMatrices().pushMatrix();
+        context.getMatrices().scale(2, 2);
         for (int i = 0; i < count; i++) {
-            RenderUtils.drawItem(event.drawContext, shown[i], (int) Math.round(x + i * (ITEM_SIZE + ITEM_SPACING)), (int) Math.round(y), 2, false, null, false);
+            context.drawItem(shown[i], (int) Math.round(x + i * (ITEM_SIZE + ITEM_SPACING)) / 2, (int) Math.round(y) / 2);
             bars |= shown[i].isDamageable();
         }
+        context.getMatrices().popMatrix();
         if (bars) {
-            Renderer2D.COLOR.begin();
             for (int i = 0; i < count; i++) {
                 ItemStack stack = shown[i];
                 if (!stack.isDamageable()) continue;
                 double left = 1 - (double) stack.getDamage() / stack.getMaxDamage();
                 double bx = x + i * (ITEM_SIZE + ITEM_SPACING) + 3;
                 double by = y + ITEM_SIZE;
-                barColor.set(CoyHud.color(0xFF000000 | stack.getItemBarColor()));
-                Renderer2D.COLOR.quad(bx, by, ITEM_SIZE - 6, 3, BAR_BACKGROUND);
-                Renderer2D.COLOR.quad(bx, by, (ITEM_SIZE - 6) * left, 2, barColor);
+                overlay.rect(bx, by, ITEM_SIZE - 6, 3, BAR_BACKGROUND);
+                overlay.rect(bx, by, (ITEM_SIZE - 6) * left, 2, 0xFF000000 | stack.getItemBarColor());
             }
-            Renderer2D.COLOR.render();
         }
         for (int i = 0; i < count; i++) shown[i] = null;
     }

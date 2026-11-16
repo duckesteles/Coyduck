@@ -30,8 +30,6 @@ import dev.coyduck.utils.Targets;
 import dev.coyduck.utils.Trace;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.AbstractFireBlock;
@@ -272,11 +270,7 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
 
     @Override
     public void onActivate() {
-        Module meteor = Modules.get().get(meteordevelopment.meteorclient.systems.modules.combat.AutoCity.class);
-        if (meteor != null && meteor.isActive()) {
-            meteor.toggle();
-            info("Disabled %s, it mines the same blocks.", meteor.title);
-        }
+        displace("it mines the same blocks.", "auto-city");
 
         reset();
     }

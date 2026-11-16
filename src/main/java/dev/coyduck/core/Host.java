@@ -49,4 +49,12 @@ public interface Host {
     default int tint(int argb) {
         return argb;
     }
+
+    default int playerColor(PlayerEntity player, int fallback) {
+        return fallback;
+    }
+
+    default void timer(double multiplier) {}
+
+    default void swapChest() {}
 }

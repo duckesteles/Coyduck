@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.core.Core;
 import dev.coyduck.events.GameJoinedEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
@@ -14,11 +15,10 @@ import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Trace;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
-import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
@@ -34,8 +34,8 @@ import net.minecraft.registry.Registries;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 
@@ -858,6 +858,6 @@ public class ElytraEvade extends Feature {
     }
 
     private boolean enemy(PlayerEntity player) {
-        return player != mc.player && player.isAlive() && !player.isSpectator() && !Friends.get().isFriend(player);
+        return player != mc.player && player.isAlive() && !player.isSpectator() && !Core.host().isFriend(player);
     }
 }

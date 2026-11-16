@@ -14,4 +14,6 @@ public interface Shell {
     default void warning(String message, Object... args) {}
 
     default void error(String message, Object... args) {}
+
+    default void displace(String reason, String... rivals) {}
 }

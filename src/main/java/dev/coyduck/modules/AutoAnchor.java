@@ -1,7 +1,9 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.core.Core;
 import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.RenderScreenEvent;
 import dev.coyduck.events.RenderWorldEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
@@ -32,7 +34,6 @@ import dev.coyduck.managers.RotationManager;
 import dev.coyduck.render.DuckRender;
 import dev.coyduck.render.Shape;
 import dev.coyduck.utils.ExplosionDamage;
-import dev.coyduck.utils.Labels;
 import dev.coyduck.utils.PacketBatch;
 import dev.coyduck.utils.Targets;
 import dev.coyduck.utils.Trace;
@@ -40,11 +41,6 @@ import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import meteordevelopment.meteorclient.events.render.Render2DEvent;
-import meteordevelopment.meteorclient.systems.friends.Friends;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.systems.modules.combat.AnchorAura;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
@@ -347,11 +343,7 @@ public class AutoAnchor extends Feature {
 
     @Override
     public void onActivate() {
-        Module meteor = Modules.get().get(AnchorAura.class);
-        if (meteor != null && meteor.isActive()) {
-            meteor.toggle();
-            info("Disabled %s, it uses the same anchors.", meteor.title);
-        }
+        displace("it uses the same anchors.", "anchor-aura");
         reset();
     }
 
@@ -507,9 +499,9 @@ public class AutoAnchor extends Feature {
     }
 
     @EventHandler
-    private void onRender2D(Render2DEvent event) {
+    private void onRender2D(RenderScreenEvent event) {
         if (!render.get() || !damageText.get() || renderDamage <= 0) return;
-        Labels.damage(slide.center(), String.format("%.1f", renderDamage), 0xFFFFFFFF, slide.alpha());
+        DuckRender.label(event.overlay, slide.center(), String.format("%.1f", renderDamage), 0xFFFFFFFF, slide.alpha());
     }
 
     @EventHandler
@@ -900,7 +892,7 @@ public class AutoAnchor extends Feature {
     private boolean hurtsFriend(Vec3d center, BlockOverlay view, long arrival) {
         double range = (RANGE + 1) * (RANGE + 1);
         for (PlayerEntity player : mc.world.getPlayers()) {
-            if (player == mc.player || !player.isAlive() || !Friends.get().isFriend(player)) continue;
+            if (player == mc.player || !player.isAlive() || !Core.host().isFriend(player)) continue;
 
             Vec3d position = MotionTracker.get().position(player);
             if (position.squaredDistanceTo(center) > range) continue;
@@ -921,7 +913,7 @@ public class AutoAnchor extends Feature {
         int ticks = predict.get() ? Math.min(MathHelper.ceil(LatencyManager.get().rtt() / 50.0), MAX_PREDICT_TICKS) : 0;
 
         for (PlayerEntity player : mc.world.getPlayers()) {
-            if (player == mc.player || !player.isAlive() || Friends.get().isFriend(player)) continue;
+            if (player == mc.player || !player.isAlive() || Core.host().isFriend(player)) continue;
             if (ExplosionDamage.isInvulnerable(player) || player.squaredDistanceTo(mc.player) > range) continue;
 
             Box box = MotionTracker.get().predict(player, ticks);
