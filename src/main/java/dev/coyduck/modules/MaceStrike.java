@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.core.Core;
 import dev.coyduck.events.GameLeftEvent;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.block.Blocks;
@@ -32,11 +33,16 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerEntity;
 import meteordevelopment.meteorclient.utils.Utils;
 import meteordevelopment.meteorclient.utils.entity.DamageUtils;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.EquippableComponent;
 import net.minecraft.enchantment.Enchantments;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
@@ -54,6 +60,8 @@ import java.util.ArrayDeque;
 
 public class MaceStrike extends Module {
     private static final int PRIORITY = 85;
+    private static final int CHEST = PlayerInventory.MAIN_SIZE + EquipmentSlot.CHEST.getEntitySlotId();
+    private static final long ELYTRA_GRACE = 2_000;
     private static final float ROTATE_SPEED = 180.0f;
     private static final double MIN_DROP = 2.0;
     private static final double HEIGHT_STEP = 0.5;
@@ -119,6 +127,12 @@ public class MaceStrike extends Module {
         Burst
     }
 
+    public enum Unglide {
+        Armor,
+        Command,
+        Off
+    }
+
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgAir = settings.createGroup("Elytra");
 
@@ -179,10 +193,10 @@ public class MaceStrike extends Module {
         .build()
     );
 
-    private final Setting<Boolean> smash = sgGeneral.add(new BoolSetting.Builder()
-        .name("smash")
-        .description("Stops gliding for the hit, then glides again.")
-        .defaultValue(true)
+    private final Setting<Unglide> unglide = sgGeneral.add(new EnumSetting.Builder<Unglide>()
+        .name("unglide")
+        .description("How the hit stops gliding: a chestplate swap or a glide toggle.")
+        .defaultValue(Unglide.Armor)
         .build()
     );
 
@@ -190,7 +204,7 @@ public class MaceStrike extends Module {
         .name("stop-first")
         .description("Experimental. Stops gliding before the dive instead.")
         .defaultValue(false)
-        .visible(smash::get)
+        .visible(() -> unglide.get() == Unglide.Command)
         .build()
     );
 
@@ -362,6 +376,7 @@ public class MaceStrike extends Module {
         if (mc.world != null) {
             trackHeals();
             learn();
+            keepElytra();
         }
         if (phase != Phase.Idle) return;
         if (Util.getMeasuringTimeMs() < pausedUntil) return;
@@ -443,6 +458,7 @@ public class MaceStrike extends Module {
             return;
         }
         takeMace();
+        if (unglide.get() == Unglide.Armor) chestplateSlot();
         Vec3d now = target.getEntityPos();
         boolean fresh = lastTargetPos == null || lastTarget != target;
         Vec3d moved = fresh ? Vec3d.ZERO : now.subtract(lastTargetPos);
@@ -756,7 +772,7 @@ public class MaceStrike extends Module {
                     move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, false, collision));
                     return;
                 }
-                boolean stopped = smash.get() && stopFirst.get() && mc.player.isGliding();
+                boolean stopped = unglide.get() == Unglide.Command && stopFirst.get() && mc.player.isGliding();
                 if (stopped) glideCommand();
                 path(x, y, strikeY, z, collision);
                 strike(stopped);
@@ -816,13 +832,16 @@ public class MaceStrike extends Module {
             learnMixed = false;
         }
         Runnable hit = () -> {
-            boolean toggle = smash.get() && mc.player.isGliding() && !preStopped;
+            boolean gliding = mc.player.isGliding() && !preStopped;
+            int worn = gliding && unglide.get() == Unglide.Armor ? wearChestplate() : -1;
+            boolean toggle = gliding && worn == -1 && unglide.get() != Unglide.Off;
             boolean sprinting = mc.player.isSprinting();
             if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
             if (toggle) glideCommand();
             mc.interactionManager.attackEntity(mc.player, victim);
             InteractionManager.get().swing(InteractionManager.SwingMode.Packet);
             if (toggle) glideCommand();
+            if (worn != -1) InventoryManager.get().swapWithHotbar(CHEST, worn);
             if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_SPRINTING));
         };
         if (InventoryManager.get().selectedSlot() == slot) hit.run();
@@ -942,6 +961,37 @@ public class MaceStrike extends Module {
         double fall = popped ? Math.max(countedFall(), high) : high;
         learnedFall = Double.isNaN(learnedFall) ? fall : learnedFall + (fall - learnedFall) * LEARN_WEIGHT;
         Trace.log("mace learned counted fall {} from {} damage{}", learnedFall, observed, popped ? " (popped, at least)" : "");
+    }
+
+    private int wearChestplate() {
+        if (!LivingEntity.canGlideWith(mc.player.getEquippedStack(EquipmentSlot.CHEST), EquipmentSlot.CHEST)) return -1;
+        int hotbar = chestplateSlot();
+        if (hotbar == -1 || !InventoryManager.get().swapWithHotbar(CHEST, hotbar)) return -1;
+        return hotbar;
+    }
+
+    private int chestplateSlot() {
+        InventoryManager inventory = InventoryManager.get();
+        int hotbar = inventory.find(MaceStrike::isChestplate, 0, InventoryManager.HOTBAR_END);
+        if (hotbar != -1 || unglide.get() != Unglide.Armor) return hotbar;
+        int stored = inventory.find(MaceStrike::isChestplate, InventoryManager.HOTBAR_END, InventoryManager.MAIN_END);
+        int free = inventory.find(ItemStack::isEmpty, 0, InventoryManager.HOTBAR_END);
+        if (stored != -1 && free != -1 && free != Core.host().totemSlot()) inventory.swapWithHotbar(stored, free);
+        return -1;
+    }
+
+    private void keepElytra() {
+        if (mc.player == null || mc.player.isOnGround() || unglide.get() != Unglide.Armor) return;
+        if (LivingEntity.canGlideWith(mc.player.getEquippedStack(EquipmentSlot.CHEST), EquipmentSlot.CHEST)) return;
+        int elytra = InventoryManager.get().find(stack -> LivingEntity.canGlideWith(stack, EquipmentSlot.CHEST), 0, InventoryManager.HOTBAR_END);
+        if (elytra != -1 && isChestplate(mc.player.getEquippedStack(EquipmentSlot.CHEST)) && Util.getMeasuringTimeMs() - lastStrike < ELYTRA_GRACE) {
+            InventoryManager.get().swapWithHotbar(CHEST, elytra);
+        }
+    }
+
+    private static boolean isChestplate(ItemStack stack) {
+        EquippableComponent equippable = stack.get(DataComponentTypes.EQUIPPABLE);
+        return equippable != null && equippable.slot() == EquipmentSlot.CHEST && !LivingEntity.canGlideWith(stack, EquipmentSlot.CHEST);
     }
 
     private void glideCommand() {
