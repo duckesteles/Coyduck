@@ -184,12 +184,15 @@ public final class InteractionManager {
         }
 
         if (seen != null) return seen;
-        if (facing != null || support || !airplace) return facing;
-        if (new Box(pos).squaredMagnitude(eye) >= reachSquared || !centerReach(pos)) return null;
-        for (Direction direction : Direction.values()) {
-            Vec3d point = visiblePoint(pos, direction, eye, reachSquared);
-            if (point != null) return new BlockHitResult(point, direction, pos, false);
+        boolean reachable = new Box(pos).squaredMagnitude(eye) < reachSquared && centerReach(pos);
+        if (airplace && reachable) {
+            for (Direction direction : Direction.values()) {
+                Vec3d point = visiblePoint(pos, direction, eye, reachSquared);
+                if (point != null) return new BlockHitResult(point, direction, pos, false);
+            }
         }
+        if (facing != null || support || !airplace) return facing;
+        if (!reachable) return null;
         Direction side = null;
         double best = 0;
         for (Direction direction : Direction.values()) {
