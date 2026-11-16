@@ -47,6 +47,7 @@ public final class MiningManager {
 
     private static final float SERVER_THRESHOLD = 1.0f;
     private static final float STOP_THRESHOLD = 1.0f;
+    private static final float SERVER_SLACK = 10;
     private static final double REACH_MARGIN = 0.05;
     private static final double BREAK_REACH = 5.2 - REACH_MARGIN;
 
@@ -237,8 +238,7 @@ public final class MiningManager {
         float delta = bestDelta(state);
         if (delta <= 0) return Integer.MAX_VALUE;
 
-        float margin = (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
-        return Math.max(0, (int) Math.ceil(STOP_THRESHOLD / delta - elapsed() + margin));
+        return Math.max(0, (int) Math.ceil(needed(delta) + (LatencyManager.get().jitter() - SERVER_SLACK) / 50.0f - elapsed()));
     }
 
     public boolean isReady() {
@@ -250,16 +250,13 @@ public final class MiningManager {
     }
 
     private boolean readyUnheld(BlockState state, int tool) {
-        float raw = delta(state, pos, InventoryManager.get().stack(tool), mc.player.isOnGround() || Core.host().spoofsGround(), false);
-        float margin = (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
-        return raw * (elapsed() - margin) >= STOP_THRESHOLD;
+        return ripe(delta(state, pos, InventoryManager.get().stack(tool), mc.player.isOnGround() || Core.host().spoofsGround(), false));
     }
 
     private boolean isReady(BlockState state) {
         if (state.isReplaceable()) return false;
 
-        float margin = (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
-        return bestDelta(state) * (elapsed() - margin) >= STOP_THRESHOLD;
+        return ripe(bestDelta(state));
     }
 
     private boolean stop(Object owner, BlockState state) {
@@ -283,7 +280,7 @@ public final class MiningManager {
             send(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK);
         };
 
-        faceForStop();
+        if (!faceForStop()) return false;
         if (tool == -1) action.run();
         else if (!InventoryManager.get().withItem(tool, switchMode, action)) return false;
 
@@ -298,16 +295,26 @@ public final class MiningManager {
         return true;
     }
 
-    private void faceForStop() {
-        if (Core.host().freezesRotation()) return;
+    private boolean ripe(float delta) {
+        return delta > 0 && elapsed() * 50 + SERVER_SLACK >= needed(delta) * 50 + LatencyManager.get().jitter();
+    }
+
+    private static float needed(float delta) {
+        return Math.round(STOP_THRESHOLD / delta);
+    }
+
+    private boolean faceForStop() {
+        if (Core.host().freezesRotation()) return true;
         Direction face = side != null ? side : facing(pos);
         Vec3d point = Vec3d.ofCenter(pos).add(face.getOffsetX() * 0.5, face.getOffsetY() * 0.5, face.getOffsetZ() * 0.5);
         RotationManager rotations = RotationManager.get();
         Vec3d eye = mc.player.getEyePos();
         Vec3d look = Vec3d.fromPolar(rotations.serverPitch(), rotations.serverYaw());
         Vec3d want = point.subtract(eye).normalize();
-        if (look.dotProduct(want) >= STOP_FACE_COS) return;
-        if (rotations.lookNow(point, STOP_FACE_PRIORITY) && Trace.on()) Trace.log("mine faces {} before stop", pos);
+        if (look.dotProduct(want) >= STOP_FACE_COS) return true;
+        if (!rotations.lookNow(point, STOP_FACE_PRIORITY)) return false;
+        if (Trace.on()) Trace.log("mine faces {} before stop", pos);
+        return true;
     }
 
     private void blindStop() {

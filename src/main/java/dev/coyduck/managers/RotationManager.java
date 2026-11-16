@@ -5,13 +5,21 @@ import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.logic.YawRate;
 import dev.coyduck.mixin.ClientPlayerEntityAccessor;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.entity.Entity;
+import net.minecraft.item.FishingRodItem;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.ProjectileItem;
+import net.minecraft.item.RangedWeaponItem;
+import net.minecraft.item.TridentItem;
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.util.PlayerInput;
+import net.minecraft.util.Util;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec2f;
@@ -34,7 +42,7 @@ public final class RotationManager {
 
     private static final int DEFER_TICKS = 3;
     private static final float DEFER_TOLERANCE = 1.0f;
-    private static final float TICK_YAW_BUDGET = 80.0f;
+    private static final long RETURN_MS = 50;
 
     private final ArrayList<Deferred> deferred = new ArrayList<>();
     private int ticks;
@@ -51,7 +59,10 @@ public final class RotationManager {
     private boolean known;
     private float serverYaw;
     private float serverPitch;
-    private float spentYaw;
+    private final YawRate yawRate = new YawRate();
+    private boolean held;
+    private float heldYaw;
+    private float heldPitch;
 
     private RotationManager() {}
 
@@ -90,16 +101,15 @@ public final class RotationManager {
         float deltaYaw = Math.round(MathHelper.wrapDegrees(wantYaw - base) / gcd) * gcd;
         float deltaPitch = Math.round((wantPitch - basePitch) / gcd) * gcd;
         if (deltaYaw == 0 && deltaPitch == 0) return true;
-        if (spentYaw + Math.abs(deltaYaw) > TICK_YAW_BUDGET) return false;
         float lookYaw = base + deltaYaw;
         float lookPitch = MathHelper.clamp(basePitch + deltaPitch, -90.0f, 90.0f);
+        long now = Util.getMeasuringTimeMs();
+        float back = active ? yaw : mc.player.getYaw();
+        if (!yawRate.allows(lookYaw, back, now, now + RETURN_MS, LatencyManager.get().jitter())) return false;
         mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(lookYaw, lookPitch, mc.player.isOnGround(), mc.player.horizontalCollision));
-        current = new Request(priority, lookYaw, lookPitch, 180.0f, false);
-        keep = 1;
-        yaw = lookYaw;
-        pitch = lookPitch;
-        moveFix = false;
-        active = true;
+        held = true;
+        heldYaw = lookYaw;
+        heldPitch = lookPitch;
         return true;
     }
 
@@ -122,6 +132,7 @@ public final class RotationManager {
     }
 
     public void afterMovement() {
+        held = false;
         if (deferred.isEmpty()) return;
         float yawNow = serverYaw();
         float pitchNow = serverPitch();
@@ -158,11 +169,11 @@ public final class RotationManager {
     }
 
     public float packetYaw(float original) {
-        return active ? yaw : original;
+        return held ? heldYaw : active ? yaw : original;
     }
 
     public float packetPitch(float original) {
-        return active ? pitch : original;
+        return held ? heldPitch : active ? pitch : original;
     }
 
     public float physicsYaw(Entity entity, float original) {
@@ -209,7 +220,6 @@ public final class RotationManager {
     @EventHandler(priority = EventPriority.LOWEST)
     private void onTick(TickEvent.Pre event) {
         ticks++;
-        spentYaw = 0;
         if (mc.player == null) {
             active = false;
             return;
@@ -257,13 +267,13 @@ public final class RotationManager {
     @EventHandler
     private void onSent(PacketEvent.Sent event) {
         if (event.packet instanceof PlayerMoveC2SPacket packet && packet.changesLook()) {
-            spentYaw += Math.abs(MathHelper.wrapDegrees(packet.getYaw(serverYaw) - serverYaw));
             serverYaw = packet.getYaw(serverYaw);
+            yawRate.feed(serverYaw, Util.getMeasuringTimeMs(), LatencyManager.get().jitter());
             serverPitch = packet.getPitch(serverPitch);
             known = true;
         } else if (event.packet instanceof PlayerInteractItemC2SPacket packet) {
-            spentYaw += Math.abs(MathHelper.wrapDegrees(packet.getYaw() - serverYaw));
             serverYaw = packet.getYaw();
+            yawRate.feed(serverYaw, Util.getMeasuringTimeMs(), LatencyManager.get().jitter());
             serverPitch = packet.getPitch();
             known = true;
             if (mc.player != null) {
@@ -271,6 +281,19 @@ public final class RotationManager {
                 ((ClientPlayerEntityAccessor) mc.player).coyduck$setLastPitchClient(packet.getPitch());
             }
         }
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST)
+    private void onSend(PacketEvent.Send event) {
+        if (!(event.packet instanceof PlayerInteractItemC2SPacket packet) || !(held || active) || mc.player == null || !known) return;
+        if (packet.getYaw() == serverYaw && packet.getPitch() == serverPitch || aims(mc.player.getStackInHand(packet.getHand()))) return;
+        event.cancel();
+        mc.getNetworkHandler().sendPacket(new PlayerInteractItemC2SPacket(packet.getHand(), packet.getSequence(), serverYaw, serverPitch));
+    }
+
+    private static boolean aims(ItemStack stack) {
+        Item item = stack.getItem();
+        return item instanceof ProjectileItem || item instanceof RangedWeaponItem || item instanceof TridentItem || item instanceof FishingRodItem;
     }
 
     @EventHandler
@@ -289,6 +312,7 @@ public final class RotationManager {
         current = null;
         active = false;
         known = false;
+        held = false;
     }
 
     private static float gcd() {

@@ -6,6 +6,7 @@ import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.mixin.ClientPlayerEntityAccessor;
 import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
 import dev.coyduck.utils.PacketBatch;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
@@ -233,7 +234,7 @@ public final class InventoryManager {
     }
 
     private void unsprinted(Runnable clicks) {
-        if (!mc.player.isSprinting()) {
+        if (!((ClientPlayerEntityAccessor) mc.player).coyduck$lastSprinting()) {
             clicks.run();
             return;
         }
@@ -402,6 +403,6 @@ public final class InventoryManager {
 
     public void resync() {
         ScreenHandler handler = mc.player.currentScreenHandler;
-        mc.getNetworkHandler().sendPacket(new ClickSlotC2SPacket(handler.syncId, -1, (short) -1, (byte) 0, SlotActionType.CLONE, Int2ObjectMaps.emptyMap(), ItemStackHash.EMPTY));
+        unsprinted(() -> mc.getNetworkHandler().sendPacket(new ClickSlotC2SPacket(handler.syncId, -1, (short) -1, (byte) 0, SlotActionType.CLONE, Int2ObjectMaps.emptyMap(), ItemStackHash.EMPTY)));
     }
 }

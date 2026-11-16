@@ -51,6 +51,7 @@ import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 
@@ -108,6 +109,7 @@ public final class InteractionManager {
     private boolean trackDrops;
     private final ArrayDeque<OwnBreak> ownBreaks = new ArrayDeque<>();
     private final NcpVisible visible = new NcpVisible();
+    private final NcpVisible.Solid solid = this::solid;
     private final BlockPos.Mutable scratch = new BlockPos.Mutable();
 
     private InteractionManager() {}
@@ -174,11 +176,11 @@ public final class InteractionManager {
             Vec3d normal = Vec3d.of(side.getVector());
             Vec3d center = Vec3d.ofCenter(neighbor).add(normal.multiply(0.5));
             boolean inside = new Box(neighbor).contains(eye);
-            boolean facing = inside || eye.subtract(center).dotProduct(normal) > 0;
-            boolean seenByServer = ncpSees(neighbor, side, eye);
-            if (!facing && !seenByServer) continue;
+            if (!inside && !ncpFace(neighbor, side, eye)) continue;
             support = true;
+            boolean seenByServer = ncpSees(neighbor, side, eye);
 
+            boolean facing = inside || eye.subtract(center).dotProduct(normal) > 0;
             Vec3d point = !facing ? null : inside ? center : visiblePoint(neighbor, side, eye, reachSquared);
             int rank = (seenByServer ? 2 : 0) + (point != null ? 1 : 0);
             if (rank < bestRank || rank == bestRank && distance >= bestDistance) continue;
@@ -210,18 +212,32 @@ public final class InteractionManager {
         return side == null ? null : new BlockHitResult(Vec3d.ofCenter(pos).add(Vec3d.of(side.getVector()).multiply(0.5)), side, pos, false);
     }
 
+    private static boolean ncpFace(BlockPos block, Direction side, Vec3d eye) {
+        int x = MathHelper.floor(eye.x) - block.getX();
+        int y = MathHelper.floor(eye.y) - block.getY();
+        int z = MathHelper.floor(eye.z) - block.getZ();
+        return switch (side) {
+            case UP -> y >= 0;
+            case DOWN -> y <= 0;
+            case EAST -> x > 0;
+            case WEST -> x < 0;
+            case SOUTH -> z > 0;
+            case NORTH -> z < 0;
+        };
+    }
+
     private boolean ncpSees(BlockPos block, Direction side, Vec3d eye) {
         int axis = switch (side.getAxis()) {
             case X -> NcpVisible.X;
             case Y -> NcpVisible.Y;
             case Z -> NcpVisible.Z;
         };
-        return visible.sees(this::solid, block.getX(), block.getY(), block.getZ(), axis, eye.x, eye.y, eye.z);
+        return visible.sees(solid, block.getX(), block.getY(), block.getZ(), axis, eye.x, eye.y, eye.z);
     }
 
     private boolean solid(int x, int y, int z) {
         scratch.set(x, y, z);
-        return mc.world.getBlockState(scratch).isFullCube(mc.world, scratch);
+        return !mc.world.getBlockState(scratch).getCollisionShape(mc.world, scratch).isEmpty();
     }
 
     public Vec3d visiblePoint(BlockPos block, Direction side, Vec3d eye, double reachSquared) {

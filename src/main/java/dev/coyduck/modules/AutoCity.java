@@ -773,7 +773,7 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
     private boolean solid(int x, int y, int z) {
         if (opened != null && opened.getX() == x && opened.getY() == y && opened.getZ() == z) return false;
         scratch.set(x, y, z);
-        return mc.world.getBlockState(scratch).isFullCube(mc.world, scratch);
+        return !mc.world.getBlockState(scratch).getCollisionShape(mc.world, scratch).isEmpty();
     }
 
     private record Choice(BlockPos pos, float score, BlockPos support) {}

@@ -11,4 +11,7 @@ public interface ClientPlayerEntityAccessor {
 
     @Accessor("lastPitchClient")
     void coyduck$setLastPitchClient(float pitch);
+
+    @Accessor("lastSprinting")
+    boolean coyduck$lastSprinting();
 }
