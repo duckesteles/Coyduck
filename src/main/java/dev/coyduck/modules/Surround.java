@@ -42,6 +42,7 @@ import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.FallingBlockEntity;
 import net.minecraft.entity.MovementType;
@@ -320,6 +321,7 @@ public class Surround extends Feature {
     private final Long2LongOpenHashMap rendered = new Long2LongOpenHashMap();
     private final Long2ObjectOpenHashMap<String> cellStatus = new Long2ObjectOpenHashMap<>();
     private final Int2LongOpenHashMap anchorSeen = new Int2LongOpenHashMap();
+    private long anchorPlacedUntil;
     private LongSet anchored = new LongOpenHashSet();
     private int anchorY;
     private int budget;
@@ -351,6 +353,7 @@ public class Surround extends Feature {
         cellStatus.clear();
         preSent.clear();
         anchorSeen.clear();
+        anchorPlacedUntil = 0;
         maceTick = -1;
     }
 
@@ -454,11 +457,17 @@ public class Surround extends Feature {
         if (!canAct()) return;
 
         boolean relevant = switch (event.packet) {
-            case BlockUpdateS2CPacket packet -> near(packet.getPos());
+            case BlockUpdateS2CPacket packet -> {
+                noteAnchor(packet.getPos(), packet.getState());
+                yield near(packet.getPos());
+            }
             case BlockBreakingProgressS2CPacket packet -> near(packet.getPos());
             case ChunkDeltaUpdateS2CPacket packet -> {
                 boolean[] found = {false};
-                packet.visitUpdates((pos, state) -> found[0] |= near(pos));
+                packet.visitUpdates((pos, state) -> {
+                    noteAnchor(pos, state);
+                    found[0] |= near(pos);
+                });
                 yield found[0];
             }
             case EntitiesDestroyS2CPacket ignored -> destroyedNear;
@@ -660,7 +669,7 @@ public class Surround extends Feature {
     }
 
     private void prePlace(int slot) {
-        if (!predict.get() || rotate.get() || budget <= 0) return;
+        if (!predict.get() || rotate.get() || budget <= 0 || eating()) return;
 
         InteractionManager interaction = InteractionManager.get();
         List<BlockPos> ready = new ArrayList<>();
@@ -683,6 +692,10 @@ public class Surround extends Feature {
                 budget--;
             }
         });
+    }
+
+    private boolean eating() {
+        return mc.player.isUsingItem() && mc.player.getActiveItem().contains(DataComponentTypes.CONSUMABLE);
     }
 
     private static int preInterval() {
@@ -863,7 +876,7 @@ public class Surround extends Feature {
         }
 
         List<BlockPos> blockers = new ArrayList<>();
-        if (blocker.get()) {
+        if (blocker.get() && !eating()) {
             for (Side side : threatenedSides) {
                 addBlocker(blockers, ring, side.pos.offset(side.outward));
                 addBlocker(blockers, ring, side.pos.offset(side.outward.rotateYClockwise()));
@@ -911,9 +924,16 @@ public class Surround extends Feature {
         return faces;
     }
 
+    private void noteAnchor(BlockPos pos, BlockState state) {
+        if (!state.isOf(Blocks.RESPAWN_ANCHOR) || mc.player.squaredDistanceTo(Vec3d.ofCenter(pos)) > FACE_ENEMY_RANGE * FACE_ENEMY_RANGE) return;
+        if (InteractionManager.get().placedByUs(pos, ANCHOR_MEMORY)) return;
+        anchorPlacedUntil = Util.getMeasuringTimeMs() + ANCHOR_MEMORY;
+    }
+
     private boolean anchorArmed() {
         if (mc.world.getRegistryKey() == World.NETHER || mc.world.getDimensionEntry().matchesKey(DimensionTypes.THE_NETHER)) return false;
         long now = Util.getMeasuringTimeMs();
+        if (now < anchorPlacedUntil) return true;
         for (PlayerEntity player : mc.world.getPlayers()) {
             if (player == mc.player || !player.isAlive() || Core.host().isFriend(player) || player.squaredDistanceTo(mc.player) > FACE_ENEMY_RANGE * FACE_ENEMY_RANGE) continue;
             if (holdsAnchorGear(player.getMainHandStack()) || holdsAnchorGear(player.getOffHandStack())) anchorSeen.put(player.getId(), now + ANCHOR_MEMORY);
