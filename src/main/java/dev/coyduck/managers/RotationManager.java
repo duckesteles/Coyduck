@@ -34,6 +34,7 @@ public final class RotationManager {
 
     private static final int DEFER_TICKS = 3;
     private static final float DEFER_TOLERANCE = 1.0f;
+    private static final float TICK_YAW_BUDGET = 80.0f;
 
     private final ArrayList<Deferred> deferred = new ArrayList<>();
     private int ticks;
@@ -50,6 +51,7 @@ public final class RotationManager {
     private boolean known;
     private float serverYaw;
     private float serverPitch;
+    private float spentYaw;
 
     private RotationManager() {}
 
@@ -87,7 +89,17 @@ public final class RotationManager {
         float gcd = gcd();
         float deltaYaw = Math.round(MathHelper.wrapDegrees(wantYaw - base) / gcd) * gcd;
         float deltaPitch = Math.round((wantPitch - basePitch) / gcd) * gcd;
-        mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(base + deltaYaw, MathHelper.clamp(basePitch + deltaPitch, -90.0f, 90.0f), mc.player.isOnGround(), mc.player.horizontalCollision));
+        if (deltaYaw == 0 && deltaPitch == 0) return true;
+        if (spentYaw + Math.abs(deltaYaw) > TICK_YAW_BUDGET) return false;
+        float lookYaw = base + deltaYaw;
+        float lookPitch = MathHelper.clamp(basePitch + deltaPitch, -90.0f, 90.0f);
+        mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.LookAndOnGround(lookYaw, lookPitch, mc.player.isOnGround(), mc.player.horizontalCollision));
+        current = new Request(priority, lookYaw, lookPitch, 180.0f, false);
+        keep = 1;
+        yaw = lookYaw;
+        pitch = lookPitch;
+        moveFix = false;
+        active = true;
         return true;
     }
 
@@ -197,6 +209,7 @@ public final class RotationManager {
     @EventHandler(priority = EventPriority.LOWEST)
     private void onTick(TickEvent.Pre event) {
         ticks++;
+        spentYaw = 0;
         if (mc.player == null) {
             active = false;
             return;
@@ -244,10 +257,12 @@ public final class RotationManager {
     @EventHandler
     private void onSent(PacketEvent.Sent event) {
         if (event.packet instanceof PlayerMoveC2SPacket packet && packet.changesLook()) {
+            spentYaw += Math.abs(MathHelper.wrapDegrees(packet.getYaw(serverYaw) - serverYaw));
             serverYaw = packet.getYaw(serverYaw);
             serverPitch = packet.getPitch(serverPitch);
             known = true;
         } else if (event.packet instanceof PlayerInteractItemC2SPacket packet) {
+            spentYaw += Math.abs(MathHelper.wrapDegrees(packet.getYaw() - serverYaw));
             serverYaw = packet.getYaw();
             serverPitch = packet.getPitch();
             known = true;

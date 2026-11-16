@@ -530,8 +530,9 @@ public class AutoAnchor extends Feature {
     }
 
     private void heard(Vec3d center) {
-        BlockPos pos = BlockPos.ofFloored(center);
-        if (awaiting.remove(pos.asLong()) != 0) misses = 0;
+        long key = BlockPos.ofFloored(center).asLong();
+        if (awaiting.remove(key) != 0) misses = 0;
+        used.remove(key);
     }
 
     private void countMisses(long now) {
