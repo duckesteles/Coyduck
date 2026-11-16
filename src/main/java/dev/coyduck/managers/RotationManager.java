@@ -11,9 +11,6 @@ import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.Entity;
-import net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket;
-import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
-import net.minecraft.network.packet.c2s.play.PlayerInteractBlockC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
@@ -274,7 +271,7 @@ public final class RotationManager {
             yawRate.feed(serverYaw, Util.getMeasuringTimeMs(), LatencyManager.get().jitter());
             serverPitch = packet.getPitch(serverPitch);
             known = true;
-        } else if (known && (event.packet instanceof PlayerInteractBlockC2SPacket || event.packet instanceof PlayerInteractEntityC2SPacket || event.packet instanceof PlayerActionC2SPacket || event.packet instanceof ClickSlotC2SPacket)) {
+        } else if (known && event.packet instanceof PlayerInteractEntityC2SPacket packet && FightTracker.isAttack(packet)) {
             yawRate.feed(serverYaw, Util.getMeasuringTimeMs(), LatencyManager.get().jitter());
         } else if (event.packet instanceof PlayerInteractItemC2SPacket packet) {
             serverYaw = packet.getYaw();

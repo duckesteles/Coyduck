@@ -100,6 +100,8 @@ public final class MiningManager {
     private long lastStopAt;
     private long readySince;
     private long faceRefusedAt;
+    private int faceRefusedTick;
+    private boolean heldAway;
 
     public interface StopGate {
         boolean allowStop(BlockPos pos);
@@ -168,6 +170,7 @@ public final class MiningManager {
     private void begin() {
         readySince = 0;
         faceRefusedAt = 0;
+        heldAway = false;
         startPending = true;
         startTick = ticks;
         startTime = Util.getMeasuringTimeMs();
@@ -198,7 +201,7 @@ public final class MiningManager {
     }
 
     public boolean guardsHeldTool() {
-        return pos != null && !broken && !startPending && holdTicks > 0;
+        return pos != null && !broken && !startPending && holdTicks > 0 && holdHotbar != -1 && InventoryManager.get().selectedSlot() == holdHotbar;
     }
 
     public boolean mineTwo(Object owner, int priority, BlockPos first, BlockPos second, boolean autoStop, InventoryManager.SwitchMode switchMode, InteractionManager.SwingMode swing) {
@@ -272,7 +275,7 @@ public final class MiningManager {
         if (owner instanceof StopGate gate && !gate.allowStop(pos)) return false;
 
         int tool = bestTool(state);
-        if (tool != -1 && holdTicks == 0 && canHold()) {
+        if (tool != -1 && holdTicks == 0 && !heldAway && canHold()) {
             Trace.log("mine stop deferred {} tool not in hand", pos);
             hold(state, pos);
             return false;
@@ -320,13 +323,17 @@ public final class MiningManager {
         Vec3d eye = mc.player.getEyePos();
         Vec3d look = Vec3d.fromPolar(rotations.serverPitch(), rotations.serverYaw());
         Vec3d want = point.subtract(eye).normalize();
-        if (look.dotProduct(want) >= STOP_FACE_COS) return true;
+        if (look.dotProduct(want) >= STOP_FACE_COS) {
+            faceRefusedAt = 0;
+            return true;
+        }
         if (rotations.lookNow(point, STOP_FACE_PRIORITY)) {
             if (Trace.on()) Trace.log("mine faces {} before stop", pos);
             return true;
         }
         long now = Util.getMeasuringTimeMs();
-        if (faceRefusedAt == 0) faceRefusedAt = now;
+        if (faceRefusedAt == 0 || ticks - faceRefusedTick > 1) faceRefusedAt = now;
+        faceRefusedTick = ticks;
         if (now - faceRefusedAt >= STOP_FACE_WAIT) {
             Trace.log("mine stop {} unfaced after {}ms", pos, now - faceRefusedAt);
             return true;
@@ -577,10 +584,12 @@ public final class MiningManager {
 
     private void keepTool() {
         if (holdTicks > 0 && holdHotbar != -1 && (!canHold() || InventoryManager.get().selectedSlot() != holdHotbar)) {
+            if (InventoryManager.get().selectedSlot() != holdHotbar) heldAway = true;
             holdTicks = 0;
             unhold();
             return;
         }
+        if (heldAway) return;
         boolean rebreaking = broken && autoStop && pos != null && enemyNear(pos);
         if (pos == null || broken && !rebreaking || !canHold()) return;
 

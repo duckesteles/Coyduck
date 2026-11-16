@@ -106,7 +106,7 @@ public final class FightTracker {
         }
     }
 
-    private static boolean isAttack(PlayerInteractEntityC2SPacket packet) {
+    static boolean isAttack(PlayerInteractEntityC2SPacket packet) {
         boolean[] attack = {false};
         packet.handle(new PlayerInteractEntityC2SPacket.Handler() {
             @Override
