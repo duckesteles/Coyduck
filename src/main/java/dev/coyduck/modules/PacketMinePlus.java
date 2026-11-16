@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.events.RenderWorldEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.feature.BoolSetting;
@@ -13,13 +14,11 @@ import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.MiningManager;
-import dev.coyduck.utils.DuckRender;
+import dev.coyduck.render.DuckRender;
+import dev.coyduck.render.Shape;
 import meteordevelopment.meteorclient.events.entity.player.StartBreakingBlockEvent;
-import meteordevelopment.meteorclient.events.render.Render3DEvent;
-import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
@@ -27,8 +26,6 @@ import net.minecraft.util.math.Box;
 
 public class PacketMinePlus extends Feature implements MiningManager.HidesMining, MiningManager.RebreaksOwn {
     private static final int PRIORITY = 150;
-    private static final Color PROGRESS_START = new Color(230, 60, 60);
-    private static final Color PROGRESS_END = new Color(80, 220, 90);
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgRender = settings.createGroup("Render");
@@ -85,7 +82,7 @@ public class PacketMinePlus extends Feature implements MiningManager.HidesMining
         .build()
     );
 
-    private final Setting<Rgba> sideColor = sgRender.add(new ColorSetting.Builder()
+    private final ColorSetting sideColor = sgRender.add(new ColorSetting.Builder()
         .name("side-color")
         .description("Fill alpha. The color follows the progress.")
         .defaultValue(new Rgba(255, 255, 255, 40))
@@ -93,7 +90,7 @@ public class PacketMinePlus extends Feature implements MiningManager.HidesMining
         .build()
     );
 
-    private final Setting<Rgba> lineColor = sgRender.add(new ColorSetting.Builder()
+    private final ColorSetting lineColor = sgRender.add(new ColorSetting.Builder()
         .name("line-color")
         .description("Outline alpha. The color follows the progress.")
         .defaultValue(new Rgba(255, 255, 255, 200))
@@ -102,8 +99,6 @@ public class PacketMinePlus extends Feature implements MiningManager.HidesMining
     );
 
     private final DuckRender.Smooth smooth = new DuckRender.Smooth();
-    private final Color sideShade = new Color();
-    private final Color lineShade = new Color();
     private BlockPos target;
     private long brokenAt;
 
@@ -180,13 +175,13 @@ public class PacketMinePlus extends Feature implements MiningManager.HidesMining
     }
 
     @EventHandler
-    private void onRender(Render3DEvent event) {
+    private void onRender(RenderWorldEvent event) {
         if (!render.get() || target == null || !MiningManager.get().owns(this)) return;
         double progress = smooth.toward(MiningManager.get().progress(), 12);
-        Color side = DuckRender.lerp(sideShade, PROGRESS_START.a(sideColor.get().a()), PROGRESS_END.a(sideColor.get().a()), progress);
-        Color line = DuckRender.lerp(lineShade, PROGRESS_START.a(lineColor.get().a()), PROGRESS_END.a(lineColor.get().a()), progress);
+        int side = DuckRender.progress(progress, sideColor.argb());
+        int line = DuckRender.progress(progress, lineColor.argb());
         Box box = new Box(target);
-        DuckRender.exact(event.renderer, box.contract((1 - progress) * 0.5), side, line, ShapeMode.Sides, 1);
-        DuckRender.exact(event.renderer, box, side, line, ShapeMode.Lines, 1);
+        DuckRender.exact(event.canvas, box.contract((1 - progress) * 0.5), side, line, Shape.Sides, 1);
+        DuckRender.exact(event.canvas, box, side, line, Shape.Lines, 1);
     }
 }

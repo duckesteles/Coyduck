@@ -1,6 +1,5 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.MeteorColors;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.ColorSetting;
 import dev.coyduck.feature.Feature;
@@ -35,7 +34,7 @@ public class ChestSearch extends Feature {
         .build()
     );
 
-    private final Setting<Rgba> color = sgGeneral.add(new ColorSetting.Builder()
+    private final ColorSetting color = sgGeneral.add(new ColorSetting.Builder()
         .name("color")
         .description("Highlight on matching slots.")
         .defaultValue(new Rgba(185, 74, 230, 110))
@@ -52,7 +51,7 @@ public class ChestSearch extends Feature {
     }
 
     public int highlight() {
-        return MeteorColors.of(color).getPacked();
+        return color.argb();
     }
 
     public boolean matches(ItemStack stack, String query) {

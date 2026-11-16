@@ -1,16 +1,15 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.MeteorColors;
+import dev.coyduck.events.RenderWorldEvent;
 import dev.coyduck.feature.ColorSetting;
 import dev.coyduck.feature.Feature;
 import dev.coyduck.feature.Rgba;
-import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.MiningTracker;
-import dev.coyduck.utils.DuckRender;
+import dev.coyduck.render.Argb;
+import dev.coyduck.render.DuckRender;
+import dev.coyduck.render.Shape;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
-import meteordevelopment.meteorclient.events.render.Render3DEvent;
-import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.util.Util;
@@ -20,14 +19,14 @@ import net.minecraft.util.math.Box;
 public class BreakEsp extends Feature {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
-    private final Setting<Rgba> startColor = sgGeneral.add(new ColorSetting.Builder()
+    private final ColorSetting startColor = sgGeneral.add(new ColorSetting.Builder()
         .name("start-color")
         .description("Color when the block has just started breaking.")
         .defaultValue(new Rgba(255, 255, 255, 40))
         .build()
     );
 
-    private final Setting<Rgba> endColor = sgGeneral.add(new ColorSetting.Builder()
+    private final ColorSetting endColor = sgGeneral.add(new ColorSetting.Builder()
         .name("end-color")
         .description("Color when the block is about to break.")
         .defaultValue(new Rgba(230, 60, 90, 80))
@@ -47,10 +46,6 @@ public class BreakEsp extends Feature {
     }
 
     private final Long2ObjectOpenHashMap<Entry> entries = new Long2ObjectOpenHashMap<>();
-    private final Color side = new Color();
-    private final Color line = new Color();
-    private final Color edgeStart = new Color();
-    private final Color edgeEnd = new Color();
     private long last;
 
     public BreakEsp() {
@@ -64,7 +59,7 @@ public class BreakEsp extends Feature {
     }
 
     @EventHandler
-    private void onRender(Render3DEvent event) {
+    private void onRender(RenderWorldEvent event) {
         if (mc.player == null) return;
 
         long now = Util.getMeasuringTimeMs();
@@ -78,6 +73,10 @@ public class BreakEsp extends Feature {
             entry.target = (mining.stage() + 1) / 10.0;
         });
 
+        int start = startColor.argb();
+        int end = endColor.argb();
+        int edgeStart = Argb.alpha(start, Argb.a(start) * 4);
+        int edgeEnd = Argb.alpha(end, Argb.a(end) * 3);
         var iterator = entries.values().iterator();
         while (iterator.hasNext()) {
             Entry entry = iterator.next();
@@ -88,12 +87,10 @@ public class BreakEsp extends Feature {
                 continue;
             }
 
-            DuckRender.lerp(side, MeteorColors.of(startColor), MeteorColors.of(endColor), entry.progress);
-            edgeStart.set(MeteorColors.of(startColor).r, MeteorColors.of(startColor).g, MeteorColors.of(startColor).b, Math.min(255, MeteorColors.of(startColor).a * 4));
-            edgeEnd.set(MeteorColors.of(endColor).r, MeteorColors.of(endColor).g, MeteorColors.of(endColor).b, Math.min(255, MeteorColors.of(endColor).a * 3));
-            DuckRender.lerp(line, edgeStart, edgeEnd, entry.progress);
+            int side = Argb.lerp(start, end, entry.progress);
+            int line = Argb.lerp(edgeStart, edgeEnd, entry.progress);
             double inset = (1 - entry.progress) * 0.5;
-            DuckRender.box(event.renderer, new Box(entry.pos).contract(inset), side, line, ShapeMode.Both, entry.shown);
+            DuckRender.box(event.canvas, new Box(entry.pos).contract(inset), side, line, Shape.Both, entry.shown);
         }
     }
 }

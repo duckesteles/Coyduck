@@ -1,6 +1,7 @@
 package dev.coyduck.hud;
 
 import dev.coyduck.managers.PopTracker;
+import dev.coyduck.render.Palette;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;
@@ -146,7 +147,7 @@ public class PlayersHud extends HudElement {
         if (rows.isEmpty()) {
             if (!isInEditor()) return;
             CoyHud.panel(r, x, y, w, h, background.alpha());
-            r.text("No players", x + pad, y + pad, CoyHud.color(CoyHud.MUTED), background.shadow());
+            r.text("No players", x + pad, y + pad, CoyHud.color(Palette.MUTED), background.shadow());
             return;
         }
 
@@ -162,7 +163,7 @@ public class PlayersHud extends HudElement {
                 int size = (int) Math.round(head);
                 r.post(() -> drawHead(r, skin, hx, hy, size));
             }
-            r.text(row.name, nameX, rowY, CoyHud.color(row.friend ? CoyHud.GOOD : CoyHud.TEXT), background.shadow());
+            r.text(row.name, nameX, rowY, CoyHud.color(row.friend ? Palette.GOOD : Palette.TEXT), background.shadow());
 
             double sideX = right ? x + w - pad : x + pad + head + headGap + nameWidth + gap;
             double px = right ? sideX - partsWidth(r, row.parts) : sideX;
@@ -212,14 +213,14 @@ public class PlayersHud extends HudElement {
         for (PlayerEntity player : players) {
             if (rows.size() >= limit.get()) break;
             List<Part> parts = new ArrayList<>();
-            if (elytra.get() && player.getEquippedStack(EquipmentSlot.CHEST).isOf(Items.ELYTRA)) parts.add(new Part("elytra", CoyHud.SUBTLE));
+            if (elytra.get() && player.getEquippedStack(EquipmentSlot.CHEST).isOf(Items.ELYTRA)) parts.add(new Part("elytra", Palette.SUBTLE));
             int popped = pops.get() ? PopTracker.get().pops(player) : 0;
-            if (popped > 0) parts.add(new Part(popped + (popped == 1 ? " pop" : " pops"), CoyHud.WARN));
+            if (popped > 0) parts.add(new Part(popped + (popped == 1 ? " pop" : " pops"), Palette.WARN));
             if (health.get()) {
                 float total = player.getHealth() + player.getAbsorptionAmount();
-                parts.add(new Part(String.format(Locale.ROOT, "%.0f", total), CoyHud.health(Math.min(1, player.getHealth() / Math.max(1, player.getMaxHealth())))));
+                parts.add(new Part(String.format(Locale.ROOT, "%.0f", total), Palette.health(Math.min(1, player.getHealth() / Math.max(1, player.getMaxHealth())))));
             }
-            if (distance.get()) parts.add(new Part(String.format(Locale.ROOT, "%.0fm", Math.sqrt(player.squaredDistanceTo(mc.player))), CoyHud.SUBTLE));
+            if (distance.get()) parts.add(new Part(String.format(Locale.ROOT, "%.0fm", Math.sqrt(player.squaredDistanceTo(mc.player))), Palette.SUBTLE));
             rows.add(new Row(player, player.getName().getString(), parts, Friends.get().isFriend(player)));
         }
         return rows;

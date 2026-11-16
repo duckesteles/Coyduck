@@ -1,5 +1,6 @@
 package dev.coyduck.hud;
 
+import dev.coyduck.render.Palette;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;
@@ -102,6 +103,6 @@ public class Watermark extends HudElement {
 
         double textY = y + pad + (contentHeight - textHeight) / 2;
         r.text(name, textX, textY, CoyHud.color(CoyHud.accent()), shadow, s);
-        if (!tail.isEmpty()) r.text(tail, textX + nameWidth, textY, CoyHud.color(whiteVersion.get() ? CoyHud.TEXT : CoyHud.SUBTLE), shadow, s);
+        if (!tail.isEmpty()) r.text(tail, textX + nameWidth, textY, CoyHud.color(whiteVersion.get() ? Palette.TEXT : Palette.SUBTLE), shadow, s);
     }
 }

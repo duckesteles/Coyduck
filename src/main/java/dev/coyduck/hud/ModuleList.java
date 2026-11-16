@@ -5,6 +5,7 @@ import dev.coyduck.MeteorFeature;
 import dev.coyduck.modules.AutoLogin;
 import dev.coyduck.modules.ClickGui;
 import dev.coyduck.modules.UpdateChecker;
+import dev.coyduck.render.Palette;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;
@@ -186,7 +187,7 @@ public class ModuleList extends HudElement {
         double alpha = background.alpha();
         if (list.isEmpty() && isInEditor()) {
             CoyHud.panel(r, x, y, getWidth(), rowHeight, alpha);
-            r.text("Modules", x + side, y + (rowHeight - textHeight) / 2, CoyHud.color(CoyHud.SUBTLE), shadow, s);
+            r.text("Modules", x + side, y + (rowHeight - textHeight) / 2, CoyHud.color(Palette.SUBTLE), shadow, s);
             return;
         }
 
@@ -198,7 +199,7 @@ public class ModuleList extends HudElement {
             double offset = (1 - t) * (w * 0.6);
             double rowX = right ? x + getWidth() - w + offset : x - offset;
 
-            if (boxed) r.quad(rowX, rowY, w, h, CoyHud.color(CoyHud.BACKGROUND | 0xFF000000, t * alpha));
+            if (boxed) r.quad(rowX, rowY, w, h, CoyHud.color(Palette.BACKGROUND | 0xFF000000, t * alpha));
             if (bar.get()) r.quad(right ? rowX + w - BAR : rowX, rowY, BAR, h, CoyHud.color(CoyHud.accent(), t));
 
             if (t > 0.5) {
@@ -207,9 +208,9 @@ public class ModuleList extends HudElement {
                 tx = r.text(module.title, tx, ty, CoyHud.color(CoyHud.accent(), t), shadow, s);
                 String extra = extras.get(module);
                 if (extra != null) {
-                    tx = r.text(" [", tx, ty, CoyHud.color(CoyHud.SUBTLE, t), shadow, s);
-                    tx = r.text(extra, tx, ty, CoyHud.color(CoyHud.TEXT, t), shadow, s);
-                    r.text("]", tx, ty, CoyHud.color(CoyHud.SUBTLE, t), shadow, s);
+                    tx = r.text(" [", tx, ty, CoyHud.color(Palette.SUBTLE, t), shadow, s);
+                    tx = r.text(extra, tx, ty, CoyHud.color(Palette.TEXT, t), shadow, s);
+                    r.text("]", tx, ty, CoyHud.color(Palette.SUBTLE, t), shadow, s);
                 }
             }
             rowY += h;
@@ -217,8 +218,8 @@ public class ModuleList extends HudElement {
         if (more != null) {
             double w = r.textWidth(more, shadow, s) + side * 2;
             double rowX = right ? x + getWidth() - w : x;
-            if (boxed) r.quad(rowX, rowY, w, rowHeight, CoyHud.color(CoyHud.BACKGROUND | 0xFF000000, alpha));
-            r.text(more, rowX + side, rowY + (rowHeight - textHeight) / 2, CoyHud.color(CoyHud.MUTED), shadow, s);
+            if (boxed) r.quad(rowX, rowY, w, rowHeight, CoyHud.color(Palette.BACKGROUND | 0xFF000000, alpha));
+            r.text(more, rowX + side, rowY + (rowHeight - textHeight) / 2, CoyHud.color(Palette.MUTED), shadow, s);
         }
     }
 

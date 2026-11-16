@@ -1,8 +1,8 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.MeteorColors;
 import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.RenderWorldEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.feature.BlockListSetting;
@@ -23,17 +23,15 @@ import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.RotationManager;
-import dev.coyduck.utils.DuckRender;
+import dev.coyduck.render.DuckRender;
+import dev.coyduck.render.Shape;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
 import dev.coyduck.utils.Trace;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import meteordevelopment.meteorclient.events.render.Render3DEvent;
-import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.AbstractFireBlock;
@@ -213,10 +211,10 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
         .build()
     );
 
-    private final Setting<ShapeMode> shapeMode = sgRender.add(new EnumSetting.Builder<ShapeMode>()
+    private final Setting<Shape> shapeMode = sgRender.add(new EnumSetting.Builder<Shape>()
         .name("shape-mode")
         .description("How the highlight is drawn.")
-        .defaultValue(ShapeMode.Both)
+        .defaultValue(Shape.Both)
         .visible(render::get)
         .build()
     );
@@ -229,7 +227,7 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
         .build()
     );
 
-    private final Setting<Rgba> sideColor = sgRender.add(new ColorSetting.Builder()
+    private final ColorSetting sideColor = sgRender.add(new ColorSetting.Builder()
         .name("side-color")
         .description("Highlight side color.")
         .defaultValue(new Rgba(110, 45, 200, 50))
@@ -237,7 +235,7 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
         .build()
     );
 
-    private final Setting<Rgba> lineColor = sgRender.add(new ColorSetting.Builder()
+    private final ColorSetting lineColor = sgRender.add(new ColorSetting.Builder()
         .name("line-color")
         .description("Highlight line color.")
         .defaultValue(new Rgba(110, 45, 200, 220))
@@ -245,12 +243,7 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
         .build()
     );
 
-    private static final Color PROGRESS_START = new Color(230, 60, 60);
-    private static final Color PROGRESS_END = new Color(80, 220, 90);
-
     private final DuckRender.Smooth smoothProgress = new DuckRender.Smooth();
-    private final Color sideShade = new Color();
-    private final Color lineShade = new Color();
 
     private final Long2LongOpenHashMap banned = new Long2LongOpenHashMap();
 
@@ -371,7 +364,7 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
     }
 
     @EventHandler
-    private void onRender(Render3DEvent event) {
+    private void onRender(RenderWorldEvent event) {
         if (pending) {
             pending = false;
             update();
@@ -380,20 +373,20 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
 
         Box box = new Box(current);
         double progress = smoothProgress.toward(MiningManager.get().progress(), 12);
-        Color side = MeteorColors.of(sideColor);
-        Color line = MeteorColors.of(lineColor);
+        int side = sideColor.argb();
+        int line = lineColor.argb();
         if (progressColor.get()) {
-            side = DuckRender.lerp(sideShade, PROGRESS_START.a(side.a), PROGRESS_END.a(side.a), progress);
-            line = DuckRender.lerp(lineShade, PROGRESS_START.a(line.a), PROGRESS_END.a(line.a), progress);
+            side = DuckRender.progress(progress, side);
+            line = DuckRender.progress(progress, line);
         }
 
-        if (shapeMode.get() != ShapeMode.Lines) drawBox(event, box.contract((1 - progress) * 0.5), side, line, ShapeMode.Sides);
-        if (shapeMode.get() != ShapeMode.Sides) drawBox(event, box, side, line, ShapeMode.Lines);
+        if (shapeMode.get() != Shape.Lines) drawBox(event, box.contract((1 - progress) * 0.5), side, line, Shape.Sides);
+        if (shapeMode.get() != Shape.Sides) drawBox(event, box, side, line, Shape.Lines);
     }
 
-    private void drawBox(Render3DEvent event, Box box, Color side, Color line, ShapeMode mode) {
-        if (progressColor.get()) DuckRender.exact(event.renderer, box, side, line, mode, 1);
-        else DuckRender.box(event.renderer, box, side, line, mode, 1);
+    private void drawBox(RenderWorldEvent event, Box box, int side, int line, Shape mode) {
+        if (progressColor.get()) DuckRender.exact(event.canvas, box, side, line, mode, 1);
+        else DuckRender.box(event.canvas, box, side, line, mode, 1);
     }
 
     private void update() {

@@ -1,10 +1,10 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.MeteorColors;
 import dev.coyduck.core.Clock;
 import dev.coyduck.events.EntityAddedEvent;
 import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.RenderWorldEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.feature.BlockListSetting;
@@ -33,8 +33,10 @@ import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.managers.MotionTracker;
 import dev.coyduck.managers.RotationManager;
-import dev.coyduck.utils.DuckRender;
+import dev.coyduck.render.DuckRender;
+import dev.coyduck.render.Shape;
 import dev.coyduck.utils.ExplosionDamage;
+import dev.coyduck.utils.Labels;
 import dev.coyduck.utils.Targets;
 import dev.coyduck.utils.Trace;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
@@ -45,15 +47,12 @@ import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
-import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.BlockUpdateEvent;
 import meteordevelopment.meteorclient.events.world.ChunkDataEvent;
-import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.systems.modules.combat.CrystalAura;
-import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -475,15 +474,15 @@ public class AutoCrystal extends Feature {
         .build()
     );
 
-    private final Setting<ShapeMode> shapeMode = sgRender.add(new EnumSetting.Builder<ShapeMode>()
+    private final Setting<Shape> shapeMode = sgRender.add(new EnumSetting.Builder<Shape>()
         .name("shape-mode")
         .description("How the highlight is drawn.")
-        .defaultValue(ShapeMode.Both)
+        .defaultValue(Shape.Both)
         .visible(render::get)
         .build()
     );
 
-    private final Setting<Rgba> sideColor = sgRender.add(new ColorSetting.Builder()
+    private final ColorSetting sideColor = sgRender.add(new ColorSetting.Builder()
         .name("side-color")
         .description("Highlight side color.")
         .defaultValue(new Rgba(185, 74, 230, 40))
@@ -491,7 +490,7 @@ public class AutoCrystal extends Feature {
         .build()
     );
 
-    private final Setting<Rgba> lineColor = sgRender.add(new ColorSetting.Builder()
+    private final ColorSetting lineColor = sgRender.add(new ColorSetting.Builder()
         .name("line-color")
         .description("Highlight line color.")
         .defaultValue(new Rgba(185, 74, 230, 200))
@@ -745,18 +744,18 @@ public class AutoCrystal extends Feature {
     @EventHandler
     private void onRender2D(Render2DEvent event) {
         if (!render.get() || !damageText.get() || renderDamage <= 0) return;
-        DuckRender.label(slide.center(), String.format("%.1f", renderDamage), Color.WHITE, slide.alpha());
+        Labels.damage(slide.center(), String.format("%.1f", renderDamage), 0xFFFFFFFF, slide.alpha());
     }
 
     @EventHandler
-    private void onRender(Render3DEvent event) {
+    private void onRender(RenderWorldEvent event) {
         if (releaseAt != 0 && Util.getMeasuringTimeMs() >= releaseAt) {
             releaseAt = 0;
             pass();
         }
 
         if (!render.get()) return;
-        slide.render(event.renderer, MeteorColors.of(sideColor), MeteorColors.of(lineColor), shapeMode.get());
+        slide.render(event.canvas, sideColor.argb(), lineColor.argb(), shapeMode.get());
     }
 
     private void pass() {

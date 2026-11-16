@@ -1,8 +1,8 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.MeteorColors;
 import dev.coyduck.events.EntityAddedEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.RenderWorldEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.feature.BlockListSetting;
@@ -23,7 +23,9 @@ import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
-import dev.coyduck.utils.DuckRender;
+import dev.coyduck.render.Argb;
+import dev.coyduck.render.DuckRender;
+import dev.coyduck.render.Shape;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
 import dev.coyduck.utils.Trace;
@@ -33,9 +35,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
-import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
-import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
@@ -269,15 +269,15 @@ public class Surround extends Feature {
         .build()
     );
 
-    private final Setting<ShapeMode> shapeMode = sgRender.add(new EnumSetting.Builder<ShapeMode>()
+    private final Setting<Shape> shapeMode = sgRender.add(new EnumSetting.Builder<Shape>()
         .name("shape-mode")
         .description("How the highlight is drawn.")
-        .defaultValue(ShapeMode.Both)
+        .defaultValue(Shape.Both)
         .visible(render::get)
         .build()
     );
 
-    private final Setting<Rgba> sideColor = sgRender.add(new ColorSetting.Builder()
+    private final ColorSetting sideColor = sgRender.add(new ColorSetting.Builder()
         .name("side-color")
         .description("Highlight side color.")
         .defaultValue(new Rgba(251, 192, 45, 40))
@@ -285,7 +285,7 @@ public class Surround extends Feature {
         .build()
     );
 
-    private final Setting<Rgba> lineColor = sgRender.add(new ColorSetting.Builder()
+    private final ColorSetting lineColor = sgRender.add(new ColorSetting.Builder()
         .name("line-color")
         .description("Highlight line color.")
         .defaultValue(new Rgba(251, 192, 45, 200))
@@ -300,7 +300,7 @@ public class Surround extends Feature {
         .build()
     );
 
-    private final Setting<Rgba> openColor = sgRender.add(new ColorSetting.Builder()
+    private final ColorSetting openColor = sgRender.add(new ColorSetting.Builder()
         .name("open-color")
         .description("Color of open cells.")
         .defaultValue(new Rgba(230, 60, 60, 220))
@@ -309,7 +309,6 @@ public class Surround extends Feature {
     );
 
     private static final long OPEN_MEMORY = 600;
-    private final Color openSide = new Color();
 
     private record Side(BlockPos pos, Direction outward) {}
 
@@ -512,7 +511,7 @@ public class Surround extends Feature {
     }
 
     @EventHandler
-    private void onRender(Render3DEvent event) {
+    private void onRender(RenderWorldEvent event) {
         if (!render.get()) return;
 
         long now = Util.getMeasuringTimeMs();
@@ -520,13 +519,13 @@ public class Surround extends Feature {
         InteractionManager interaction = InteractionManager.get();
         for (var entry : rendered.long2LongEntrySet()) {
             if (interaction.rejectedAt(BlockPos.fromLong(entry.getLongKey())) >= entry.getLongValue()) continue;
-            DuckRender.box(event.renderer, new Box(BlockPos.fromLong(entry.getLongKey())), MeteorColors.of(sideColor), MeteorColors.of(lineColor), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
+            DuckRender.box(event.canvas, new Box(BlockPos.fromLong(entry.getLongKey())), sideColor.argb(), lineColor.argb(), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
         }
         if (showOpen.get() && mc.world != null && !anchored.isEmpty()) {
-            Color line = MeteorColors.of(openColor);
-            openSide.set(line.r, line.g, line.b, Math.min(line.a, 45));
+            int line = openColor.argb();
+            int openSide = Argb.alpha(line, Math.min(Argb.a(line), 45));
             for (BlockPos pos : Targets.ring(anchored, 0)) {
-                if (open(pos, now)) DuckRender.box(event.renderer, new Box(pos), openSide, line, ShapeMode.Both, 1);
+                if (open(pos, now)) DuckRender.box(event.canvas, new Box(pos), openSide, line, Shape.Both, 1);
             }
         }
     }

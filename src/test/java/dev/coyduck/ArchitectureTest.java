@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ArchitectureTest {
     private static final Path SOURCES = Path.of(System.getProperty("coyduck.sources", "src/main/java"));
     private static final String ROOT = "dev.coyduck.";
-    private static final Set<String> CORE_PACKAGES = Set.of("dev.coyduck.core", "dev.coyduck.events", "dev.coyduck.managers", "dev.coyduck.feature");
+    private static final Set<String> CORE_PACKAGES = Set.of("dev.coyduck.core", "dev.coyduck.events", "dev.coyduck.managers", "dev.coyduck.feature", "dev.coyduck.render");
     private static final Set<String> LOGIC_PACKAGES = Set.of("dev.coyduck.logic");
     private static final Set<String> SHELL_PACKAGES = Set.of("dev.coyduck.modules", "dev.coyduck.hud", "dev.coyduck.gui", "dev.coyduck.commands", "dev.coyduck.dev");
     private static final Pattern WILDCARD = Pattern.compile("^import (dev\\.coyduck(?:\\.[a-z]\\w*)+)\\.\\*;", Pattern.MULTILINE);
@@ -126,6 +126,7 @@ class ArchitectureTest {
         assertFalse(dependencies("dev.coyduck.managers.PopTracker").contains("dev.coyduck.modules.AutoTotem"));
         assertTrue(dependencies("dev.coyduck.MeteorHost").contains("dev.coyduck.modules.AutoTotem"));
         assertTrue(dependencies("dev.coyduck.Coyduck").contains("dev.coyduck.core.Core"));
+        assertTrue(dependencies("dev.coyduck.render.DuckRender").contains("dev.coyduck.core.Core"));
     }
 
     @Test

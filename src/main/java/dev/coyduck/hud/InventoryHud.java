@@ -1,5 +1,6 @@
 package dev.coyduck.hud;
 
+import dev.coyduck.render.Palette;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.Setting;
@@ -65,7 +66,7 @@ public class InventoryHud extends HudElement {
             double rowY = y + pad + row * (size + gap) + (row == 3 ? gap : 0);
             for (int column = 0; column < 9; column++) {
                 double cellX = x + pad + column * (size + gap);
-                if (slots.get()) r.quad(cellX, rowY, size, size, CoyHud.color(CoyHud.TRACK));
+                if (slots.get()) r.quad(cellX, rowY, size, size, CoyHud.color(Palette.TRACK));
                 int index = row == 3 ? column : 9 + row * 9 + column;
                 ItemStack stack = mc.player.getInventory().getStack(index);
                 if (stack.isEmpty()) continue;

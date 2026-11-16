@@ -2,6 +2,7 @@ package dev.coyduck.hud;
 
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.TickRate;
+import dev.coyduck.render.Palette;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
@@ -65,19 +66,19 @@ public class InfoHud extends HudElement {
     @Override
     public void render(HudRenderer r) {
         List<Line> lines = new ArrayList<>();
-        if (fps.get()) lines.add(new Line("FPS", String.valueOf(mc.getCurrentFps()), CoyHud.TEXT));
+        if (fps.get()) lines.add(new Line("FPS", String.valueOf(mc.getCurrentFps()), Palette.TEXT));
         if (ping.get()) {
             int latency = latency();
-            lines.add(new Line("Ping", latency + "ms", latency > 250 ? CoyHud.BAD : latency > 150 ? CoyHud.WARN : CoyHud.TEXT));
+            lines.add(new Line("Ping", latency + "ms", latency > 250 ? Palette.BAD : latency > 150 ? Palette.WARN : Palette.TEXT));
         }
         if (tps.get()) {
             float rate = TickRate.get().tickRate();
-            lines.add(new Line("TPS", String.format(Locale.ROOT, "%.1f", rate), rate < 15 ? CoyHud.BAD : rate < 19 ? CoyHud.WARN : CoyHud.TEXT));
+            lines.add(new Line("TPS", String.format(Locale.ROOT, "%.1f", rate), rate < 15 ? Palette.BAD : rate < 19 ? Palette.WARN : Palette.TEXT));
         }
         if (speed.get() && mc.player != null) {
             double dx = mc.player.getX() - mc.player.lastX;
             double dz = mc.player.getZ() - mc.player.lastZ;
-            lines.add(new Line("Speed", String.format(Locale.ROOT, "%.1f", Math.sqrt(dx * dx + dz * dz) * 20), CoyHud.TEXT));
+            lines.add(new Line("Speed", String.format(Locale.ROOT, "%.1f", Math.sqrt(dx * dx + dz * dz) * 20), Palette.TEXT));
         }
         if (coords.get() && mc.player != null && mc.world != null) {
             double px = mc.player.getX();
@@ -88,37 +89,37 @@ public class InfoHud extends HudElement {
             String other = String.format(Locale.ROOT, "%.0f %.0f", px * scale, pz * scale);
             int limit = hideBeyond.get();
             if (limit > 0 && Math.max(Math.abs(px), Math.abs(pz)) > limit) {
-                lines.add(new Line("XYZ", "hidden", CoyHud.MUTED));
+                lines.add(new Line("XYZ", "hidden", Palette.MUTED));
             } else {
-                lines.add(new Line("XYZ", main, CoyHud.TEXT));
-                if (mc.world.getRegistryKey() != World.END) lines.add(new Line(nether ? "Overworld" : "Nether", other, CoyHud.SUBTLE));
+                lines.add(new Line("XYZ", main, Palette.TEXT));
+                if (mc.world.getRegistryKey() != World.END) lines.add(new Line(nether ? "Overworld" : "Nether", other, Palette.SUBTLE));
             }
         }
         if (facing.get() && mc.player != null) {
             float yaw = MathHelper.wrapDegrees(mc.player.getYaw());
             Direction direction = mc.player.getHorizontalFacing();
             String axis = (direction.getDirection() == Direction.AxisDirection.POSITIVE ? "+" : "-") + direction.getAxis().asString().toUpperCase(Locale.ROOT);
-            lines.add(new Line("Facing", capitalize(direction.asString()) + " " + axis + String.format(Locale.ROOT, " %.0f°", yaw), CoyHud.TEXT));
+            lines.add(new Line("Facing", capitalize(direction.asString()) + " " + axis + String.format(Locale.ROOT, " %.0f°", yaw), Palette.TEXT));
         }
         if (biome.get() && mc.player != null && mc.world != null) {
             String name = mc.world.getBiome(mc.player.getBlockPos()).getKey().map(key -> key.getValue().getPath()).orElse("unknown");
-            lines.add(new Line("Biome", capitalize(name.replace('_', ' ')), CoyHud.TEXT));
+            lines.add(new Line("Biome", capitalize(name.replace('_', ' ')), Palette.TEXT));
         }
         if (dimension.get() && mc.world != null) {
-            lines.add(new Line("Dimension", capitalize(mc.world.getRegistryKey().getValue().getPath().replace('_', ' ')), CoyHud.TEXT));
+            lines.add(new Line("Dimension", capitalize(mc.world.getRegistryKey().getValue().getPath().replace('_', ' ')), Palette.TEXT));
         }
         if (day.get() && mc.world != null) {
             long time = mc.world.getTimeOfDay();
             long hours = (time / 1000 + 6) % 24;
             long minutes = (time % 1000) * 60 / 1000;
-            lines.add(new Line("Day", String.format(Locale.ROOT, "%d  %02d:%02d", time / 24000 + 1, hours, minutes), CoyHud.TEXT));
+            lines.add(new Line("Day", String.format(Locale.ROOT, "%d  %02d:%02d", time / 24000 + 1, hours, minutes), Palette.TEXT));
         }
         if (server.get()) {
             ServerInfo entry = mc.getCurrentServerEntry();
-            lines.add(new Line("Server", mc.isInSingleplayer() ? "Singleplayer" : entry == null ? "-" : entry.address, CoyHud.TEXT));
+            lines.add(new Line("Server", mc.isInSingleplayer() ? "Singleplayer" : entry == null ? "-" : entry.address, Palette.TEXT));
         }
         if (players.get() && mc.getNetworkHandler() != null) {
-            lines.add(new Line("Players", String.valueOf(mc.getNetworkHandler().getPlayerList().size()), CoyHud.TEXT));
+            lines.add(new Line("Players", String.valueOf(mc.getNetworkHandler().getPlayerList().size()), Palette.TEXT));
         }
 
         double pad = 6;
@@ -141,7 +142,7 @@ public class InfoHud extends HudElement {
         boolean right = getX() + getWidth() / 2.0 > Utils.getWindowWidth() / 2.0;
         double rowY = y + pad;
         for (Line line : lines) {
-            r.text(line.label, x + pad, rowY, CoyHud.color(CoyHud.SUBTLE), background.shadow());
+            r.text(line.label, x + pad, rowY, CoyHud.color(Palette.SUBTLE), background.shadow());
             double vx = right ? x + w - pad - r.textWidth(line.value) : x + pad + labelWidth + gap;
             r.text(line.value, vx, rowY, CoyHud.color(line.color), background.shadow());
             rowY += rowHeight;

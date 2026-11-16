@@ -8,6 +8,7 @@ import dev.coyduck.modules.AutoCrystal;
 import dev.coyduck.modules.AutoTotem;
 import dev.coyduck.modules.MaceStrike;
 import dev.coyduck.modules.NoRotate;
+import dev.coyduck.modules.Shaders;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
@@ -65,5 +66,10 @@ public final class MeteorHost implements Host {
     public double keepHealth() {
         AutoCrystal autoCrystal = Features.get(AutoCrystal.class);
         return autoCrystal == null ? 0 : autoCrystal.minHealth();
+    }
+
+    @Override
+    public int tint(int argb) {
+        return Shaders.tint(argb);
     }
 }

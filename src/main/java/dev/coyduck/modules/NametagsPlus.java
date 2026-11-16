@@ -11,6 +11,7 @@ import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.hud.CoyHud;
 import dev.coyduck.mixin.PlayerLikeEntityAccessor;
+import dev.coyduck.render.Palette;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.renderer.Renderer2D;
 import meteordevelopment.meteorclient.renderer.text.TextRenderer;
@@ -202,17 +203,17 @@ public class NametagsPlus extends Feature {
         if (health.get()) {
             float total = player.getHealth() + player.getAbsorptionAmount();
             healthText = " " + Math.round(total);
-            healthColor.set(CoyHud.color(CoyHud.health(Math.min(1, player.getHealth() / Math.max(1, player.getMaxHealth())))));
+            healthColor.set(CoyHud.color(Palette.health(Math.min(1, player.getHealth() / Math.max(1, player.getMaxHealth())))));
         }
         if (ping.get() && mc.getNetworkHandler() != null) {
             PlayerListEntry entry = mc.getNetworkHandler().getPlayerListEntry(player.getUuid());
             if (entry != null && entry.getLatency() > 0) {
                 int latency = entry.getLatency();
                 pingText = " " + latency + "ms";
-                pingColor.set(CoyHud.color(latency > 250 ? CoyHud.BAD : latency > 150 ? CoyHud.WARN : CoyHud.SUBTLE));
+                pingColor.set(CoyHud.color(latency > 250 ? Palette.BAD : latency > 150 ? Palette.WARN : Palette.SUBTLE));
             }
         }
-        nameColor.set(CoyHud.color(Friends.get().isFriend(player) ? CoyHud.GOOD : CoyHud.TEXT));
+        nameColor.set(CoyHud.color(Friends.get().isFriend(player) ? Palette.GOOD : Palette.TEXT));
 
         text.beginBig();
         double height = text.getHeight(shadow);
@@ -233,7 +234,7 @@ public class NametagsPlus extends Feature {
         if (background.get()) Renderer2D.COLOR.quad(left - PAD, top - PAD, width + PAD * 2, height + bar + PAD * 2, MeteorColors.of(fill));
         if (progress >= 0) {
             double barY = top + height + 1;
-            barColor.set(CoyHud.color(CoyHud.health(1 - progress)));
+            barColor.set(CoyHud.color(Palette.health(1 - progress)));
             Renderer2D.COLOR.quad(left, barY, width, EAT_BAR, BAR_BACKGROUND);
             Renderer2D.COLOR.quad(left, barY, width * progress, EAT_BAR, barColor);
         }

@@ -71,6 +71,10 @@ public abstract sealed class Setting<T> permits BoolSetting, IntSetting, DoubleS
         return backend == null ? null : backend.handle();
     }
 
+    protected final Backend<T> backend() {
+        return backend;
+    }
+
     public void bind(Backend<T> target) {
         backend = target;
         if (!Objects.equals(value, defaultValue)) target.set(value);

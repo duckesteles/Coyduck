@@ -1,8 +1,8 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.MeteorColors;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.RenderWorldEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.feature.BoolSetting;
@@ -15,11 +15,12 @@ import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.hud.CoyHud;
 import dev.coyduck.managers.PopTracker;
-import dev.coyduck.utils.DuckRender;
+import dev.coyduck.render.Argb;
+import dev.coyduck.render.DuckRender;
+import dev.coyduck.render.Palette;
+import dev.coyduck.render.Shape;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
-import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.renderer.Renderer2D;
-import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.renderer.text.TextRenderer;
 import meteordevelopment.meteorclient.systems.config.Config;
 import meteordevelopment.meteorclient.systems.friends.Friends;
@@ -27,7 +28,6 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.render.NametagUtils;
 import meteordevelopment.meteorclient.utils.render.color.Color;
-import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.packet.s2c.play.PlayerListS2CPacket;
@@ -76,7 +76,7 @@ public class LogoutSpots extends Feature {
         .build()
     );
 
-    private final Setting<Rgba> color = sgGeneral.add(new ColorSetting.Builder()
+    private final ColorSetting color = sgGeneral.add(new ColorSetting.Builder()
         .name("color")
         .description("Color of the box.")
         .defaultValue(new Rgba(230, 90, 110, 50))
@@ -89,7 +89,6 @@ public class LogoutSpots extends Feature {
     private final Map<UUID, Seen> seen = new HashMap<>();
     private final Map<UUID, Spot> spots = new HashMap<>();
     private final Vector3d pos = new Vector3d();
-    private final Color line = new Color();
     private final Color background = new Color();
 
     public LogoutSpots() {
@@ -140,10 +139,10 @@ public class LogoutSpots extends Feature {
     }
 
     @EventHandler
-    private void onRender3D(Render3DEvent event) {
-        SettingColor fill = MeteorColors.of(color);
-        line.set(fill.r, fill.g, fill.b, Math.min(255, fill.a * 4));
-        for (Spot spot : spots.values()) DuckRender.box(event.renderer, spot.box, fill, line, ShapeMode.Both, 1);
+    private void onRender3D(RenderWorldEvent event) {
+        int fill = color.argb();
+        int line = Argb.alpha(fill, Argb.a(fill) * 4);
+        for (Spot spot : spots.values()) DuckRender.box(event.canvas, spot.box, fill, line, Shape.Both, 1);
     }
 
     @EventHandler
@@ -151,7 +150,7 @@ public class LogoutSpots extends Feature {
         if (spots.isEmpty()) return;
         boolean shadow = Config.get().customFont.get();
         TextRenderer text = TextRenderer.get();
-        background.set(CoyHud.color(CoyHud.BACKGROUND));
+        background.set(CoyHud.color(Palette.BACKGROUND));
         long now = Util.getMeasuringTimeMs();
         for (Spot spot : spots.values()) {
             pos.set(spot.box.getCenter().x, spot.box.maxY + 0.5, spot.box.getCenter().z);
@@ -170,10 +169,10 @@ public class LogoutSpots extends Feature {
             Renderer2D.COLOR.render();
             text.beginBig();
             double x = -width / 2;
-            x = text.render(name, x, -height, CoyHud.color(CoyHud.TEXT), shadow);
-            x = text.render(hp, x, -height, CoyHud.color(CoyHud.health(Math.min(1, spot.health / 20))), shadow);
-            if (!pops.isEmpty()) x = text.render(pops, x, -height, CoyHud.color(CoyHud.WARN), shadow);
-            text.render(ago, x, -height, CoyHud.color(CoyHud.SUBTLE), shadow);
+            x = text.render(name, x, -height, CoyHud.color(Palette.TEXT), shadow);
+            x = text.render(hp, x, -height, CoyHud.color(Palette.health(Math.min(1, spot.health / 20))), shadow);
+            if (!pops.isEmpty()) x = text.render(pops, x, -height, CoyHud.color(Palette.WARN), shadow);
+            text.render(ago, x, -height, CoyHud.color(Palette.SUBTLE), shadow);
             text.end();
             NametagUtils.end(event.drawContext);
         }

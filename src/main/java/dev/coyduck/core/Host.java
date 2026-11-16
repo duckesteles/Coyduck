@@ -45,4 +45,8 @@ public interface Host {
     default double keepHealth() {
         return 0;
     }
+
+    default int tint(int argb) {
+        return argb;
+    }
 }

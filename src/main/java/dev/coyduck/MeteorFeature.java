@@ -104,7 +104,7 @@ public final class MeteorFeature extends Module implements Shell {
                 if (s.onChanged() != null) s.onChanged().accept(rgba(color));
             })
             .build();
-        s.bind(new Setting.Backend<>() {
+        s.bind(new ColorSetting.Live() {
             private Rgba last;
             private int lastPacked;
 
@@ -127,6 +127,11 @@ public final class MeteorFeature extends Module implements Shell {
             @Override
             public void reset() {
                 theirs.reset();
+            }
+
+            @Override
+            public int argb() {
+                return theirs.get().getPacked();
             }
 
             @Override

@@ -1,6 +1,6 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.MeteorColors;
+import dev.coyduck.events.RenderWorldEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.ColorSetting;
 import dev.coyduck.feature.EnumSetting;
@@ -9,10 +9,8 @@ import dev.coyduck.feature.Features;
 import dev.coyduck.feature.Rgba;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
-import meteordevelopment.meteorclient.events.render.Render3DEvent;
-import meteordevelopment.meteorclient.renderer.Renderer3D;
-import meteordevelopment.meteorclient.renderer.ShapeMode;
-import meteordevelopment.meteorclient.utils.render.color.Color;
+import dev.coyduck.render.Canvas;
+import dev.coyduck.render.Shape;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.render.entity.EndCrystalEntityRenderer;
@@ -33,21 +31,21 @@ public class CrystalChams extends Feature {
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
-    private final Setting<ShapeMode> shapeMode = sgGeneral.add(new EnumSetting.Builder<ShapeMode>()
+    private final Setting<Shape> shapeMode = sgGeneral.add(new EnumSetting.Builder<Shape>()
         .name("shape-mode")
         .description("Draws the edges, the faces or both.")
-        .defaultValue(ShapeMode.Both)
+        .defaultValue(Shape.Both)
         .build()
     );
 
-    private final Setting<Rgba> lineColor = sgGeneral.add(new ColorSetting.Builder()
+    private final ColorSetting lineColor = sgGeneral.add(new ColorSetting.Builder()
         .name("line-color")
         .description("Colour of the cube edges.")
         .defaultValue(new Rgba(255, 255, 255, 255))
         .build()
     );
 
-    private final Setting<Rgba> sideColor = sgGeneral.add(new ColorSetting.Builder()
+    private final ColorSetting sideColor = sgGeneral.add(new ColorSetting.Builder()
         .name("side-color")
         .description("Colour of the cube faces.")
         .defaultValue(new Rgba(255, 255, 255, 30))
@@ -73,8 +71,8 @@ public class CrystalChams extends Feature {
     private final Vector3f[] corners = new Vector3f[8];
     private final EndCrystalEntityRenderState state = new EndCrystalEntityRenderState();
     private final MatrixStack matrices = new MatrixStack();
-    private Color side;
-    private Color line;
+    private int side;
+    private int line;
     private boolean sides;
     private boolean lines;
 
@@ -93,20 +91,20 @@ public class CrystalChams extends Feature {
     }
 
     @EventHandler
-    private void onRender(Render3DEvent event) {
+    private void onRender(RenderWorldEvent event) {
         if (mc.world == null) return;
-        Renderer3D renderer = throughWalls.get() ? event.renderer : event.depthRenderer;
-        side = Shaders.tint(MeteorColors.of(sideColor));
-        line = Shaders.lightTint(MeteorColors.of(lineColor));
+        Canvas canvas = throughWalls.get() ? event.canvas : event.depth;
+        side = Shaders.tint(sideColor.argb());
+        line = Shaders.lightTint(lineColor.argb());
         sides = shapeMode.get().sides();
         lines = shapeMode.get().lines();
         double range = MAX_DISTANCE * MAX_DISTANCE;
         for (Entity entity : mc.world.getEntities()) {
-            if (entity instanceof EndCrystalEntity crystal && (mc.player == null || mc.player.squaredDistanceTo(crystal) <= range)) draw(crystal, event.tickDelta, renderer);
+            if (entity instanceof EndCrystalEntity crystal && (mc.player == null || mc.player.squaredDistanceTo(crystal) <= range)) draw(crystal, event.tickDelta, canvas);
         }
     }
 
-    private void draw(EndCrystalEntity crystal, float tickDelta, Renderer3D renderer) {
+    private void draw(EndCrystalEntity crystal, float tickDelta, Canvas canvas) {
         if (!(mc.getEntityRenderDispatcher().getRenderer(crystal) instanceof EndCrystalEntityRenderer crystalRenderer)) return;
         EndCrystalEntityModel model = ((ModelHolder) crystalRenderer).coyduck$model();
         state.age = crystal.endCrystalAge + tickDelta;
@@ -121,11 +119,11 @@ public class CrystalChams extends Feature {
         matrices.translate(0, -0.5f, 0);
         model.getRootPart().forEachCuboid(matrices, (entry, path, index, cuboid) -> {
             if (!model.base.visible && path.contains("base")) return;
-            cube(x, y, z, entry.getPositionMatrix(), cuboid, renderer);
+            cube(x, y, z, entry.getPositionMatrix(), cuboid, canvas);
         });
     }
 
-    private void cube(double px, double py, double pz, Matrix4f matrix, ModelPart.Cuboid cuboid, Renderer3D renderer) {
+    private void cube(double px, double py, double pz, Matrix4f matrix, ModelPart.Cuboid cuboid, Canvas canvas) {
         for (int i = 0; i < 8; i++) {
             float x = ((i & 1) == 0 ? cuboid.minX : cuboid.maxX) / 16;
             float y = ((i & 2) == 0 ? cuboid.minY : cuboid.maxY) / 16;
@@ -136,7 +134,7 @@ public class CrystalChams extends Feature {
         if (sides) {
             for (int[] face : FACES) {
                 Vector3f a = corners[face[0]], b = corners[face[1]], c = corners[face[2]], d = corners[face[3]];
-                renderer.quad(px + a.x, py + a.y, pz + a.z, px + b.x, py + b.y, pz + b.z,
+                canvas.quad(px + a.x, py + a.y, pz + a.z, px + b.x, py + b.y, pz + b.z,
                     px + c.x, py + c.y, pz + c.z, px + d.x, py + d.y, pz + d.z, side);
             }
         }
@@ -146,7 +144,7 @@ public class CrystalChams extends Feature {
                 for (int bit = 1; bit < 8; bit <<= 1) {
                     if ((i & bit) != 0) continue;
                     Vector3f a = corners[i], b = corners[i | bit];
-                    renderer.line(px + a.x, py + a.y, pz + a.z, px + b.x, py + b.y, pz + b.z, line);
+                    canvas.line(px + a.x, py + a.y, pz + a.z, px + b.x, py + b.y, pz + b.z, line);
                 }
             }
         }

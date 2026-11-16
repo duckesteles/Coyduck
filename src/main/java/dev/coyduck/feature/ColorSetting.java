@@ -1,8 +1,16 @@
 package dev.coyduck.feature;
 
 public final class ColorSetting extends Setting<Rgba> {
+    public interface Live extends Backend<Rgba> {
+        int argb();
+    }
+
     private ColorSetting(Builder builder) {
         super(builder);
+    }
+
+    public int argb() {
+        return backend() instanceof Live live ? live.argb() : get().packed();
     }
 
     @Override

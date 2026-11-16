@@ -1,5 +1,6 @@
 package dev.coyduck.hud;
 
+import dev.coyduck.render.Palette;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.Setting;
@@ -156,11 +157,11 @@ public class ClockHud extends HudElement {
         double left = x + pad + bar;
         double end = x + w - pad;
         double ty = y + pad;
-        r.text(time, right ? end - r.textWidth(time, shadow, big) : left, ty, CoyHud.color(accentTime.get() ? CoyHud.accent() : CoyHud.TEXT), shadow, big);
+        r.text(time, right ? end - r.textWidth(time, shadow, big) : left, ty, CoyHud.color(accentTime.get() ? CoyHud.accent() : Palette.TEXT), shadow, big);
         ty += timeHeight + 2 * scale;
         for (int i = 0; i < small.size(); i++) {
             String line = small.get(i);
-            r.text(line, right ? end - r.textWidth(line, shadow, scale) : left, ty, CoyHud.color(i == 0 && date.get() ? CoyHud.SUBTLE : CoyHud.MUTED), shadow, scale);
+            r.text(line, right ? end - r.textWidth(line, shadow, scale) : left, ty, CoyHud.color(i == 0 && date.get() ? Palette.SUBTLE : Palette.MUTED), shadow, scale);
             ty += lineHeight;
         }
     }

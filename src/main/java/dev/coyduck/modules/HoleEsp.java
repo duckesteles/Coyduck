@@ -1,6 +1,6 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.MeteorColors;
+import dev.coyduck.events.RenderWorldEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.ColorSetting;
@@ -10,12 +10,11 @@ import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.Rgba;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.render.Argb;
+import dev.coyduck.render.Canvas;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import meteordevelopment.meteorclient.events.render.Render3DEvent;
-import meteordevelopment.meteorclient.renderer.Renderer3D;
-import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -92,21 +91,21 @@ public class HoleEsp extends Feature {
         .build()
     );
 
-    private final Setting<Rgba> safeColor = sgRender.add(new ColorSetting.Builder()
+    private final ColorSetting safeColor = sgRender.add(new ColorSetting.Builder()
         .name("bedrock-color")
         .description("Bedrock-only holes.")
         .defaultValue(new Rgba(255, 255, 255, 60))
         .build()
     );
 
-    private final Setting<Rgba> otherColor = sgRender.add(new ColorSetting.Builder()
+    private final ColorSetting otherColor = sgRender.add(new ColorSetting.Builder()
         .name("obsidian-color")
         .description("Holes with breakable walls.")
         .defaultValue(new Rgba(190, 170, 255, 60))
         .build()
     );
 
-    private final Setting<Rgba> trappedColor = sgRender.add(new ColorSetting.Builder()
+    private final ColorSetting trappedColor = sgRender.add(new ColorSetting.Builder()
         .name("trapped-color")
         .description("Holes with a solid roof.")
         .defaultValue(new Rgba(255, 180, 70, 60))
@@ -139,10 +138,6 @@ public class HoleEsp extends Feature {
     private final Long2ObjectOpenHashMap<Hole> holes = new Long2ObjectOpenHashMap<>();
     private final LongSet seen = new LongOpenHashSet();
     private final BlockPos.Mutable cursor = new BlockPos.Mutable();
-    private final Color fill = new Color();
-    private final Color clear = new Color();
-    private final Color line = new Color();
-    private final Color lineClear = new Color();
     private int ticks;
     private long last;
     private boolean anchorsWork;
@@ -245,7 +240,7 @@ public class HoleEsp extends Feature {
     }
 
     @EventHandler
-    private void onRender(Render3DEvent event) {
+    private void onRender(RenderWorldEvent event) {
         long now = Util.getMeasuringTimeMs();
         double delta = last == 0 ? 0 : Math.min((now - last) / 1000.0, 0.1);
         last = now;
@@ -258,18 +253,17 @@ public class HoleEsp extends Feature {
                 iterator.remove();
                 continue;
             }
-            draw(event.renderer, hole);
+            draw(event.canvas, hole);
         }
     }
 
-    private void draw(Renderer3D r, Hole hole) {
+    private void draw(Canvas r, Hole hole) {
         double inverse = 1 - hole.shown;
         double t = 1 - inverse * inverse * inverse;
-        Color base = Shaders.tint(hole.trapped ? MeteorColors.of(trappedColor) : hole.safe ? MeteorColors.of(safeColor) : MeteorColors.of(otherColor));
-        fill.set(base.r, base.g, base.b, (int) (base.a * t));
-        clear.set(base.r, base.g, base.b, 0);
-        line.set(base.r, base.g, base.b, (int) (Math.min(255, base.a * 3.5) * t));
-        lineClear.set(base.r, base.g, base.b, 0);
+        int base = Shaders.tint((hole.trapped ? trappedColor : hole.safe ? safeColor : otherColor).argb());
+        int fill = Argb.alpha(base, (int) (Argb.a(base) * t));
+        int clear = Argb.alpha(base, 0);
+        int line = Argb.alpha(base, (int) (Math.min(255, Argb.a(base) * 3.5) * t));
 
         double y = hole.y;
         double top = y + height.get() * t;
@@ -283,9 +277,9 @@ public class HoleEsp extends Feature {
         r.line(hole.minX, y, hole.maxZ, hole.maxX, y, hole.maxZ, line);
         r.line(hole.minX, y, hole.minZ, hole.minX, y, hole.maxZ, line);
         r.line(hole.maxX, y, hole.minZ, hole.maxX, y, hole.maxZ, line);
-        r.line(hole.minX, y, hole.minZ, hole.minX, top, hole.minZ, line, lineClear);
-        r.line(hole.maxX, y, hole.minZ, hole.maxX, top, hole.minZ, line, lineClear);
-        r.line(hole.minX, y, hole.maxZ, hole.minX, top, hole.maxZ, line, lineClear);
-        r.line(hole.maxX, y, hole.maxZ, hole.maxX, top, hole.maxZ, line, lineClear);
+        r.line(hole.minX, y, hole.minZ, hole.minX, top, hole.minZ, line, clear);
+        r.line(hole.maxX, y, hole.minZ, hole.maxX, top, hole.minZ, line, clear);
+        r.line(hole.minX, y, hole.maxZ, hole.minX, top, hole.maxZ, line, clear);
+        r.line(hole.maxX, y, hole.maxZ, hole.maxX, top, hole.maxZ, line, clear);
     }
 }

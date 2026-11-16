@@ -10,6 +10,7 @@ import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.Rgba;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.render.Argb;
 import dev.coyduck.utils.ShaderGlow;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.utils.render.color.Color;
@@ -23,7 +24,7 @@ public class Shaders extends Feature implements ShaderGlow.Source {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgAtmosphere = settings.createGroup("Atmosphere");
 
-    private final Setting<Rgba> color = sgGeneral.add(new ColorSetting.Builder()
+    private final ColorSetting color = sgGeneral.add(new ColorSetting.Builder()
         .name("color")
         .description("Shader color, also used by Coyduck renders.")
         .defaultValue(new Rgba(130, 202, 255, 255))
@@ -146,18 +147,17 @@ public class Shaders extends Feature implements ShaderGlow.Source {
         return module != null && module.isActive() ? module : null;
     }
 
-    public static Color tint(Color original) {
+    public static int tint(int argb) {
         Shaders module = active();
-        if (module == null || !module.allRenders.get()) return original;
-        Color global = MeteorColors.of(module.color);
-        return new Color(global.r, global.g, global.b, original.a);
+        if (module == null || !module.allRenders.get()) return argb;
+        return Argb.alpha(module.color.argb(), Argb.a(argb));
     }
 
-    public static Color lightTint(Color original) {
+    public static int lightTint(int argb) {
         Shaders module = active();
-        if (module == null || !module.allRenders.get()) return original;
-        Color global = MeteorColors.of(module.color);
-        return new Color((global.r + 255) / 2, (global.g + 255) / 2, (global.b + 255) / 2, original.a);
+        if (module == null || !module.allRenders.get()) return argb;
+        int global = module.color.argb();
+        return Argb.of((Argb.r(global) + 255) / 2, (Argb.g(global) + 255) / 2, (Argb.b(global) + 255) / 2, Argb.a(argb));
     }
 
     public static Shaders atmosphere() {

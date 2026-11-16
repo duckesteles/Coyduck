@@ -1,5 +1,6 @@
 package dev.coyduck.hud;
 
+import dev.coyduck.render.Palette;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;
@@ -111,7 +112,7 @@ public class ItemsHud extends HudElement {
         int y = box.getRenderY();
         CoyHud.panel(r, x, y, w, h, background.alpha());
         if (entries.isEmpty()) {
-            if (isInEditor()) r.text("Items", x + pad, y + pad, CoyHud.color(CoyHud.MUTED), background.shadow(), s);
+            if (isInEditor()) r.text("Items", x + pad, y + pad, CoyHud.color(Palette.MUTED), background.shadow(), s);
             return;
         }
 
@@ -126,7 +127,7 @@ public class ItemsHud extends HudElement {
             int iy = (int) Math.round(cellY);
             ItemStack stack = entry.stack;
             r.post(() -> r.item(stack, ix, iy, icon, false, ""));
-            int color = entry.count == 0 ? CoyHud.BAD : entry.count <= low.get() ? CoyHud.WARN : CoyHud.TEXT;
+            int color = entry.count == 0 ? Palette.BAD : entry.count <= low.get() ? Palette.WARN : Palette.TEXT;
             r.text(entry.text, textX, cellY + (size - textHeight) / 2, CoyHud.color(color), background.shadow(), s);
         }
     }

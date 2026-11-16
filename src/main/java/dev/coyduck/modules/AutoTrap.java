@@ -1,7 +1,7 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.MeteorColors;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.RenderWorldEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.feature.BlockListSetting;
@@ -19,12 +19,11 @@ import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.MiningManager;
-import dev.coyduck.utils.DuckRender;
+import dev.coyduck.render.DuckRender;
+import dev.coyduck.render.Shape;
 import dev.coyduck.utils.Targets;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import meteordevelopment.meteorclient.events.render.Render3DEvent;
-import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
@@ -40,8 +39,8 @@ import net.minecraft.network.packet.s2c.play.EntitiesDestroyS2CPacket;
 import net.minecraft.util.Util;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.MathHelper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -140,15 +139,15 @@ public class AutoTrap extends Feature {
         .build()
     );
 
-    private final Setting<ShapeMode> shapeMode = sgRender.add(new EnumSetting.Builder<ShapeMode>()
+    private final Setting<Shape> shapeMode = sgRender.add(new EnumSetting.Builder<Shape>()
         .name("shape-mode")
         .description("How the highlight is drawn.")
-        .defaultValue(ShapeMode.Both)
+        .defaultValue(Shape.Both)
         .visible(render::get)
         .build()
     );
 
-    private final Setting<Rgba> sideColor = sgRender.add(new ColorSetting.Builder()
+    private final ColorSetting sideColor = sgRender.add(new ColorSetting.Builder()
         .name("side-color")
         .description("Highlight side color.")
         .defaultValue(new Rgba(110, 45, 200, 40))
@@ -156,7 +155,7 @@ public class AutoTrap extends Feature {
         .build()
     );
 
-    private final Setting<Rgba> lineColor = sgRender.add(new ColorSetting.Builder()
+    private final ColorSetting lineColor = sgRender.add(new ColorSetting.Builder()
         .name("line-color")
         .description("Highlight line color.")
         .defaultValue(new Rgba(110, 45, 200, 200))
@@ -228,13 +227,13 @@ public class AutoTrap extends Feature {
     }
 
     @EventHandler
-    private void onRender(Render3DEvent event) {
+    private void onRender(RenderWorldEvent event) {
         if (!render.get()) return;
 
         long now = Util.getMeasuringTimeMs();
         rendered.long2LongEntrySet().removeIf(entry -> now - entry.getLongValue() > DuckRender.LIFETIME);
         for (var entry : rendered.long2LongEntrySet()) {
-            DuckRender.box(event.renderer, new Box(BlockPos.fromLong(entry.getLongKey())), MeteorColors.of(sideColor), MeteorColors.of(lineColor), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
+            DuckRender.box(event.canvas, new Box(BlockPos.fromLong(entry.getLongKey())), sideColor.argb(), lineColor.argb(), shapeMode.get(), DuckRender.alpha(now - entry.getLongValue()));
         }
     }
 

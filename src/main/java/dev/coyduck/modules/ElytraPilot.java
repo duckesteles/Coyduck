@@ -1,8 +1,8 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.MeteorColors;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.RenderWorldEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.feature.BoolSetting;
@@ -21,9 +21,7 @@ import dev.coyduck.utils.Trace;
 import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.ChunkDataEvent;
-import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.orbit.EventHandler;
 import net.fabricmc.loader.api.FabricLoader;
@@ -218,7 +216,7 @@ public class ElytraPilot extends Feature {
         .build()
     );
 
-    private final Setting<Rgba> color = sgRender.add(new ColorSetting.Builder()
+    private final ColorSetting color = sgRender.add(new ColorSetting.Builder()
         .name("color")
         .description("Route and landing spot color.")
         .defaultValue(new Rgba(110, 45, 200, 200))
@@ -1196,18 +1194,19 @@ public class ElytraPilot extends Feature {
     }
 
     @EventHandler
-    private void onRender(Render3DEvent event) {
+    private void onRender(RenderWorldEvent event) {
         if (!render.get()) return;
 
         if (nether() && path.size() > pathIndex) {
+            int argb = color.argb();
             Vec3d last = mc.player.getEntityPos();
             for (int i = pathIndex; i < path.size(); i++) {
                 Vec3d next = point(i);
-                event.renderer.line(last.x, last.y, last.z, next.x, next.y, next.z, MeteorColors.of(color));
+                event.canvas.line(last.x, last.y, last.z, next.x, next.y, next.z, argb);
                 last = next;
             }
         }
-        if (spot != null && state == State.Land) event.renderer.box(spot, MeteorColors.of(color), MeteorColors.of(color), ShapeMode.Lines, 0);
+        if (spot != null && state == State.Land) event.canvas.boxLines(spot.getX(), spot.getY(), spot.getZ(), spot.getX() + 1, spot.getY() + 1, spot.getZ() + 1, color.argb());
     }
 
     private BlockPos findSpot(Vec3d around, int radius) {
