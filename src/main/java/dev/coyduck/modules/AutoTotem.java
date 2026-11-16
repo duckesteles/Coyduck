@@ -184,6 +184,9 @@ public class AutoTotem extends Module {
     private int skipMask;
     private int pendingSyncId;
     private int barrier;
+    private int mainBarrier;
+    private boolean mainPending;
+    private long mainPendingUntil;
     private long pendingUntil;
     private int attempts;
     private boolean confirmed;
@@ -244,6 +247,7 @@ public class AutoTotem extends Module {
     public void onActivate() {
         gapple = false;
         mainMissing = 0;
+        mainPending = false;
         clearPending();
         attempts = 0;
         confirmed = false;
@@ -317,6 +321,7 @@ public class AutoTotem extends Module {
     private void onPacket(PacketApplyEvent.Post event) {
         if (!canAct()) return;
 
+        if (mainPending && event.packet instanceof PlayerActionResponseS2CPacket packet && packet.sequence() >= mainBarrier) mainPending = false;
         switch (event.packet) {
             case EntityStatusS2CPacket packet when packet.getStatus() == EntityStatuses.USE_TOTEM_OF_UNDYING && packet.getEntity(mc.world) == mc.player -> onPop();
             case PlayerActionResponseS2CPacket packet when pending && packet.sequence() >= barrier -> onBarrier();
@@ -341,6 +346,7 @@ public class AutoTotem extends Module {
         Arrays.fill(sourceUsedAt, 0);
         gapple = false;
         mainMissing = 0;
+        mainPending = false;
         clearPending();
         attempts = 0;
         confirmed = false;
@@ -521,7 +527,8 @@ public class AutoTotem extends Module {
 
     private void updateGapple() {
         InventoryManager inventory = InventoryManager.get();
-        boolean mainTotem = isTotem(mc.player.getMainHandStack());
+        if (mainPending && Util.getMeasuringTimeMs() > mainPendingUntil) mainPending = false;
+        boolean mainTotem = isTotem(mc.player.getMainHandStack()) && !mainPending;
 
         if (gapple) {
             mainMissing = mainTotem ? 0 : mainMissing + 1;
@@ -706,6 +713,9 @@ public class AutoTotem extends Module {
 
             hotbar = reserveHotbar();
             if (hotbar == NONE || !inventory.swapWithHotbar(source, hotbar)) return;
+            mainBarrier = inventory.barrier();
+            mainPending = true;
+            mainPendingUntil = Util.getMeasuringTimeMs() + LatencyManager.get().timeout();
         }
 
         if (!inventory.select(hotbar)) return;
