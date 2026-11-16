@@ -42,7 +42,6 @@ import dev.coyduck.render.Shape;
 import dev.coyduck.utils.ExplosionDamage;
 import dev.coyduck.utils.Targets;
 import dev.coyduck.utils.Trace;
-import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap;
@@ -54,7 +53,6 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityStatuses;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.ItemEntity;
@@ -73,7 +71,6 @@ import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.EntitiesDestroyS2CPacket;
-import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.predicate.entity.EntityPredicates;
 import net.minecraft.util.Hand;
@@ -506,7 +503,6 @@ public class AutoCrystal extends Feature {
     private long releaseAt;
     private final Long2FloatOpenHashMap selfCache = new Long2FloatOpenHashMap();
     private final Int2ObjectOpenHashMap<TargetRaws> rawCache = new Int2ObjectOpenHashMap<>();
-    private final Int2LongOpenHashMap popped = new Int2LongOpenHashMap();
     private final List<PlayerEntity> friends = new ArrayList<>();
     private List<EndCrystalEntity> crystals = List.of();
     private Box selfBox;
@@ -585,10 +581,6 @@ public class AutoCrystal extends Feature {
         if (predictedAt != 0 && Util.getMeasuringTimeMs() - predictedAt > LatencyManager.get().timeout()) endPrediction();
         long now = Util.getMeasuringTimeMs();
         if (!clearing.isEmpty()) clearing.values().removeIf(until -> now >= until);
-        if (!popped.isEmpty()) {
-            long window = LatencyManager.get().timeout();
-            popped.values().removeIf(at -> now - at > window);
-        }
         pass();
         updateFocus();
     }
@@ -604,7 +596,6 @@ public class AutoCrystal extends Feature {
         clearing.clear();
         slide.reset();
         releaseAt = 0;
-        popped.clear();
         clearCache();
     }
 
@@ -683,10 +674,6 @@ public class AutoCrystal extends Feature {
                 boolean[] found = {false};
                 packet.visitUpdates((pos, state) -> found[0] |= state.isReplaceable() && near(Vec3d.ofCenter(pos)));
                 yield found[0];
-            }
-            case EntityStatusS2CPacket packet -> {
-                if (packet.getStatus() == EntityStatuses.USE_TOTEM_OF_UNDYING && mc.world != null && packet.getEntity(mc.world) instanceof PlayerEntity player) popped.put(player.getId(), Util.getMeasuringTimeMs());
-                yield false;
             }
             default -> false;
         };
@@ -768,7 +755,7 @@ public class AutoCrystal extends Feature {
     }
 
     private boolean holdsTotem(PlayerEntity player) {
-        return player.getMainHandStack().isOf(Items.TOTEM_OF_UNDYING) || player.getOffHandStack().isOf(Items.TOTEM_OF_UNDYING) || popped.containsKey(player.getId());
+        return player.getMainHandStack().isOf(Items.TOTEM_OF_UNDYING) || player.getOffHandStack().isOf(Items.TOTEM_OF_UNDYING);
     }
 
     private void prepare() {
