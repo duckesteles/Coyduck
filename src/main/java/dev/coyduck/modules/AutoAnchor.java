@@ -106,23 +106,28 @@ public class AutoAnchor extends Module {
     private record Saved(Danger threat, Choice now) {}
 
     private static final class Raws {
-        float[] target = new float[0];
+        final Vec3d center;
+        float[] targets = new float[0];
         float self = Float.NaN;
         byte friend = UNKNOWN;
         byte costly = UNKNOWN;
         BlockOverlay view;
 
-        float target(int index) {
-            return index < target.length ? target[index] : Float.NaN;
+        Raws(BlockPos pos) {
+            center = Vec3d.ofCenter(pos);
         }
 
-        void target(int index, float value) {
-            if (index >= target.length) {
-                int old = target.length;
-                target = Arrays.copyOf(target, Math.max(index + 1, old * 2));
-                Arrays.fill(target, old, target.length, Float.NaN);
+        float raw(int index) {
+            return index < targets.length ? targets[index] : Float.NaN;
+        }
+
+        void raw(int index, float value) {
+            if (index >= targets.length) {
+                int old = targets.length;
+                targets = Arrays.copyOf(targets, Math.max(index + 1, old * 2));
+                Arrays.fill(targets, old, targets.length, Float.NaN);
             }
-            target[index] = value;
+            targets[index] = value;
         }
     }
 
@@ -316,6 +321,8 @@ public class AutoAnchor extends Module {
     private final Long2LongOpenHashMap used = new Long2LongOpenHashMap();
     private final Long2LongOpenHashMap awaiting = new Long2LongOpenHashMap();
     private final Long2ObjectOpenHashMap<Raws> raws = new Long2ObjectOpenHashMap<>();
+    private long lastRawsKey;
+    private Raws lastRaws;
     private final Long2ObjectOpenHashMap<BlockHitResult> faces = new Long2ObjectOpenHashMap<>();
     private final List<Saved> saved = new ArrayList<>();
     private final DuckRender.Slide slide = new DuckRender.Slide();
@@ -428,12 +435,12 @@ public class AutoAnchor extends Module {
 
         running = true;
         try {
-            raws.clear();
+            clearRaws();
             faces.clear();
             scorer.rules(rules());
             anchorOnStop(gap, anchorSlot, glowSlot);
         } finally {
-            raws.clear();
+            clearRaws();
             faces.clear();
             running = false;
         }
@@ -565,12 +572,12 @@ public class AutoAnchor extends Module {
 
         running = true;
         try {
-            raws.clear();
+            clearRaws();
             faces.clear();
             scorer.rules(rules());
             run();
         } finally {
-            raws.clear();
+            clearRaws();
             faces.clear();
             running = false;
         }
@@ -899,8 +906,9 @@ public class AutoAnchor extends Module {
             float raw = ExplosionDamage.raw(player, position, Targets.box(player), center, POWER, view);
             if (raw <= 0) continue;
 
-            float full = ExplosionDamage.mitigate(player, raw);
-            float effective = HurtTracker.get().effective(player, raw, arrival);
+            Blast.Defense defense = Blast.Defense.of(player);
+            float full = defense.reduce(raw);
+            float effective = HurtTracker.get().effective(player, defense, raw, arrival);
             if (full + AnchorScore.FIRE_MARGIN >= player.getHealth() + player.getAbsorptionAmount() || effective > FRIEND_LIMIT) return true;
         }
         return false;
@@ -1074,7 +1082,16 @@ public class AutoAnchor extends Module {
     }
 
     private Raws raws(BlockPos pos) {
-        return raws.computeIfAbsent(pos.asLong(), key -> new Raws());
+        long key = pos.asLong();
+        if (lastRaws != null && key == lastRawsKey) return lastRaws;
+        lastRawsKey = key;
+        lastRaws = raws.computeIfAbsent(key, ignored -> new Raws(pos));
+        return lastRaws;
+    }
+
+    private void clearRaws() {
+        raws.clear();
+        lastRaws = null;
     }
 
     private BlockOverlay view(Raws cached, BlockPos pos) {
@@ -1096,10 +1113,10 @@ public class AutoAnchor extends Module {
         @Override
         public float raw(BlockPos pos, int index, Target target) {
             Raws cached = raws(pos);
-            float raw = cached.target(index);
+            float raw = cached.raw(index);
             if (Float.isNaN(raw)) {
-                raw = ExplosionDamage.raw(target.player(), target.feet(), target.box(), Vec3d.ofCenter(pos), POWER, view(cached, pos));
-                cached.target(index, raw);
+                raw = ExplosionDamage.raw(target.player(), target.feet(), target.box(), cached.center, POWER, view(cached, pos));
+                cached.raw(index, raw);
             }
             return raw;
         }
@@ -1112,7 +1129,7 @@ public class AutoAnchor extends Module {
         @Override
         public float selfRaw(BlockPos pos) {
             Raws cached = raws(pos);
-            if (Float.isNaN(cached.self)) cached.self = ExplosionDamage.raw(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), Vec3d.ofCenter(pos), POWER, view(cached, pos));
+            if (Float.isNaN(cached.self)) cached.self = ExplosionDamage.raw(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), cached.center, POWER, view(cached, pos));
             return cached.self;
         }
 
@@ -1129,14 +1146,14 @@ public class AutoAnchor extends Module {
         @Override
         public boolean costly(BlockPos pos) {
             Raws cached = raws(pos);
-            if (cached.costly == UNKNOWN) cached.costly = destroysOwnCrystals(Vec3d.ofCenter(pos)) ? YES : NO;
+            if (cached.costly == UNKNOWN) cached.costly = destroysOwnCrystals(cached.center) ? YES : NO;
             return cached.costly == YES;
         }
 
         @Override
         public boolean hurtsFriend(BlockPos pos, long arrival) {
             Raws cached = raws(pos);
-            if (cached.friend == UNKNOWN) cached.friend = AutoAnchor.this.hurtsFriend(Vec3d.ofCenter(pos), view(cached, pos), arrival) ? YES : NO;
+            if (cached.friend == UNKNOWN) cached.friend = AutoAnchor.this.hurtsFriend(cached.center, view(cached, pos), arrival) ? YES : NO;
             return cached.friend == YES;
         }
 

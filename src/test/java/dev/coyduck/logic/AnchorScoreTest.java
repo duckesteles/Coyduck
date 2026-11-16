@@ -263,18 +263,22 @@ class AnchorScoreTest {
                 if (random.nextInt(8) == 0) model.blocked.add(pos);
             }
             if (random.nextBoolean()) model.aim = positions.get(random.nextInt(positions.size()));
+            long timing = random.nextBoolean() ? 1 : 0;
+            if (timing != 0) model.timedShare = 0.1f + random.nextFloat() * 0.9f;
             float health = 1 + random.nextInt(36);
             AnchorScore score = scorer(model);
             List<Spot> spots = new ArrayList<>();
             for (BlockPos pos : positions) {
-                Spot spot = score.spot(targets, pos, random.nextBoolean(), 0);
+                Spot spot = score.spot(targets, pos, random.nextBoolean(), timing);
                 if (spot != null) spots.add(spot);
             }
 
-            Choice picked = score.pick(spots, targets, health, 0, 0);
+            Choice picked = score.pick(spots, targets, health, timing, 0);
             Choice best = null;
             for (Spot spot : spots) {
-                Choice choice = score.evaluate(targets, spot.pos(), health, 0, 0, spot.charged(), spot.reachable());
+                long reachable = timing != 0 ? spot.timedReachable() : spot.reachable();
+                if (reachable == 0) continue;
+                Choice choice = score.evaluate(targets, spot.pos(), health, timing, 0, spot.charged(), reachable);
                 if (choice != null && model.placeable(spot) && choice.beats(best)) best = choice;
             }
             assertEquals(best == null, picked == null, "round " + round);

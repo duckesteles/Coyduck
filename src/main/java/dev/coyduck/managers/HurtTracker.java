@@ -196,8 +196,7 @@ public final class HurtTracker {
     }
 
     private static float reduce(LivingEntity entity, Blast.Defense defense, float raw) {
-        if (raw <= 0) return 0;
-        return (defense != null ? defense : Blast.Defense.of(entity)).reduce(raw);
+        return defense != null ? defense.reduce(raw) : ExplosionDamage.mitigate(entity, raw);
     }
 
     private Window window(LivingEntity entity, long arrival) {

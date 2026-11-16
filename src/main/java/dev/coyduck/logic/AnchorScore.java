@@ -102,12 +102,11 @@ public final class AnchorScore {
         for (Spot spot : spots) {
             if (!timed || spot.timedReachable != 0) order.add(spot);
         }
-        order.sort(Comparator.comparingDouble((Spot spot) -> timed ? spot.timedPotential : spot.potential).reversed());
+        order.sort(Comparator.comparingDouble((Spot spot) -> ceiling(spot, timed)).reversed());
 
         Choice best = null;
         for (Spot spot : order) {
-            float potential = timed ? spot.timedPotential : spot.potential;
-            if (best != null && potential + CHARGED_TIE <= best.rank()) break;
+            if (best != null && ceiling(spot, timed) <= best.rank()) break;
             Choice choice = evaluate(targets, spot.pos, health, timing, arrival, spot.charged, timed ? spot.timedReachable : spot.reachable);
             if (choice == null || !choice.beats(best) || !model.placeable(spot)) continue;
             best = choice;
@@ -116,7 +115,7 @@ public final class AnchorScore {
     }
 
     public Choice evaluate(List<Target> targets, BlockPos pos, float health, long timing, long arrival, boolean charged, long reachable) {
-        boolean costly = model.costly(pos);
+        int costly = -1;
         float bonus = model.aimed(pos) ? AIM_BONUS : 0;
 
         Choice best = null;
@@ -126,7 +125,10 @@ public final class AnchorScore {
             float raw = model.raw(pos, i, target);
             float damage = timing != 0 ? model.timed(target, raw, timing) : target.defense.reduce(raw);
             if (damage < target.minDamage && damage < target.health) continue;
-            if (costly && damage < target.health) continue;
+            if (damage < target.health) {
+                if (costly < 0) costly = model.costly(pos) ? 1 : 0;
+                if (costly == 1) continue;
+            }
 
             float score = damage + bonus + (target.focused ? FOCUS_BONUS : 0) + (damage >= target.health ? LETHAL_BONUS : 0);
             Choice choice = new Choice(pos, target, damage, 0, score, charged);
@@ -147,5 +149,9 @@ public final class AnchorScore {
             return null;
         }
         return new Choice(pos, best.target, best.damage, self, best.score, charged);
+    }
+
+    private static float ceiling(Spot spot, boolean timed) {
+        return (timed ? spot.timedPotential : spot.potential) + (spot.charged ? CHARGED_TIE : 0);
     }
 }
