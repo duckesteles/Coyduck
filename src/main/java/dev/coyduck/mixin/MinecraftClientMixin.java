@@ -1,6 +1,7 @@
 package dev.coyduck.mixin;
 
 import dev.coyduck.core.Bus;
+import dev.coyduck.core.Clock;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.TickEvent;
 import net.minecraft.client.MinecraftClient;
@@ -19,6 +20,7 @@ public abstract class MinecraftClientMixin {
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void coyduck$tickPre(CallbackInfo ci) {
+        Clock.advance();
         Bus.post(TickEvent.Pre.INSTANCE);
     }
 

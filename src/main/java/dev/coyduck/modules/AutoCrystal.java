@@ -1,6 +1,7 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.Coyduck;
+import dev.coyduck.core.Clock;
 import dev.coyduck.events.EntityAddedEvent;
 import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
@@ -568,7 +569,7 @@ public class AutoCrystal extends Module {
         if (pauseMining.get() && mc.interactionManager.isBreakingBlock()) return false;
         if (pauseEating.get() && mc.player.isUsingItem() || InventoryManager.get().isOffhandEating()) return false;
 
-        if (preparedAt != mc.world.getTime()) prepare();
+        if (preparedAt != Clock.ticks()) prepare();
         Target target = makeTarget(player, predictTicks());
         Surround surround = Modules.get().get(Surround.class);
         ownCells = surround != null && surround.isActive() ? Targets.ownRing() : List.of();
@@ -601,6 +602,7 @@ public class AutoCrystal extends Module {
 
     @EventHandler
     private void onWorldReset(WorldResetEvent event) {
+        preparedAt = -1;
         focus = null;
         lastTarget = null;
         challengeTicks = 0;
@@ -777,7 +779,7 @@ public class AutoCrystal extends Module {
     }
 
     private void prepare() {
-        preparedAt = mc.world.getTime();
+        preparedAt = Clock.ticks();
         rules = rules();
         scorer.rules(rules);
         Difficulty now = mc.world.getDifficulty();
