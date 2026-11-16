@@ -15,6 +15,7 @@ import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.logic.Blast;
 import dev.coyduck.logic.Enchants;
+import dev.coyduck.managers.AttackCharge;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
@@ -490,7 +491,7 @@ public class MaceStrike extends Feature {
         boolean burst = mode.get() == Mode.Burst;
         int diveTicks = burst ? 0 : (int) Math.ceil((mc.player.getY() - y) / step.get());
         long hitAt = Util.getMeasuringTimeMs() + diveTicks * 50L + LatencyManager.get().rtt() / 2;
-        float charge = mc.player.getAttackCooldownProgress(diveTicks + 0.5f);
+        float charge = AttackCharge.server(diveTicks + 0.5f);
         double drop = mc.player.getY() - y;
         double counted = burst && Double.isNaN(learnedFall) ? drop : countedFall();
         double fall = Math.min(burst ? drop : Math.min(drop, step.get()) + 1, counted);
@@ -802,7 +803,7 @@ public class MaceStrike extends Feature {
             learnAbsorption = victim.getAbsorptionAmount();
             learnImmune = HurtTracker.get().releaseTime(victim) > Util.getMeasuringTimeMs();
             learnPops = PopCounter.pops(victim);
-            learnCharge = mc.player.getAttackCooldownProgress(0.5f);
+            learnCharge = AttackCharge.server(0.5f);
             learnBase = (float) mc.player.getAttributeValue(EntityAttributes.ATTACK_DAMAGE);
             learnDensity = Enchants.level(mc.player.getMainHandStack(), Enchantments.DENSITY);
             learnAt = Util.getMeasuringTimeMs();

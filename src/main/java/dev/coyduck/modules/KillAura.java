@@ -8,6 +8,7 @@ import dev.coyduck.feature.Feature;
 import dev.coyduck.feature.Features;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.managers.AttackCharge;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
@@ -198,7 +199,7 @@ public class KillAura extends Feature {
         if (choice == null || paused()) return;
         if (autoSwitch.get()) equip(choice.entity());
         if (!rotate.get()) return;
-        if (mc.player.getAttackCooldownProgress(LEAD_TICKS) < cooldown.get()) return;
+        if (AttackCharge.server(LEAD_TICKS) < cooldown.get()) return;
         if (Util.getMeasuringTimeMs() + LEAD_TIME < HurtTracker.get().releaseTime(choice.entity())) return;
         RotationManager.get().request(PRIORITY, choice.aim(), ROTATE_SPEED, true);
     }
@@ -218,7 +219,7 @@ public class KillAura extends Feature {
     }
 
     private void attack(Choice choice) {
-        float progress = mc.player.getAttackCooldownProgress(0.5f);
+        float progress = AttackCharge.server(0.5f);
         if (progress < cooldown.get()) return;
 
         if (crits.get() && critComing() && critWait < CRIT_WAIT) {
