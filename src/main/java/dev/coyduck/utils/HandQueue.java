@@ -1,5 +1,6 @@
 package dev.coyduck.utils;
 
+import dev.coyduck.MeteorGlow;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.render.RenderLayer;
@@ -34,7 +35,7 @@ public final class HandQueue extends WallQueue {
     }
 
     private VertexConsumer mask(RenderLayer layer, Sprite sprite) {
-        VertexConsumer consumer = ShaderGlow.get().vertexConsumerProvider.getBuffer(layer);
+        VertexConsumer consumer = MeteorGlow.get().vertexConsumerProvider.getBuffer(layer);
         return sprite != null ? sprite.getTextureSpecificVertexConsumer(consumer) : consumer;
     }
 

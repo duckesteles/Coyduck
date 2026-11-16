@@ -1,6 +1,7 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.core.Core;
+import dev.coyduck.events.ChunkDataEvent;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.RenderWorldEvent;
@@ -22,7 +23,6 @@ import dev.coyduck.utils.Trace;
 import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import meteordevelopment.meteorclient.events.world.ChunkDataEvent;
 import meteordevelopment.orbit.EventHandler;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;

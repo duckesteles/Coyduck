@@ -1,5 +1,7 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.core.Core;
+import dev.coyduck.events.EntityMoveEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.feature.BoolSetting;
@@ -11,9 +13,6 @@ import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.utils.Trace;
-import meteordevelopment.meteorclient.MeteorClient;
-import meteordevelopment.meteorclient.events.entity.EntityMoveEvent;
-import meteordevelopment.meteorclient.mixininterface.IVec3d;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
@@ -201,7 +200,7 @@ public class BoatFly extends Feature {
 
     public static boolean keepSeat() {
         BoatFly module = Features.get(BoatFly.class);
-        return module != null && module.isActive() && MeteorClient.mc.player != null && MeteorClient.mc.player.getVehicle() instanceof AbstractBoatEntity;
+        return module != null && module.isActive() && Core.mc.player != null && Core.mc.player.getVehicle() instanceof AbstractBoatEntity;
     }
 
     @Override
@@ -308,7 +307,7 @@ public class BoatFly extends Feature {
         move = antiKick(vehicle, move);
         vehicle.setVelocity(new Vec3d(0, 0, 0));
         remember(vehicle, want, move);
-        ((IVec3d) event.movement).meteor$set(move.x, move.y, move.z);
+        event.set(move.x, move.y, move.z);
     }
 
     @EventHandler

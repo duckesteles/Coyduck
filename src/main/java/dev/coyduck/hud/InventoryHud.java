@@ -1,19 +1,18 @@
 package dev.coyduck.hud;
 
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.render.Palette;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.hud.HudElement;
-import meteordevelopment.meteorclient.systems.hud.HudElementInfo;
-import meteordevelopment.meteorclient.systems.hud.HudRenderer;
+import dev.coyduck.render.Panel;
+import dev.coyduck.widget.Widget;
 import net.minecraft.item.ItemStack;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
-public class InventoryHud extends HudElement {
-    public static final HudElementInfo<InventoryHud> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-inventory", "Your inventory.", InventoryHud::new);
+public class InventoryHud extends Widget {
+    public static final Info INFO = new Info("coy-inventory", "Your inventory.", InventoryHud::new);
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -47,17 +46,17 @@ public class InventoryHud extends HudElement {
     }
 
     @Override
-    public void render(HudRenderer r) {
-        float icon = (float) (r.textHeight() * 1.7 / 16 * scale.get());
+    public void render(Panel r) {
+        float icon = (float) (r.textHeight(false, Panel.DEFAULT_SCALE) * 1.7 / 16 * scale.get());
         double size = 16 * icon;
         double gap = Math.max(1, 2 * icon);
         double pad = Math.max(2, 3 * icon);
         int rows = hotbar.get() ? 4 : 3;
         double w = pad * 2 + 9 * size + 8 * gap;
         double h = pad * 2 + rows * size + (rows - 1) * gap + (hotbar.get() ? gap : 0);
-        setSize(w, h);
-        int x = box.getRenderX();
-        int y = box.getRenderY();
+        size(w, h);
+        int x = x();
+        int y = y();
 
         CoyHud.panel(r, x, y, w, h, background.alpha());
         if (mc.player == null) return;
@@ -66,13 +65,13 @@ public class InventoryHud extends HudElement {
             double rowY = y + pad + row * (size + gap) + (row == 3 ? gap : 0);
             for (int column = 0; column < 9; column++) {
                 double cellX = x + pad + column * (size + gap);
-                if (slots.get()) r.quad(cellX, rowY, size, size, CoyHud.color(Palette.TRACK));
+                if (slots.get()) r.quad(cellX, rowY, size, size, Palette.TRACK);
                 int index = row == 3 ? column : 9 + row * 9 + column;
                 ItemStack stack = mc.player.getInventory().getStack(index);
                 if (stack.isEmpty()) continue;
                 int ix = (int) Math.round(cellX);
                 int iy = (int) Math.round(rowY);
-                r.post(() -> r.item(stack, ix, iy, icon, true));
+                r.post(() -> r.item(stack, ix, iy, icon, true, null));
             }
         }
     }

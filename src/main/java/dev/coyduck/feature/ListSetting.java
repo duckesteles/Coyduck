@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
 
-public abstract sealed class ListSetting<E> extends Setting<List<E>> permits BlockListSetting, ItemListSetting, StringListSetting {
+public abstract sealed class ListSetting<E> extends Setting<List<E>> permits BlockListSetting, ItemListSetting, StringListSetting, ModuleListSetting {
     public final Predicate<E> filter;
 
     protected ListSetting(Builder<?, E, ?> builder) {

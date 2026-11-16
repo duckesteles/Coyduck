@@ -14,6 +14,8 @@ import dev.coyduck.feature.Features;
 import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.logic.Blast;
+import dev.coyduck.logic.Enchants;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
@@ -24,8 +26,6 @@ import dev.coyduck.utils.Targets;
 import dev.coyduck.utils.Trace;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-import meteordevelopment.meteorclient.utils.Utils;
-import meteordevelopment.meteorclient.utils.entity.DamageUtils;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
@@ -38,7 +38,6 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
@@ -59,7 +58,6 @@ import java.util.ArrayDeque;
 
 public class MaceStrike extends Feature {
     private static final int PRIORITY = 85;
-    private static final int CHEST = PlayerInventory.MAIN_SIZE + EquipmentSlot.CHEST.getEntitySlotId();
     private static final long ELYTRA_GRACE = 2_000;
     private int repairSlot = -1;
     private static final float ROTATE_SPEED = 180.0f;
@@ -770,7 +768,7 @@ public class MaceStrike extends Feature {
                 path(x, y, strikeY, z, collision);
                 strike(gliding);
                 if (worn != -1) {
-                    InventoryManager.get().swapWithHotbar(CHEST, worn);
+                    InventoryManager.get().swapWithHotbar(InventoryManager.CHEST, worn);
                     repairSlot = worn;
                 }
                 if (gliding) glideCommand();
@@ -823,7 +821,7 @@ public class MaceStrike extends Feature {
             learnPops = PopCounter.pops(victim);
             learnCharge = mc.player.getAttackCooldownProgress(0.5f);
             learnBase = (float) mc.player.getAttributeValue(EntityAttributes.ATTACK_DAMAGE);
-            learnDensity = Utils.getEnchantmentLevel(mc.player.getMainHandStack(), Enchantments.DENSITY);
+            learnDensity = Enchants.level(mc.player.getMainHandStack(), Enchantments.DENSITY);
             learnAt = Util.getMeasuringTimeMs();
             learnSmash = false;
             learnMixed = false;
@@ -842,7 +840,7 @@ public class MaceStrike extends Feature {
         if (InventoryManager.get().selectedSlot() == slot) hit.run();
         else InventoryManager.get().withItem(slot, switchMode.get(), hit);
         if (worn[0] != -1) {
-            InventoryManager.get().swapWithHotbar(CHEST, worn[0]);
+            InventoryManager.get().swapWithHotbar(InventoryManager.CHEST, worn[0]);
             repairSlot = worn[0];
         }
         if (toggle) glideCommand();
@@ -865,7 +863,7 @@ public class MaceStrike extends Feature {
     private int density() {
         int slot = maceSlot();
         ItemStack mace = slot == -1 ? mc.player.getMainHandStack() : InventoryManager.get().stack(slot);
-        return Utils.getEnchantmentLevel(mace, Enchantments.DENSITY);
+        return Enchants.level(mace, Enchantments.DENSITY);
     }
 
     private float smashRaw(double fall, float charge) {
@@ -877,7 +875,7 @@ public class MaceStrike extends Feature {
     }
 
     private float smashDamage(double fall, float charge, PlayerEntity victim, float base, int density) {
-        return DamageUtils.calculateReductions(smashRaw(fall, charge, base, density), victim, mc.world.getDamageSources().playerAttack(mc.player));
+        return Blast.Defense.melee(victim).reduce(smashRaw(fall, charge, base, density));
     }
 
     private boolean rapidFirst(double fall, float charge, float needed) {
@@ -967,7 +965,7 @@ public class MaceStrike extends Feature {
     private int wearChestplate() {
         if (!LivingEntity.canGlideWith(mc.player.getEquippedStack(EquipmentSlot.CHEST), EquipmentSlot.CHEST)) return -1;
         int hotbar = chestplateSlot();
-        if (hotbar == -1 || !InventoryManager.get().swapWithHotbar(CHEST, hotbar)) return -1;
+        if (hotbar == -1 || !InventoryManager.get().swapWithHotbar(InventoryManager.CHEST, hotbar)) return -1;
         return hotbar;
     }
 
@@ -988,7 +986,7 @@ public class MaceStrike extends Feature {
             return;
         }
         if (!isChestplate(mc.player.getEquippedStack(EquipmentSlot.CHEST)) || !LivingEntity.canGlideWith(InventoryManager.get().stack(repairSlot), EquipmentSlot.CHEST)) return;
-        InventoryManager.get().swapWithHotbar(CHEST, repairSlot);
+        InventoryManager.get().swapWithHotbar(InventoryManager.CHEST, repairSlot);
         repairSlot = -1;
     }
 
@@ -1064,7 +1062,7 @@ public class MaceStrike extends Feature {
         for (int i = 0; i < end; i++) {
             ItemStack stack = inventory.stack(i);
             if (!stack.isOf(Items.MACE)) continue;
-            int score = Utils.getEnchantmentLevel(stack, Enchantments.DENSITY) * 4 + Utils.getEnchantmentLevel(stack, Enchantments.BREACH) * 3 + (i < InventoryManager.HOTBAR_END ? 1 : 0);
+            int score = Enchants.level(stack, Enchantments.DENSITY) * 4 + Enchants.level(stack, Enchantments.BREACH) * 3 + (i < InventoryManager.HOTBAR_END ? 1 : 0);
             if (score > bestScore) {
                 best = i;
                 bestScore = score;

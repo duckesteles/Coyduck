@@ -1,11 +1,11 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.events.ParticleEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.Feature;
 import dev.coyduck.feature.Features;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
-import meteordevelopment.meteorclient.events.world.ParticleEvent;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.particle.ParticleType;
 import net.minecraft.particle.ParticleTypes;

@@ -1,10 +1,10 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.events.ReceiveMessageEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.Feature;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
-import meteordevelopment.meteorclient.events.game.ReceiveMessageEvent;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.text.MutableText;

@@ -31,8 +31,12 @@ public final class Bus {
         listeners = target == null ? null : listenerMap(target);
     }
 
-    static void subscribe(Object listener) {
+    public static void subscribe(Object listener) {
         bus.subscribe(listener);
+    }
+
+    public static void unsubscribe(Object listener) {
+        bus.unsubscribe(listener);
     }
 
     public static <T> T post(T event) {

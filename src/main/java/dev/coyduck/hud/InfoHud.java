@@ -1,16 +1,14 @@
 package dev.coyduck.hud;
 
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.TickRate;
 import dev.coyduck.render.Palette;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.hud.HudElement;
-import meteordevelopment.meteorclient.systems.hud.HudElementInfo;
-import meteordevelopment.meteorclient.systems.hud.HudRenderer;
-import meteordevelopment.meteorclient.utils.Utils;
+import dev.coyduck.render.Panel;
+import dev.coyduck.widget.Widget;
 import net.minecraft.client.network.ServerInfo;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
@@ -20,10 +18,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
-public class InfoHud extends HudElement {
-    public static final HudElementInfo<InfoHud> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-info", "FPS, ping, TPS, speed and coordinates.", InfoHud::new);
+public class InfoHud extends Widget {
+    public static final Info INFO = new Info("coy-info", "FPS, ping, TPS, speed and coordinates.", InfoHud::new);
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final CoyHud.Background background = new CoyHud.Background(settings);
@@ -64,7 +62,7 @@ public class InfoHud extends HudElement {
     }
 
     @Override
-    public void render(HudRenderer r) {
+    public void render(Panel r) {
         List<Line> lines = new ArrayList<>();
         if (fps.get()) lines.add(new Line("FPS", String.valueOf(mc.getCurrentFps()), Palette.TEXT));
         if (ping.get()) {
@@ -127,24 +125,24 @@ public class InfoHud extends HudElement {
         double labelWidth = 0;
         double valueWidth = 0;
         for (Line line : lines) {
-            labelWidth = Math.max(labelWidth, r.textWidth(line.label));
-            valueWidth = Math.max(valueWidth, r.textWidth(line.value));
+            labelWidth = Math.max(labelWidth, r.textWidth(line.label, false, Panel.DEFAULT_SCALE));
+            valueWidth = Math.max(valueWidth, r.textWidth(line.value, false, Panel.DEFAULT_SCALE));
         }
-        double rowHeight = r.textHeight() + 3;
+        double rowHeight = r.textHeight(false, Panel.DEFAULT_SCALE) + 3;
         double w = pad * 2 + labelWidth + gap + valueWidth;
         double h = pad * 2 + rowHeight * lines.size() - 3;
-        setSize(Math.max(w, 40), Math.max(h, rowHeight));
-        int x = box.getRenderX();
-        int y = box.getRenderY();
+        size(Math.max(w, 40), Math.max(h, rowHeight));
+        int x = x();
+        int y = y();
         if (lines.isEmpty()) return;
 
         CoyHud.panel(r, x, y, w, h, background.alpha());
-        boolean right = getX() + getWidth() / 2.0 > Utils.getWindowWidth() / 2.0;
+        boolean right = rightSide();
         double rowY = y + pad;
         for (Line line : lines) {
-            r.text(line.label, x + pad, rowY, CoyHud.color(Palette.SUBTLE), background.shadow());
-            double vx = right ? x + w - pad - r.textWidth(line.value) : x + pad + labelWidth + gap;
-            r.text(line.value, vx, rowY, CoyHud.color(line.color), background.shadow());
+            r.text(line.label, x + pad, rowY, Palette.SUBTLE, background.shadow(), Panel.DEFAULT_SCALE);
+            double vx = right ? x + w - pad - r.textWidth(line.value, false, Panel.DEFAULT_SCALE) : x + pad + labelWidth + gap;
+            r.text(line.value, vx, rowY, (line.color), background.shadow(), Panel.DEFAULT_SCALE);
             rowY += rowHeight;
         }
     }

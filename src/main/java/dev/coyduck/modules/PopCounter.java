@@ -7,7 +7,6 @@ import dev.coyduck.feature.Feature;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.PopTracker;
-import meteordevelopment.meteorclient.utils.player.ChatUtils;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.EntityStatuses;
 import net.minecraft.entity.player.PlayerEntity;
@@ -72,7 +71,7 @@ public class PopCounter extends Feature {
             .append(verb)
             .append(Text.literal(String.valueOf(count)).withColor(COUNT))
             .append(Text.literal(count == 1 ? " totem" : " totems").formatted(Formatting.GRAY));
-        ChatUtils.sendMsg(replace.get() ? id(player) : 0, "Coyduck", Formatting.LIGHT_PURPLE, message);
+        Core.host().notify(replace.get() ? id(player) : 0, message);
     }
 
     private static int id(PlayerEntity player) {

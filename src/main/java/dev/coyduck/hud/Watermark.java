@@ -1,21 +1,19 @@
 package dev.coyduck.hud;
 
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.EnumSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.feature.StringSetting;
 import dev.coyduck.render.Palette;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.settings.StringSetting;
-import meteordevelopment.meteorclient.systems.hud.HudElement;
-import meteordevelopment.meteorclient.systems.hud.HudElementInfo;
-import meteordevelopment.meteorclient.systems.hud.HudRenderer;
-import meteordevelopment.meteorclient.utils.render.color.Color;
+import dev.coyduck.render.Panel;
+import dev.coyduck.widget.Widget;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.util.Identifier;
 
-public class Watermark extends HudElement {
-    public static final HudElementInfo<Watermark> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-watermark", "Coyduck name and mascot.", Watermark::new);
+public class Watermark extends Widget {
+    public static final Info INFO = new Info("coy-watermark", "Coyduck name and mascot.", Watermark::new);
 
     private static final Identifier MASCOT = Identifier.of("coyduck", "textures/mascot.png");
     private static final String VERSION = FabricLoader.getInstance().getModContainer("coyduck")
@@ -75,7 +73,7 @@ public class Watermark extends HudElement {
     }
 
     @Override
-    public void render(HudRenderer r) {
+    public void render(Panel r) {
         double s = scale.get();
         boolean shadow = background.shadow();
         boolean boxed = background.boxed();
@@ -91,18 +89,18 @@ public class Watermark extends HudElement {
         double contentHeight = Math.max(textHeight, logoSize);
         double w = pad * 2 + logoSize + gap + textWidth;
         double h = pad * 2 + contentHeight;
-        setSize(w, h);
+        size(w, h);
 
-        int x = box.getRenderX();
-        int y = box.getRenderY();
+        int x = x();
+        int y = y();
         CoyHud.panel(r, x, y, w, h, background.alpha());
 
         double logoX = logo.get() == Logo.Right ? x + pad + textWidth + gap : x + pad;
         double textX = logo.get() == Logo.Left ? x + pad + logoSize + gap : x + pad;
-        if (logoSize > 0) r.texture(MASCOT, logoX, y + pad + (contentHeight - logoSize) / 2, logoSize, logoSize, Color.WHITE);
+        if (logoSize > 0) r.texture(MASCOT, logoX, y + pad + (contentHeight - logoSize) / 2, logoSize, logoSize, 0xFFFFFFFF);
 
         double textY = y + pad + (contentHeight - textHeight) / 2;
-        r.text(name, textX, textY, CoyHud.color(CoyHud.accent()), shadow, s);
-        if (!tail.isEmpty()) r.text(tail, textX + nameWidth, textY, CoyHud.color(whiteVersion.get() ? Palette.TEXT : Palette.SUBTLE), shadow, s);
+        r.text(name, textX, textY, CoyHud.accent(), shadow, s);
+        if (!tail.isEmpty()) r.text(tail, textX + nameWidth, textY, (whiteVersion.get() ? Palette.TEXT : Palette.SUBTLE), shadow, s);
     }
 }

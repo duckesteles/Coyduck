@@ -68,7 +68,6 @@ import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
 import meteordevelopment.meteorclient.commands.Commands;
 import meteordevelopment.meteorclient.gui.GuiThemes;
-import meteordevelopment.meteorclient.systems.hud.Hud;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.item.Items;
@@ -84,18 +83,19 @@ public class Coyduck extends MeteorAddon {
         LOG.info("Initializing Coyduck");
 
         GuiThemes.add(new CoyduckTheme());
-        Hud.get().register(Watermark.INFO);
-        Hud.get().register(ModuleList.INFO);
-        Hud.get().register(InfoHud.INFO);
-        Hud.get().register(ClockHud.INFO);
-        Hud.get().register(PlayersHud.INFO);
-        Hud.get().register(InventoryHud.INFO);
-        Hud.get().register(ItemsHud.INFO);
+        MeteorWidget.register(Watermark.INFO);
+        MeteorWidget.register(ModuleList.INFO);
+        MeteorWidget.register(InfoHud.INFO);
+        MeteorWidget.register(ClockHud.INFO);
+        MeteorWidget.register(PlayersHud.INFO);
+        MeteorWidget.register(InventoryHud.INFO);
+        MeteorWidget.register(ItemsHud.INFO);
 
         MeteorClient.EVENT_BUS.subscribe(ConfigSaver.get());
         Core.start(MeteorClient.EVENT_BUS, new MeteorHost());
         MeteorClient.EVENT_BUS.subscribe(MeteorCanvas.BRIDGE);
         MeteorClient.EVENT_BUS.subscribe(MeteorOverlay.BRIDGE);
+        MeteorClient.EVENT_BUS.subscribe(MeteorEvents.BRIDGE);
 
         add(new AutoTotem());
         add(new Surround());
@@ -147,8 +147,8 @@ public class Coyduck extends MeteorAddon {
         add(new ChestSorter());
         add(new SuffocationGuard());
 
-        Commands.add(new PilotCommand());
-        Commands.add(new KitCommand());
+        Commands.add(new MeteorCommand(new PilotCommand()));
+        Commands.add(new MeteorCommand(new KitCommand()));
     }
 
     private static void add(Feature feature) {

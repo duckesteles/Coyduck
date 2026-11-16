@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -27,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ArchitectureTest {
     private static final Path SOURCES = Path.of(System.getProperty("coyduck.sources", "src/main/java"));
     private static final String ROOT = "dev.coyduck.";
-    private static final Set<String> CORE_PACKAGES = Set.of("dev.coyduck.core", "dev.coyduck.events", "dev.coyduck.managers", "dev.coyduck.feature", "dev.coyduck.render");
+    private static final Set<String> CORE_PACKAGES = Set.of("dev.coyduck.core", "dev.coyduck.events", "dev.coyduck.managers", "dev.coyduck.feature", "dev.coyduck.render", "dev.coyduck.command", "dev.coyduck.widget");
     private static final Set<String> LOGIC_PACKAGES = Set.of("dev.coyduck.logic");
     private static final Set<String> SHELL_PACKAGES = Set.of("dev.coyduck.modules", "dev.coyduck.hud", "dev.coyduck.gui", "dev.coyduck.commands", "dev.coyduck.dev");
     private static final Pattern WILDCARD = Pattern.compile("^import (dev\\.coyduck(?:\\.[a-z]\\w*)+)\\.\\*;", Pattern.MULTILINE);
@@ -109,14 +110,25 @@ class ArchitectureTest {
     }
 
     @Test
-    void featuresDoNotUseMeteorModulesOrSettings() {
+    void featuresDoNotTouchMeteor() {
         Set<String> features = features();
         List<String> offenders = code.entrySet().stream()
             .filter(entry -> features.contains(entry.getKey().substring(entry.getKey().lastIndexOf('.') + 1)))
-            .filter(entry -> entry.getValue().contains("meteordevelopment.meteorclient.settings.") || Pattern.compile("\\bclass \\w+ extends Module\\b").matcher(entry.getValue()).find())
+            .filter(entry -> entry.getValue().contains("meteordevelopment.meteorclient") || Pattern.compile("\\bclass \\w+ extends Module\\b").matcher(entry.getValue()).find())
             .map(Map.Entry::getKey)
             .toList();
-        assertTrue(offenders.isEmpty(), "features still use Meteor modules or settings: " + offenders);
+        assertTrue(offenders.isEmpty(), "features, widgets or commands still touch Meteor: " + offenders);
+    }
+
+    @Test
+    void featuresNeverReachMeteor() {
+        Set<String> extensions = features();
+        Map<String, String> reached = closure(name -> SHELL_PACKAGES.contains(packageOf(name)) && extensions.contains(name.substring(name.lastIndexOf('.') + 1)));
+        List<String> offenders = reached.keySet().stream()
+            .filter(name -> code.get(name).contains("meteordevelopment.meteorclient"))
+            .map(name -> chain(reached, name))
+            .toList();
+        assertTrue(offenders.isEmpty(), "features, widgets or commands reach Meteor:\n" + String.join("\n", offenders));
     }
 
     @Test
@@ -137,20 +149,25 @@ class ArchitectureTest {
     }
 
     private static Set<String> features() {
-        Pattern extendsFeature = Pattern.compile("\\bclass (\\w+) extends Feature\\b");
+        Pattern extension = Pattern.compile("\\bclass (\\w+) extends (?:Feature|Widget|Command)\\b");
         Set<String> out = new TreeSet<>();
-        for (String text : code.values()) {
-            Matcher matcher = extendsFeature.matcher(text);
+        code.forEach((name, text) -> {
+            if (!SHELL_PACKAGES.contains(packageOf(name))) return;
+            Matcher matcher = extension.matcher(text);
             while (matcher.find()) out.add(matcher.group(1));
-        }
+        });
         return out;
     }
 
     private static Map<String, String> closure(Set<String> roots) {
+        return closure(name -> roots.contains(packageOf(name)));
+    }
+
+    private static Map<String, String> closure(Predicate<String> root) {
         Map<String, String> parent = new LinkedHashMap<>();
         Deque<String> queue = new ArrayDeque<>();
         for (String name : sources.keySet()) {
-            if (!roots.contains(packageOf(name))) continue;
+            if (!root.test(name)) continue;
             parent.put(name, null);
             queue.add(name);
         }

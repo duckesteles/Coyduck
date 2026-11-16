@@ -1,8 +1,10 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.core.Bus;
 import dev.coyduck.core.Core;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.PlayerMoveEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.feature.Bind;
 import dev.coyduck.feature.BoolSetting;
@@ -17,11 +19,6 @@ import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.RotationManager;
 import dev.coyduck.utils.Trace;
-import meteordevelopment.meteorclient.MeteorClient;
-import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
-import meteordevelopment.meteorclient.mixininterface.IVec3d;
-import meteordevelopment.meteorclient.utils.player.FindItemResult;
-import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.Blocks;
@@ -726,17 +723,17 @@ public class ElytraFly extends Feature {
             z = pilot.z;
             resetRamp();
         } else if (vanilla) {
-            double now = Math.hypot(event.movement.x, event.movement.z);
+            double now = Math.hypot(event.x(), event.z());
             if (now > 1.0E-4) {
                 double next = now;
                 if (rampDelay < RAMP_DELAY) rampDelay++;
                 else next = Math.min(now + gain(now), speedCap());
-                x = event.movement.x * next / now;
-                z = event.movement.z * next / now;
+                x = event.x() * next / now;
+                z = event.z() * next / now;
             } else {
                 rampDelay = 0;
-                x = event.movement.x;
-                z = event.movement.z;
+                x = event.x();
+                z = event.z();
             }
         } else if (forward != 0 || strafe != 0) {
             if (rampDelay < RAMP_DELAY) rampDelay++;
@@ -810,7 +807,7 @@ public class ElytraFly extends Feature {
         }
         lastSpeed = moved;
 
-        ((IVec3d) event.movement).meteor$set(x, y, z);
+        event.set(x, y, z);
         if (!vanilla) mc.player.setVelocity(0, 0, 0);
     }
 
@@ -972,12 +969,14 @@ public class ElytraFly extends Feature {
             mc.player.swingHand(Hand.OFF_HAND);
             return;
         }
-        FindItemResult rocket = InvUtils.findInHotbar(Items.FIREWORK_ROCKET);
-        if (!rocket.found() || mc.player.isUsingItem()) return;
-        if (!InvUtils.swap(rocket.slot(), true)) return;
+        InventoryManager inventory = InventoryManager.get();
+        int rocket = inventory.find(stack -> stack.isOf(Items.FIREWORK_ROCKET), 0, InventoryManager.HOTBAR_END);
+        if (rocket == -1 || mc.player.isUsingItem()) return;
+        int previous = inventory.selectedSlot();
+        if (!inventory.select(rocket)) return;
         mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND);
         mc.player.swingHand(Hand.MAIN_HAND);
-        InvUtils.swapBack();
+        inventory.select(previous);
     }
 
     private void replenish() {
@@ -988,7 +987,7 @@ public class ElytraFly extends Feature {
         int slot = InventoryManager.get().find(stack -> stack.isOf(Items.FIREWORK_ROCKET), 9, InventoryManager.MAIN_END);
         if (slot == -1) return;
         replenishedAt = now;
-        InvUtils.move().from(slot).toHotbar(target);
+        InventoryManager.get().swapWithHotbar(slot, target);
     }
 
     private void replaceElytra() {
@@ -1013,7 +1012,7 @@ public class ElytraFly extends Feature {
             return;
         }
         replacedAt = now;
-        InvUtils.move().from(slot).toArmor(2);
+        InventoryManager.get().move(slot, InventoryManager.CHEST);
         fluidFlight = true;
         takeoffTries = TAKEOFF_TRIES;
         airTicks = 0;
@@ -1044,7 +1043,7 @@ public class ElytraFly extends Feature {
             this.landing = landing;
             if (subscribed) return;
             subscribed = true;
-            MeteorClient.EVENT_BUS.subscribe(this);
+            Bus.subscribe(this);
         }
 
         void stop() {
@@ -1053,7 +1052,7 @@ public class ElytraFly extends Feature {
             world = null;
             if (!subscribed) return;
             subscribed = false;
-            MeteorClient.EVENT_BUS.unsubscribe(this);
+            Bus.unsubscribe(this);
         }
 
         @EventHandler

@@ -1,6 +1,5 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.events.RenderScreenEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.ColorSetting;
 import dev.coyduck.feature.DoubleSetting;
@@ -11,14 +10,13 @@ import dev.coyduck.feature.Rgba;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.render.Argb;
-import dev.coyduck.utils.ShaderGlow;
-import meteordevelopment.orbit.EventHandler;
+import dev.coyduck.render.Glow;
 import net.minecraft.client.render.entity.state.EndCrystalEntityRenderState;
 import net.minecraft.client.render.entity.state.EntityRenderState;
 import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
 import net.minecraft.entity.EntityType;
 
-public class Shaders extends Feature implements ShaderGlow.Source {
+public class Shaders extends Feature implements Glow {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgAtmosphere = settings.createGroup("Atmosphere");
 
@@ -213,11 +211,5 @@ public class Shaders extends Feature implements ShaderGlow.Source {
     @Override
     public float glowStrength() {
         return glow.get().floatValue();
-    }
-
-    @EventHandler
-    private void onRender2D(RenderScreenEvent event) {
-        event.overlay.flush();
-        ShaderGlow.get().render();
     }
 }

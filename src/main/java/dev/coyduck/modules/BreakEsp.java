@@ -10,7 +10,6 @@ import dev.coyduck.render.Argb;
 import dev.coyduck.render.DuckRender;
 import dev.coyduck.render.Shape;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
-import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;

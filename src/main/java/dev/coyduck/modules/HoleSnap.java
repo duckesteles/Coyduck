@@ -3,6 +3,7 @@ package dev.coyduck.modules;
 import dev.coyduck.core.Core;
 import dev.coyduck.events.GameLeftEvent;
 import dev.coyduck.events.PacketEvent;
+import dev.coyduck.events.PlayerMoveEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.DoubleSetting;
@@ -11,8 +12,6 @@ import dev.coyduck.feature.Features;
 import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
-import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
-import meteordevelopment.meteorclient.mixininterface.IVec3d;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
@@ -241,8 +240,8 @@ public class HoleSnap extends Feature {
         double dz = middle.z - mc.player.getZ();
 
         if (Math.abs(dx) < ARRIVE && Math.abs(dz) < ARRIVE) {
-            ((IVec3d) event.movement).meteor$setXZ(0, 0);
-            mc.player.setVelocity(0, mc.player.getVelocity().y, 0);
+            event.setXZ(0, 0);
+            mc.player.setVelocity(0, event.y(), 0);
             if (Math.abs(mc.player.getY() - middle.y) < ARRIVE) stop(null);
             else if (standing()) stop("Cannot drop into the hole.");
             return;
@@ -267,11 +266,11 @@ public class HoleSnap extends Feature {
         if (jumpTicks > 0) jumpTicks--;
         else if (jump.get() && standing()) {
             jumpTicks = jumpCooldown.get();
-            ((IVec3d) event.movement).meteor$setY(JUMP);
+            event.setY(JUMP);
         }
 
-        ((IVec3d) event.movement).meteor$setXZ(x, z);
-        mc.player.setVelocity(0, mc.player.getVelocity().y, 0);
+        event.setXZ(x, z);
+        mc.player.setVelocity(0, event.y(), 0);
     }
 
     private void stop(String reason) {

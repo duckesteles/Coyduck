@@ -1,6 +1,7 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.events.RenderWorldEvent;
+import dev.coyduck.events.StartBreakingBlockEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.feature.BoolSetting;
@@ -16,7 +17,6 @@ import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.render.DuckRender;
 import dev.coyduck.render.Shape;
-import meteordevelopment.meteorclient.events.entity.player.StartBreakingBlockEvent;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;

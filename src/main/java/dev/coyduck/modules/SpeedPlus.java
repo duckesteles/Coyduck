@@ -1,6 +1,7 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.events.PacketEvent;
+import dev.coyduck.events.PlayerMoveEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.DoubleSetting;
@@ -10,8 +11,6 @@ import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.RotationManager;
-import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
-import meteordevelopment.meteorclient.mixininterface.IVec3d;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -174,7 +173,7 @@ public class SpeedPlus extends Feature {
             }
             case 1 -> {
                 if (mc.player.isOnGround()) {
-                    ((IVec3d) event.movement).meteor$setY(hop());
+                    event.setY(hop());
                     speed *= strafeSpeed.get();
                     stage = 2;
                 }
@@ -242,7 +241,7 @@ public class SpeedPlus extends Feature {
         double z = input.y * MathHelper.cos(yaw) + input.x * MathHelper.sin(yaw);
         double length = Math.sqrt(x * x + z * z);
         if (length < 1.0E-4) return;
-        ((IVec3d) event.movement).meteor$setXZ(x / length * amount, z / length * amount);
+        event.setXZ(x / length * amount, z / length * amount);
     }
 
     private double base() {

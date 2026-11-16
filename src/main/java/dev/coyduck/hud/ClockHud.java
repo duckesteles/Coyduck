@@ -1,15 +1,13 @@
 package dev.coyduck.hud;
 
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.DoubleSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.feature.StringSetting;
 import dev.coyduck.render.Palette;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.DoubleSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.settings.StringSetting;
-import meteordevelopment.meteorclient.systems.hud.HudElement;
-import meteordevelopment.meteorclient.systems.hud.HudElementInfo;
-import meteordevelopment.meteorclient.systems.hud.HudRenderer;
-import meteordevelopment.meteorclient.utils.Utils;
+import dev.coyduck.render.Panel;
+import dev.coyduck.widget.Widget;
 
 import java.time.DateTimeException;
 import java.time.ZoneId;
@@ -19,10 +17,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-import static meteordevelopment.meteorclient.MeteorClient.mc;
+import static dev.coyduck.core.Core.mc;
 
-public class ClockHud extends HudElement {
-    public static final HudElementInfo<ClockHud> INFO = new HudElementInfo<>(CoyHud.GROUP, "coy-clock", "Real time clock.", ClockHud::new);
+public class ClockHud extends Widget {
+    public static final Info INFO = new Info("coy-clock", "Real time clock.", ClockHud::new);
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final CoyHud.Background background = new CoyHud.Background(settings);
@@ -109,7 +107,7 @@ public class ClockHud extends HudElement {
     }
 
     @Override
-    public void render(HudRenderer r) {
+    public void render(Panel r) {
         if (mc.getNetworkHandler() != connection) {
             connection = mc.getNetworkHandler();
             joined = System.currentTimeMillis();
@@ -146,22 +144,22 @@ public class ClockHud extends HudElement {
         double lineHeight = r.textHeight(shadow, scale) + 2 * scale;
         double w = pad * 2 + bar + width;
         double h = pad * 2 + timeHeight + (small.isEmpty() ? 0 : 2 * scale + lineHeight * small.size() - 2 * scale);
-        setSize(w, h);
-        int x = box.getRenderX();
-        int y = box.getRenderY();
-        boolean right = getX() + getWidth() / 2.0 > Utils.getWindowWidth() / 2.0;
+        size(w, h);
+        int x = x();
+        int y = y();
+        boolean right = rightSide();
 
         CoyHud.panel(r, x, y, w, h, background.alpha());
-        if (boxed) CoyHud.round(r, x, y + 3 * scale, 2 * scale, h - 6 * scale, 1, CoyHud.color(CoyHud.accent()));
+        if (boxed) CoyHud.round(r, x, y + 3 * scale, 2 * scale, h - 6 * scale, 1, CoyHud.accent());
 
         double left = x + pad + bar;
         double end = x + w - pad;
         double ty = y + pad;
-        r.text(time, right ? end - r.textWidth(time, shadow, big) : left, ty, CoyHud.color(accentTime.get() ? CoyHud.accent() : Palette.TEXT), shadow, big);
+        r.text(time, right ? end - r.textWidth(time, shadow, big) : left, ty, (accentTime.get() ? CoyHud.accent() : Palette.TEXT), shadow, big);
         ty += timeHeight + 2 * scale;
         for (int i = 0; i < small.size(); i++) {
             String line = small.get(i);
-            r.text(line, right ? end - r.textWidth(line, shadow, scale) : left, ty, CoyHud.color(i == 0 && date.get() ? Palette.SUBTLE : Palette.MUTED), shadow, scale);
+            r.text(line, right ? end - r.textWidth(line, shadow, scale) : left, ty, (i == 0 && date.get() ? Palette.SUBTLE : Palette.MUTED), shadow, scale);
             ty += lineHeight;
         }
     }

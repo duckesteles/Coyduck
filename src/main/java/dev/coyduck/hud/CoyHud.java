@@ -1,20 +1,16 @@
 package dev.coyduck.hud;
 
-import dev.coyduck.modules.ClickGui;
+import dev.coyduck.core.Core;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.IntSetting;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.feature.Settings;
+import dev.coyduck.render.Argb;
 import dev.coyduck.render.Palette;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.IntSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.settings.Settings;
-import meteordevelopment.meteorclient.systems.hud.HudGroup;
-import meteordevelopment.meteorclient.systems.hud.HudRenderer;
-import meteordevelopment.meteorclient.utils.render.color.Color;
-import net.minecraft.util.math.MathHelper;
+import dev.coyduck.render.Panel;
 
 public final class CoyHud {
-    public static final HudGroup GROUP = new HudGroup("Coyduck");
-
     private static final double SHADOW_BELOW = 0.35;
 
     private CoyHud() {
@@ -57,36 +53,27 @@ public final class CoyHud {
     }
 
     public static int accent() {
-        return ClickGui.accentColor();
+        return Core.host().accent();
     }
 
-    public static Color color(int argb) {
-        return new Color((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, (argb >>> 24) & 0xFF);
-    }
-
-    public static Color color(int argb, double alpha) {
-        int a = (int) Math.round(((argb >>> 24) & 0xFF) * MathHelper.clamp(alpha, 0, 1));
-        return new Color((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, a);
-    }
-
-    public static void panel(HudRenderer r, double x, double y, double w, double h, double alpha) {
+    public static void panel(Panel r, double x, double y, double w, double h, double alpha) {
         if (alpha <= 0) return;
-        round(r, x, y, w, h, 3, color(Palette.BACKGROUND | 0xFF000000, alpha));
+        round(r, x, y, w, h, 3, Argb.fade(Palette.BACKGROUND | 0xFF000000, alpha));
     }
 
-    public static void round(HudRenderer r, double x, double y, double w, double h, int radius, Color c) {
+    public static void round(Panel r, double x, double y, double w, double h, int radius, int argb) {
         if (w <= 0 || h <= 0) return;
         int rad = (int) Math.min(radius, Math.floor(Math.min(w, h) / 2));
         if (rad <= 0) {
-            r.quad(x, y, w, h, c);
+            r.quad(x, y, w, h, argb);
             return;
         }
-        r.quad(x, y + rad, w, h - rad * 2, c);
+        r.quad(x, y + rad, w, h - rad * 2, argb);
         for (int i = 0; i < rad; i++) {
             double dy = rad - i - 0.5;
             double inset = rad - Math.sqrt(rad * rad - dy * dy);
-            r.quad(x + inset, y + i, w - inset * 2, 1, c);
-            r.quad(x + inset, y + h - 1 - i, w - inset * 2, 1, c);
+            r.quad(x + inset, y + i, w - inset * 2, 1, argb);
+            r.quad(x + inset, y + h - 1 - i, w - inset * 2, 1, argb);
         }
     }
 

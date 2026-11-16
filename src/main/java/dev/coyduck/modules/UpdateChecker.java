@@ -2,10 +2,10 @@ package dev.coyduck.modules;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.coyduck.core.Bus;
 import dev.coyduck.events.GameJoinedEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.feature.Feature;
-import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.orbit.EventHandler;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.font.TextRenderer;
@@ -40,7 +40,7 @@ public class UpdateChecker extends Feature {
     public UpdateChecker() {
         super("update-checker", "Checks for Coyduck updates.");
         runInMainMenu = true;
-        MeteorClient.EVENT_BUS.subscribe(new FirstRun());
+        Bus.subscribe(new FirstRun());
     }
 
     @Override

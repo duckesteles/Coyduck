@@ -2,8 +2,8 @@ package dev.coyduck.managers;
 
 import dev.coyduck.core.Core;
 import dev.coyduck.events.GameLeftEvent;
-import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.mixin.ClientPlayerInteractionManagerAccessor;
@@ -12,6 +12,7 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.component.DataComponentTypes;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -44,6 +45,7 @@ public final class InventoryManager {
     public static final int HOTBAR_END = PlayerInventory.HOTBAR_SIZE;
     public static final int MAIN_END = PlayerInventory.MAIN_SIZE;
     public static final int OFFHAND = PlayerInventory.OFF_HAND_SLOT;
+    public static final int CHEST = PlayerInventory.MAIN_SIZE + EquipmentSlot.CHEST.getEntitySlotId();
 
     private static final int BARRIER_DISTANCE = 64;
     private static final long SELECT_MARGIN = 50;
@@ -213,6 +215,17 @@ public final class InventoryManager {
 
         mc.interactionManager.clickSlot(handler.syncId, id, hotbar, SlotActionType.SWAP, mc.player);
         if (hotbar == serverSlot()) noteSelectChange(hotbar, hotbar);
+        return true;
+    }
+
+    public boolean move(int from, int to) {
+        ScreenHandler handler = mc.player.currentScreenHandler;
+        int source = handlerSlot(handler, from);
+        int target = handlerSlot(handler, to);
+        if (source == -1 || target == -1) return false;
+        mc.interactionManager.clickSlot(handler.syncId, source, 0, SlotActionType.PICKUP, mc.player);
+        mc.interactionManager.clickSlot(handler.syncId, target, 0, SlotActionType.PICKUP, mc.player);
+        if (!handler.getCursorStack().isEmpty()) mc.interactionManager.clickSlot(handler.syncId, source, 0, SlotActionType.PICKUP, mc.player);
         return true;
     }
 

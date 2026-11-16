@@ -2,6 +2,7 @@ package dev.coyduck.modules;
 
 import dev.coyduck.events.GameJoinedEvent;
 import dev.coyduck.events.PacketEvent;
+import dev.coyduck.events.ReceiveMessageEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.feature.Feature;
 import dev.coyduck.feature.IntSetting;
@@ -9,7 +10,6 @@ import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.feature.StringListSetting;
 import dev.coyduck.feature.StringSetting;
-import meteordevelopment.meteorclient.events.game.ReceiveMessageEvent;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.network.packet.s2c.common.ServerTransferS2CPacket;
 import net.minecraft.util.Util;

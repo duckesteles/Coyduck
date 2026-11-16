@@ -2,6 +2,8 @@ package dev.coyduck.modules;
 
 import dev.coyduck.core.Clock;
 import dev.coyduck.core.Core;
+import dev.coyduck.events.BlockUpdateEvent;
+import dev.coyduck.events.ChunkDataEvent;
 import dev.coyduck.events.EntityAddedEvent;
 import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
@@ -47,8 +49,6 @@ import it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import meteordevelopment.meteorclient.events.world.BlockUpdateEvent;
-import meteordevelopment.meteorclient.events.world.ChunkDataEvent;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;

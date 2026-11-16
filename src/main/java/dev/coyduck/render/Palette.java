@@ -9,6 +9,7 @@ public final class Palette {
     public static final int GOOD = 0xFF7CCE9A;
     public static final int WARN = 0xFFF4C660;
     public static final int BAD = 0xFFE26C7A;
+    public static final int ACCENT = 0xFF7B62AA;
 
     private Palette() {}
 

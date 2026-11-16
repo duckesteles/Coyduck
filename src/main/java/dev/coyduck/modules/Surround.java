@@ -3,6 +3,7 @@ package dev.coyduck.modules;
 import dev.coyduck.core.Core;
 import dev.coyduck.events.EntityAddedEvent;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.PlayerMoveEvent;
 import dev.coyduck.events.RenderWorldEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
@@ -35,9 +36,6 @@ import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
-import meteordevelopment.meteorclient.mixininterface.IVec3d;
-import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.Block;
@@ -500,8 +498,8 @@ public class Surround extends Feature {
         double fit = 0.5 - mc.player.getWidth() / 2 - EDGE;
         if (Math.abs(dx) <= fit && Math.abs(dz) <= fit) return;
 
-        ((IVec3d) event.movement).meteor$set(MathHelper.clamp(dx, -CENTER_SPEED, CENTER_SPEED), event.movement.y, MathHelper.clamp(dz, -CENTER_SPEED, CENTER_SPEED));
-        mc.player.setVelocity(0, mc.player.getVelocity().y, 0);
+        event.set(MathHelper.clamp(dx, -CENTER_SPEED, CENTER_SPEED), event.y(), MathHelper.clamp(dz, -CENTER_SPEED, CENTER_SPEED));
+        mc.player.setVelocity(0, event.y(), 0);
     }
 
     @EventHandler

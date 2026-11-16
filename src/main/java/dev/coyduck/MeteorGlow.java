@@ -1,4 +1,4 @@
-package dev.coyduck.utils;
+package dev.coyduck;
 
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
@@ -7,6 +7,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import dev.coyduck.modules.Esp;
 import dev.coyduck.modules.Shaders;
 import dev.coyduck.render.Argb;
+import dev.coyduck.render.Glow;
 import meteordevelopment.meteorclient.mixininterface.IWorldRenderer;
 import meteordevelopment.meteorclient.renderer.ExtendedRenderPipelineBuilder;
 import meteordevelopment.meteorclient.renderer.MeshRenderer;
@@ -33,7 +34,7 @@ import java.util.function.Supplier;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
-public final class ShaderGlow extends EntityShader {
+public final class MeteorGlow extends EntityShader {
     private static final RenderPipeline SOFT = new ExtendedRenderPipelineBuilder()
         .withLocation(Identifier.of("coyduck", "pipeline/glow"))
         .withVertexFormat(MeteorRenderPipelines.POST_OUTLINE.getVertexFormat(), MeteorRenderPipelines.POST_OUTLINE.getVertexFormatMode())
@@ -48,33 +49,15 @@ public final class ShaderGlow extends EntityShader {
         .withCull(false)
         .build();
 
-    public interface Source {
-        boolean glowing();
-
-        boolean shows(EntityRenderState state);
-
-        int maskColor();
-
-        default int color(EntityRenderState state) {
-            return maskColor();
-        }
-
-        int glowWidth();
-
-        float fillOpacity();
-
-        float glowStrength();
-    }
-
-    private static ShaderGlow instance;
-    private static ShaderGlow espInstance;
+    private static MeteorGlow instance;
+    private static MeteorGlow espInstance;
 
     private final OutlineRenderCommandQueue queue = new OutlineRenderCommandQueue();
     private final Color tint = new Color();
-    private final Supplier<Source> source;
+    private final Supplier<Glow> source;
     private RenderDispatcher dispatcher;
 
-    private ShaderGlow(Supplier<Source> source) {
+    private MeteorGlow(Supplier<Glow> source) {
         super(pipeline());
         this.source = source;
     }
@@ -83,14 +66,19 @@ public final class ShaderGlow extends EntityShader {
         return RenderSystem.getDevice().precompilePipeline(SOFT).isValid() ? SOFT : MeteorRenderPipelines.POST_OUTLINE;
     }
 
-    public static ShaderGlow get() {
-        if (instance == null) instance = new ShaderGlow(Shaders::active);
+    public static MeteorGlow get() {
+        if (instance == null) instance = new MeteorGlow(Shaders::active);
         return instance;
     }
 
-    public static ShaderGlow esp() {
-        if (espInstance == null) espInstance = new ShaderGlow(Esp::outlineSource);
+    public static MeteorGlow esp() {
+        if (espInstance == null) espInstance = new MeteorGlow(Esp::outlineSource);
         return espInstance;
+    }
+
+    public static void renderAll() {
+        if (Shaders.active() != null) get().render();
+        if (esp().glowing()) esp().render();
     }
 
     public static void resize(int width, int height) {
@@ -99,7 +87,7 @@ public final class ShaderGlow extends EntityShader {
     }
 
     public boolean glowing() {
-        Source current = source.get();
+        Glow current = source.get();
         return current != null && current.glowing();
     }
 
@@ -115,13 +103,13 @@ public final class ShaderGlow extends EntityShader {
 
     @Override
     protected void setupPass(MeshRenderer renderer) {
-        Source module = source.get();
+        Glow module = source.get();
         if (module == null) return;
         renderer.uniform("OutlineData", OutlineUniforms.write(module.glowWidth(), module.fillOpacity(), ShapeMode.Both.ordinal(), module.glowStrength()));
     }
 
     public void drawEntities(WorldRenderState world, MatrixStack matrices) {
-        Source module = source.get();
+        Glow module = source.get();
         if (module == null || !module.glowing()) return;
         if (dispatcher == null) {
             dispatcher = new RenderDispatcher(queue, mc.getBlockRenderManager(), new WrapperImmediateVertexConsumerProvider(() -> vertexConsumerProvider), mc.getAtlasManager(),

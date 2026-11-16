@@ -2,8 +2,8 @@ package dev.coyduck.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import dev.coyduck.managers.RotationManager;
-import dev.coyduck.modules.NoRotate;
 import dev.coyduck.modules.BoatFly;
+import dev.coyduck.modules.NoRotate;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.util.PlayerInput;
 import org.spongepowered.asm.mixin.Mixin;

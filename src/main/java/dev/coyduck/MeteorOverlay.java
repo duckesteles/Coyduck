@@ -35,6 +35,7 @@ public final class MeteorOverlay implements Overlay {
     @EventHandler
     private void onRender(Render2DEvent event) {
         context = event.drawContext;
+        MeteorGlow.renderAll();
         Bus.post(RenderScreenEvent.get(this, event.tickDelta));
         try {
             flush();

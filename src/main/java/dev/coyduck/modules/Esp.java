@@ -1,7 +1,6 @@
 package dev.coyduck.modules;
 
 import dev.coyduck.core.Core;
-import dev.coyduck.events.RenderScreenEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.ColorSetting;
@@ -12,9 +11,7 @@ import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.Rgba;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
-import dev.coyduck.utils.ShaderGlow;
-import meteordevelopment.meteorclient.MeteorClient;
-import meteordevelopment.meteorclient.utils.render.color.Color;
+import dev.coyduck.render.Glow;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.render.entity.state.EntityRenderState;
 import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
@@ -23,7 +20,7 @@ import net.minecraft.entity.player.PlayerEntity;
 
 import java.lang.reflect.Method;
 
-public class Esp extends Feature implements ShaderGlow.Source {
+public class Esp extends Feature implements Glow {
     private static final String CULLABLE = "dev.tr7zw.entityculling.access.Cullable";
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -113,7 +110,7 @@ public class Esp extends Feature implements ShaderGlow.Source {
     }
 
     public static boolean shows(int id) {
-        return MeteorClient.mc.world != null && shows(MeteorClient.mc.world.getEntityById(id));
+        return Core.mc.world != null && shows(Core.mc.world.getEntityById(id));
     }
 
     public static boolean showsBody(int id) {
@@ -121,7 +118,7 @@ public class Esp extends Feature implements ShaderGlow.Source {
         return module != null && module.fullBody.get() && shows(id);
     }
 
-    public static ShaderGlow.Source outlineSource() {
+    public static Glow outlineSource() {
         Esp module = Features.get(Esp.class);
         return module != null && module.isActive() && module.outline.get() ? module : null;
     }
@@ -163,15 +160,8 @@ public class Esp extends Feature implements ShaderGlow.Source {
         return outlineGlow.get().floatValue();
     }
 
-    @EventHandler
-    private void onRender2D(RenderScreenEvent event) {
-        if (!outline.get()) return;
-        event.overlay.flush();
-        ShaderGlow.esp().render();
-    }
-
     public static boolean shows(Entity entity) {
-        if (!(entity instanceof PlayerEntity player) || player == MeteorClient.mc.player) return false;
+        if (!(entity instanceof PlayerEntity player) || player == Core.mc.player) return false;
         Esp module = Features.get(Esp.class);
         if (module == null || !module.isActive() || !module.fullBody.get() && !module.outline.get()) return false;
         if (!module.friends.get() && Core.host().isFriend(player)) return false;

@@ -2,9 +2,9 @@ package dev.coyduck.commands;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import dev.coyduck.command.Command;
 import dev.coyduck.feature.Features;
 import dev.coyduck.modules.Regear;
-import meteordevelopment.meteorclient.commands.Command;
 import net.minecraft.command.CommandSource;
 
 public class KitCommand extends Command {

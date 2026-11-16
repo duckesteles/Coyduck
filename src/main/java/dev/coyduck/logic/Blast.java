@@ -24,8 +24,16 @@ import net.minecraft.world.RaycastContext;
 public final class Blast {
     public record Defense(float armor, float toughness, int resistance, int protection) {
         public static Defense of(LivingEntity target) {
+            return against(target, protectionPoints(target, 2));
+        }
+
+        public static Defense melee(LivingEntity target) {
+            return against(target, protectionPoints(target, 0));
+        }
+
+        private static Defense against(LivingEntity target, int protection) {
             StatusEffectInstance effect = target.getStatusEffect(StatusEffects.RESISTANCE);
-            return new Defense(target.getArmor(), (float) target.getAttributeValue(EntityAttributes.ARMOR_TOUGHNESS), effect == null ? -1 : effect.getAmplifier(), protectionPoints(target));
+            return new Defense(target.getArmor(), (float) target.getAttributeValue(EntityAttributes.ARMOR_TOUGHNESS), effect == null ? -1 : effect.getAmplifier(), protection);
         }
 
         public float reduce(float damage) {
@@ -104,7 +112,7 @@ public final class Blast {
         return points > 0 ? DamageUtil.getInflictedDamage(damage, points) : damage;
     }
 
-    public static int protectionPoints(LivingEntity target) {
+    private static int protectionPoints(LivingEntity target, int blastWeight) {
         int total = 0;
         for (EquipmentSlot slot : EquipmentSlot.VALUES) {
             if (slot.getType() != EquipmentSlot.Type.HUMANOID_ARMOR) continue;
@@ -112,7 +120,7 @@ public final class Blast {
             for (var entry : enchantments.getEnchantmentEntries()) {
                 RegistryEntry<Enchantment> enchantment = entry.getKey();
                 if (enchantment.matchesKey(Enchantments.PROTECTION)) total += entry.getIntValue();
-                else if (enchantment.matchesKey(Enchantments.BLAST_PROTECTION)) total += 2 * entry.getIntValue();
+                else if (enchantment.matchesKey(Enchantments.BLAST_PROTECTION)) total += blastWeight * entry.getIntValue();
             }
         }
         return total;

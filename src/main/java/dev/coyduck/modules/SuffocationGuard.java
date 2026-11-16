@@ -1,5 +1,6 @@
 package dev.coyduck.modules;
 
+import dev.coyduck.events.PlayerMoveEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.feature.DoubleSetting;
 import dev.coyduck.feature.Feature;
@@ -9,8 +10,6 @@ import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.utils.Trace;
-import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
-import meteordevelopment.meteorclient.mixininterface.IVec3d;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.entity.MovementType;
@@ -95,7 +94,7 @@ public class SuffocationGuard extends Feature {
         double length = Math.sqrt(dx * dx + dz * dz);
         if (length < ARRIVED) return;
         double step = Math.min(SPEED, length);
-        ((IVec3d) event.movement).meteor$set(dx / length * step, event.movement.y, dz / length * step);
+        event.set(dx / length * step, event.y(), dz / length * step);
     }
 
     private boolean danger() {

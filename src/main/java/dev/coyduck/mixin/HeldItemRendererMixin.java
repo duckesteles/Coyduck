@@ -2,9 +2,9 @@ package dev.coyduck.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import dev.coyduck.MeteorGlow;
 import dev.coyduck.modules.Shaders;
 import dev.coyduck.utils.HandQueue;
-import dev.coyduck.utils.ShaderGlow;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.render.item.HeldItemRenderer;
@@ -22,7 +22,7 @@ public abstract class HeldItemRendererMixin {
             return;
         }
 
-        ShaderGlow shader = ShaderGlow.get();
+        MeteorGlow shader = MeteorGlow.get();
         shader.submitVertices(() -> {
             original.call(tickDelta, matrices, new HandQueue(queue, module.maskColor()), player, light);
             shader.vertexConsumerProvider.draw();

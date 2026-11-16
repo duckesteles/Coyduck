@@ -27,6 +27,10 @@ public final class Argb {
         return clamp(a) << 24 | argb & 0xFFFFFF;
     }
 
+    public static int fade(int argb, double alpha) {
+        return alpha(argb, (int) Math.round(a(argb) * Math.clamp(alpha, 0, 1)));
+    }
+
     public static int lerp(int from, int to, double t) {
         t = Math.clamp(t, 0, 1);
         return of(

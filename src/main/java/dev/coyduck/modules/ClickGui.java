@@ -3,21 +3,22 @@ package dev.coyduck.modules;
 import dev.coyduck.Coyduck;
 import dev.coyduck.gui.CoyGuiScreen;
 import dev.coyduck.gui.CoyduckTheme;
+import dev.coyduck.render.Palette;
 import meteordevelopment.meteorclient.events.game.OpenScreenEvent;
 import meteordevelopment.meteorclient.gui.GuiThemes;
 import meteordevelopment.meteorclient.gui.screens.ModulesScreen;
 import meteordevelopment.meteorclient.gui.tabs.TabScreen;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.ColorSetting;
-import meteordevelopment.meteorclient.settings.EnumSetting;
-import meteordevelopment.meteorclient.settings.StringListSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.settings.StringSetting;
 import meteordevelopment.meteorclient.renderer.Fonts;
 import meteordevelopment.meteorclient.renderer.text.FontFace;
 import meteordevelopment.meteorclient.renderer.text.FontFamily;
 import meteordevelopment.meteorclient.renderer.text.FontInfo;
+import meteordevelopment.meteorclient.settings.BoolSetting;
+import meteordevelopment.meteorclient.settings.ColorSetting;
+import meteordevelopment.meteorclient.settings.EnumSetting;
+import meteordevelopment.meteorclient.settings.Setting;
+import meteordevelopment.meteorclient.settings.SettingGroup;
+import meteordevelopment.meteorclient.settings.StringListSetting;
+import meteordevelopment.meteorclient.settings.StringSetting;
 import meteordevelopment.meteorclient.systems.config.Config;
 import meteordevelopment.meteorclient.systems.hud.Hud;
 import meteordevelopment.meteorclient.systems.modules.Module;
@@ -43,7 +44,6 @@ public class ClickGui extends Module {
         }
     }
 
-    private static final int DEFAULT_ACCENT = 0xFF7B62AA;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgPages = settings.createGroup("Pages");
@@ -192,7 +192,7 @@ public class ClickGui extends Module {
 
     public static int accentColor() {
         ClickGui module = Modules.get().get(ClickGui.class);
-        return module == null ? DEFAULT_ACCENT : module.accent.get().getPacked() | 0xFF000000;
+        return module == null ? Palette.ACCENT : module.accent.get().getPacked() | 0xFF000000;
     }
 
     @Override
