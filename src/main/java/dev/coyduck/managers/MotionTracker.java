@@ -24,6 +24,10 @@ public final class MotionTracker {
     private static final int SAMPLES = 4;
     private static final double GRAVITY = 0.08;
     private static final double DRAG = 0.98;
+    private static final double SPRINT_JUMP = 0.62;
+    private static final double GROUND_FRICTION = 0.546;
+    private static final double AIR_FRICTION = 0.91;
+    private static final double MAX_GLIDE = 2.5;
     private static final double TELEPORT = 4.0 * 4.0;
     private static final double GLIDING_TELEPORT = 10.0 * 10.0;
 
@@ -60,14 +64,18 @@ public final class MotionTracker {
 
         Vec3d velocity = velocity(player);
         if (velocity.lengthSquared() < 1.0E-6) return box;
+        boolean gliding = player.isGliding();
+        if (gliding && velocity.length() > MAX_GLIDE) velocity = velocity.normalize().multiply(MAX_GLIDE);
 
         for (int i = 0; i < ticks; i++) {
             Vec3d moved = Entity.adjustMovementForCollisions(player, velocity, box, mc.world, List.of());
             box = box.offset(moved);
 
-            if (player.isGliding()) continue;
+            if (gliding) continue;
             boolean landed = velocity.y < 0 && moved.y > velocity.y;
-            velocity = new Vec3d(velocity.x, landed ? 0 : (velocity.y - GRAVITY) * DRAG, velocity.z);
+            double horizontal = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+            double scale = horizontal <= SPRINT_JUMP ? 1 : (SPRINT_JUMP + (horizontal - SPRINT_JUMP) * (landed ? GROUND_FRICTION : AIR_FRICTION)) / horizontal;
+            velocity = new Vec3d(velocity.x * scale, landed ? 0 : (velocity.y - GRAVITY) * DRAG, velocity.z * scale);
         }
 
         return box;
