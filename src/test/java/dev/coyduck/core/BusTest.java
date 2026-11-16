@@ -37,6 +37,16 @@ class BusTest {
             throw new IllegalStateException("boom");
         }
 
+        @EventHandler(priority = EventPriority.LOWEST)
+        private void last(Ping ping) {
+            ping.seen++;
+        }
+
+        @EventHandler(priority = EventPriority.HIGHEST)
+        private void brokenFirst(Stop stop) {
+            throw new IllegalStateException("boom");
+        }
+
         @EventHandler(priority = EventPriority.HIGH)
         private void cancel(Stop stop) {
             stop.seen++;
@@ -64,9 +74,20 @@ class BusTest {
 
     @Test
     void failingListenerDoesNotEscape() {
-        Ping ping = new Ping();
-        assertDoesNotThrow(() -> Bus.post(ping));
-        assertEquals(1, ping.seen);
+        assertDoesNotThrow(() -> Bus.post(new Ping()));
+    }
+
+    @Test
+    void failingListenerDoesNotSilenceLaterOnes() {
+        Ping ping = Bus.post(new Ping());
+        assertEquals(2, ping.seen);
+    }
+
+    @Test
+    void cancelStillWorksAfterAFailure() {
+        Stop stop = Bus.post(new Stop());
+        assertTrue(stop.isCancelled());
+        assertEquals(1, stop.seen);
     }
 
     @Test
