@@ -34,7 +34,8 @@
     "SodiumWorldRendererMixin",
     "MinecraftClientMixin",
     "ClientWorldMixin",
-    "PlayerInteractEntityC2SPacketAccessor"
+    "PlayerInteractEntityC2SPacketAccessor",
+    "ModulesMixin"
   ],
   "injectors": {
     "defaultRequire": 1

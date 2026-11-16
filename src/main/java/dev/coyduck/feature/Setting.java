@@ -1,9 +1,10 @@
 package dev.coyduck.feature;
 
+import java.util.Objects;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
-public abstract class Setting<T> {
+public abstract sealed class Setting<T> permits BoolSetting, IntSetting, DoubleSetting, EnumSetting, StringSetting, ListSetting {
     public interface Backend<T> {
         T get();
 
@@ -23,7 +24,7 @@ public abstract class Setting<T> {
     protected Setting(Builder<?, T, ?> builder) {
         name = builder.name;
         description = builder.description;
-        defaultValue = builder.defaultValue;
+        defaultValue = Objects.requireNonNull(builder.defaultValue, builder.name);
         visible = builder.visible;
         onChanged = builder.onChanged;
         value = fresh(defaultValue);

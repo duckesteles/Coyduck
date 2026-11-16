@@ -3,7 +3,7 @@ package dev.coyduck.feature;
 public interface Shell {
     Shell DETACHED = new Shell() {};
 
-    default boolean active() {
+    default boolean isActive() {
         return false;
     }
 

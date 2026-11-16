@@ -16,7 +16,7 @@ import dev.coyduck.feature.StringSetting;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.systems.modules.Module;
 
-public final class MeteorFeature extends Module {
+public final class MeteorFeature extends Module implements Shell {
     private final Feature feature;
 
     public MeteorFeature(Feature feature) {
@@ -26,32 +26,11 @@ public final class MeteorFeature extends Module {
             var target = group.name.equals(Settings.GENERAL) ? settings.getDefaultGroup() : settings.createGroup(group.name);
             for (Setting<?> setting : group.settings()) target.add(mirror(setting));
         }
-        feature.bind(new Shell() {
-            @Override
-            public boolean active() {
-                return isActive();
-            }
+        feature.bind(this);
+    }
 
-            @Override
-            public void toggle() {
-                MeteorFeature.this.toggle();
-            }
-
-            @Override
-            public void info(String message, Object... args) {
-                MeteorFeature.this.info(message, args);
-            }
-
-            @Override
-            public void warning(String message, Object... args) {
-                MeteorFeature.this.warning(message, args);
-            }
-
-            @Override
-            public void error(String message, Object... args) {
-                MeteorFeature.this.error(message, args);
-            }
-        });
+    public Feature feature() {
+        return feature;
     }
 
     @Override
@@ -95,17 +74,10 @@ public final class MeteorFeature extends Module {
             }
             case StringListSetting s -> link(s, new meteordevelopment.meteorclient.settings.StringListSetting.Builder()
                 .name(s.name).description(s.description).defaultValue(s.getDefaultValue()).visible(s::isVisible).onChanged(s.onChanged()).build());
-            case BlockListSetting s -> {
-                var builder = new meteordevelopment.meteorclient.settings.BlockListSetting.Builder()
-                    .name(s.name).description(s.description).defaultValue(s.getDefaultValue()).visible(s::isVisible).onChanged(s.onChanged());
-                yield link(s, s.filter != null ? builder.filter(s.filter).build() : builder.build());
-            }
-            case ItemListSetting s -> {
-                var builder = new meteordevelopment.meteorclient.settings.ItemListSetting.Builder()
-                    .name(s.name).description(s.description).defaultValue(s.getDefaultValue()).visible(s::isVisible).onChanged(s.onChanged());
-                yield link(s, s.filter != null ? builder.filter(s.filter).build() : builder.build());
-            }
-            default -> throw new IllegalArgumentException("No Meteor mirror for " + setting.getClass().getSimpleName());
+            case BlockListSetting s -> link(s, new meteordevelopment.meteorclient.settings.BlockListSetting.Builder()
+                .name(s.name).description(s.description).defaultValue(s.getDefaultValue()).visible(s::isVisible).onChanged(s.onChanged()).filter(s.filter).build());
+            case ItemListSetting s -> link(s, new meteordevelopment.meteorclient.settings.ItemListSetting.Builder()
+                .name(s.name).description(s.description).defaultValue(s.getDefaultValue()).visible(s::isVisible).onChanged(s.onChanged()).filter(s.filter).build());
         };
     }
 

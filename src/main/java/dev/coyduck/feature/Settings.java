@@ -8,9 +8,11 @@ public final class Settings {
     public static final String GENERAL = "General";
 
     private final List<SettingGroup> groups = new ArrayList<>();
+    private SettingGroup defaultGroup;
 
     public SettingGroup getDefaultGroup() {
-        return groups.isEmpty() ? createGroup(GENERAL) : groups.getFirst();
+        if (defaultGroup == null) defaultGroup = createGroup(GENERAL);
+        return defaultGroup;
     }
 
     public SettingGroup createGroup(String name) {

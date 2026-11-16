@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
 
-public abstract class ListSetting<E> extends Setting<List<E>> {
+public abstract sealed class ListSetting<E> extends Setting<List<E>> permits BlockListSetting, ItemListSetting, StringListSetting {
     public final Predicate<E> filter;
 
     protected ListSetting(Builder<?, E, ?> builder) {
@@ -27,7 +27,7 @@ public abstract class ListSetting<E> extends Setting<List<E>> {
 
         @SafeVarargs
         public final B defaultValue(E... values) {
-            return defaultValue(List.of(values));
+            return defaultValue(values == null ? List.of() : List.of(values));
         }
 
         public B filter(Predicate<E> value) {

@@ -11,8 +11,8 @@ public final class IntSetting extends Setting<Integer> {
         super(builder);
         min = builder.min;
         max = builder.max;
-        sliderMin = builder.sliderMin;
-        sliderMax = builder.sliderMax;
+        sliderMin = Math.max(builder.sliderMin, builder.min);
+        sliderMax = Math.min(builder.sliderMax, builder.max);
         noSlider = builder.noSlider;
     }
 

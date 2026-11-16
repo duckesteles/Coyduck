@@ -36,7 +36,7 @@ class FeatureTest {
         final List<String> said = new ArrayList<>();
 
         @Override
-        public boolean active() {
+        public boolean isActive() {
             return active;
         }
 
@@ -156,6 +156,40 @@ class FeatureTest {
         sample.error("broke");
         sample.warning("ignored");
         assertEquals(List.of("info hit 3", "error broke"), shell.said);
+    }
+
+    @Test
+    void titlesFollowMeteor() {
+        assertEquals("Auto Crystal", Feature.title("auto-crystal"));
+        assertEquals("No Climb", Feature.title("no-climb"));
+        assertEquals("Esp", Feature.title("esp"));
+        assertEquals("Sample", new Sample().title);
+    }
+
+    @Test
+    void slidersStayInsideTheRange() {
+        IntSetting count = new IntSetting.Builder().name("count").defaultValue(3).range(1, 5).build();
+        assertEquals(1, count.sliderMin);
+        assertEquals(5, count.sliderMax);
+        DoubleSetting reach = new DoubleSetting.Builder().name("reach").defaultValue(4).range(2, 6).sliderRange(0, 8).build();
+        assertEquals(2, reach.sliderMin);
+        assertEquals(6, reach.sliderMax);
+    }
+
+    @Test
+    void missingDefaultsFailEarly() {
+        assertThrows(NullPointerException.class, () -> new EnumSetting.Builder<Mode>().name("mode").build());
+        assertEquals(List.of(), new StringListSetting.Builder().name("empty").defaultValue((String[]) null).build().get());
+    }
+
+    @Test
+    void defaultGroupIsCreatedOnFirstUse() {
+        Settings settings = new Settings();
+        SettingGroup render = settings.createGroup("Render");
+        SettingGroup general = settings.getDefaultGroup();
+        assertNotSame(render, general);
+        assertSame(general, settings.getDefaultGroup());
+        assertEquals(List.of("Render", Settings.GENERAL), settings.groups().stream().map(group -> group.name).toList());
     }
 
     @Test

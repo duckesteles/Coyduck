@@ -12,8 +12,8 @@ public final class DoubleSetting extends Setting<Double> {
         super(builder);
         min = builder.min;
         max = builder.max;
-        sliderMin = builder.sliderMin;
-        sliderMax = builder.sliderMax;
+        sliderMin = Math.max(builder.sliderMin, builder.min);
+        sliderMax = Math.min(builder.sliderMax, builder.max);
         decimalPlaces = builder.decimalPlaces;
         noSlider = builder.noSlider;
     }
