@@ -183,7 +183,7 @@ public class AirMine extends Module {
         float delta = delta(state, pos, false);
         if (delta <= 0) return false;
 
-        float rate = Math.min(TickRate.get().tickRate() / 20.0f, 1.0f);
+        float rate = TickRate.get().scale();
         int margin = (int) Math.ceil(LatencyManager.get().jitter() / 50.0) + 1;
         return delta / AIR_PENALTY * ((ticks - startTick) * rate - margin) < STOP_NEED;
     }

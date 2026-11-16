@@ -17,10 +17,10 @@ public final class TickRate {
 
     private final float[] samples = new float[20];
     private int next;
-    private long lastUpdate = -1;
+    private long lastUpdate;
     private long joinedAt;
 
-    private TickRate() {}
+    TickRate() {}
 
     public static TickRate get() {
         return INSTANCE;
@@ -28,7 +28,20 @@ public final class TickRate {
 
     public float tickRate() {
         if (mc.world == null || mc.player == null) return 0;
-        if (System.currentTimeMillis() - joinedAt < GRACE_MS) return FULL;
+        return rate(System.currentTimeMillis());
+    }
+
+    public float scale() {
+        return Math.min(tickRate() / FULL, 1.0f);
+    }
+
+    public float tickLength() {
+        float rate = tickRate();
+        return 1000.0f / (rate > 0 ? Math.min(rate, FULL) : FULL);
+    }
+
+    float rate(long now) {
+        if (now - joinedAt < GRACE_MS) return FULL;
         float sum = 0;
         int count = 0;
         for (float sample : samples) {
@@ -39,19 +52,25 @@ public final class TickRate {
         return count == 0 ? FULL : sum / count;
     }
 
-    @EventHandler
-    private void onReceive(PacketEvent.Receive event) {
-        if (!(event.packet instanceof WorldTimeUpdateS2CPacket)) return;
-        long now = System.currentTimeMillis();
+    void sample(long now) {
         samples[next] = MathHelper.clamp(FULL / ((now - lastUpdate) / 1000.0f), 0.0f, FULL);
         next = (next + 1) % samples.length;
         lastUpdate = now;
     }
 
-    @EventHandler
-    private void onGameJoined(GameJoinedEvent event) {
+    void join(long now) {
         Arrays.fill(samples, 0);
         next = 0;
-        joinedAt = lastUpdate = System.currentTimeMillis();
+        joinedAt = lastUpdate = now;
+    }
+
+    @EventHandler
+    private void onReceive(PacketEvent.Receive event) {
+        if (event.packet instanceof WorldTimeUpdateS2CPacket) sample(System.currentTimeMillis());
+    }
+
+    @EventHandler
+    private void onGameJoined(GameJoinedEvent event) {
+        join(System.currentTimeMillis());
     }
 }

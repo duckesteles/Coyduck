@@ -545,7 +545,7 @@ public final class MiningManager {
         int tool = bestTool(state, background);
         float delta = delta(state, background, tool == -1 ? mc.player.getMainHandStack() : InventoryManager.get().stack(tool), mc.player.isOnGround());
         float margin = (float) Math.ceil(LatencyManager.get().jitter() / 50.0);
-        float rate = Math.min(TickRate.get().tickRate() / 20.0f, 1.0f);
+        float rate = TickRate.get().scale();
         return delta * ((Util.getMeasuringTimeMs() - backgroundStartTime) / 50.0f * rate - margin) >= BACKGROUND_THRESHOLD;
     }
 
@@ -681,7 +681,7 @@ public final class MiningManager {
 
     private float elapsed() {
         if (startPending) return 0;
-        float rate = Math.min(TickRate.get().tickRate() / 20.0f, 1.0f);
+        float rate = TickRate.get().scale();
         return (Util.getMeasuringTimeMs() - startTime) / 50.0f * rate;
     }
 

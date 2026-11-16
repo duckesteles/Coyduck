@@ -344,14 +344,10 @@ public final class HurtTracker {
     }
 
     private static long tick() {
-        float rate = TickRate.get().tickRate();
-        if (!(rate > 0)) rate = 20.0f;
-        return (long) (1000 / Math.min(rate, 20.0f));
+        return (long) TickRate.get().tickLength();
     }
 
     private static long window() {
-        float rate = TickRate.get().tickRate();
-        if (!(rate > 0)) rate = 20.0f;
-        return (long) (IMMUNITY_TICKS * 1000 / Math.min(rate, 20.0f));
+        return (long) (IMMUNITY_TICKS * TickRate.get().tickLength());
     }
 }
