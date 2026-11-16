@@ -97,8 +97,10 @@ public final class Holes {
     }
 
     public static Hole containing(Terrain terrain, int x, int y, int z, Shapes shapes) {
-        for (int dx = 0; dx <= 1; dx++) {
-            for (int dz = 0; dz <= 1; dz++) {
+        int reach = shapes.doubles || shapes.quads ? 1 : 0;
+        for (int dx = 0; dx <= reach; dx++) {
+            for (int dz = 0; dz <= reach; dz++) {
+                if (dx == 1 && dz == 1 && !shapes.quads) continue;
                 Hole hole = at(terrain, x - dx, y, z - dz, shapes);
                 if (hole != null && hole.contains(x, y, z)) return hole;
             }

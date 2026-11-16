@@ -77,7 +77,7 @@ public final class Bus {
         try {
             listener.call(event);
         } catch (RuntimeException | LinkageError | StackOverflowError | AssertionError e) {
-            report(event, e);
+            report(owner(listener).getName(), event, e);
         }
         long end = System.nanoTime();
         if (end - start > SLOW_NS) slow(listener, event, end - start);
@@ -89,7 +89,7 @@ public final class Bus {
             if (event instanceof ICancellable cancellable) bus.post(cancellable);
             else bus.post(event);
         } catch (RuntimeException | LinkageError | StackOverflowError | AssertionError e) {
-            report(event, e);
+            report("bus", event, e);
         }
     }
 
@@ -100,10 +100,10 @@ public final class Bus {
         }
     }
 
-    private static void report(Object event, Throwable e) {
+    private static void report(String owner, Object event, Throwable e) {
         StackTraceElement[] trace = e.getStackTrace();
-        String site = event.getClass().getName() + ' ' + e.getClass().getName() + ' ' + (trace.length > 0 ? trace[0] : "");
-        if (reported.add(site)) LOG.error("Listener failed on {}", event.getClass().getSimpleName(), e);
+        String site = owner + ' ' + event.getClass().getName() + ' ' + e.getClass().getName() + ' ' + (trace.length > 0 ? trace[0] : "");
+        if (reported.add(site)) LOG.error("{} failed on {}", owner, event.getClass().getName(), e);
     }
 
     private static Class<?> resolveOwner(IListener listener) {
