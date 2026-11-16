@@ -64,6 +64,7 @@ import net.minecraft.entity.FallingBlockEntity;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.item.Items;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.registry.RegistryKey;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
@@ -327,6 +328,7 @@ public class Surround extends Module {
     private int ticks;
     private long tickStartedAt;
     private boolean reanchor;
+    private RegistryKey<World> anchorWorld;
     private boolean destroyedNear;
     private int maceTick = -1;
     private boolean maceCached;
@@ -974,8 +976,10 @@ public class Surround extends Module {
         int level = level();
         if (reanchor) {
             reanchor = false;
-            return leave(level);
+            boolean sameHole = mc.world.getRegistryKey() == anchorWorld && level == anchorY && columns(level).longStream().anyMatch(anchored::contains);
+            if (!sameHole) return leave(level);
         }
+        anchorWorld = mc.world.getRegistryKey();
         boolean ground = mc.player.isOnGround();
         if (mc.player.isGliding() || (!ground && level > anchorY + 1)) return false;
 
