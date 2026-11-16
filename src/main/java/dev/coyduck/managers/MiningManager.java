@@ -607,7 +607,7 @@ public final class MiningManager {
             int source = -1;
             if (!PlayerInventory.isValidHotbarIndex(tool)) {
                 hotbar = inventory.spareHotbar(previous);
-                if (hotbar == -1 || !inventory.swapWithHotbar(tool, hotbar)) return;
+                if (hotbar == -1 || !inventory.spareClick() || !inventory.swapWithHotbar(tool, hotbar)) return;
                 source = tool;
             }
             if (hotbar != previous && !inventory.select(hotbar)) {

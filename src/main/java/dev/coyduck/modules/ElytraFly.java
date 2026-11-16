@@ -985,7 +985,7 @@ public class ElytraFly extends Feature {
         int target = replenishSlot.get() - 1;
         if (!mc.player.getInventory().getStack(target).isEmpty()) return;
         int slot = InventoryManager.get().find(stack -> stack.isOf(Items.FIREWORK_ROCKET), 9, InventoryManager.MAIN_END);
-        if (slot == -1) return;
+        if (slot == -1 || !InventoryManager.get().spareClick()) return;
         replenishedAt = now;
         InventoryManager.get().swapWithHotbar(slot, target);
     }

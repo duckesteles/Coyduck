@@ -426,7 +426,7 @@ public class KillAura extends Feature {
         if (inventory.stack(selected).contains(DataComponentTypes.DEATH_PROTECTION) && (AutoTotem.wantsMainTotem() || best >= InventoryManager.HOTBAR_END)) return;
 
         if (best < InventoryManager.HOTBAR_END) inventory.select(best);
-        else inventory.swapWithHotbar(best, selected);
+        else if (inventory.spareClick()) inventory.swapWithHotbar(best, selected);
     }
 
     private boolean usable(ItemStack stack) {

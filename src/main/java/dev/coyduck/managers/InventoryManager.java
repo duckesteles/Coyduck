@@ -44,6 +44,12 @@ import static dev.coyduck.core.Core.mc;
 public final class InventoryManager {
     private static final InventoryManager INSTANCE = new InventoryManager();
 
+    private static final long SHORT_CLICK_WINDOW = 200;
+    private static final long LONG_CLICK_WINDOW = 1_000;
+    private static final int SHORT_CLICK_LIMIT = 4;
+    private static final int LONG_CLICK_LIMIT = 15;
+    private static final int CLICK_RESERVE = 1;
+
     public static final int HOTBAR_END = PlayerInventory.HOTBAR_SIZE;
     public static final int MAIN_END = PlayerInventory.MAIN_SIZE;
     public static final int OFFHAND = PlayerInventory.OFF_HAND_SLOT;
@@ -70,6 +76,9 @@ public final class InventoryManager {
         Silent,
         InvSwap
     }
+
+    private final long[] clicks = new long[LONG_CLICK_LIMIT];
+    private int clickHead;
 
     private InventoryManager() {}
 
@@ -299,7 +308,7 @@ public final class InventoryManager {
     }
 
     private void refill() {
-        if (homes.isEmpty() || mc.player == null || mc.interactionManager == null || mc.currentScreen instanceof HandledScreen<?> || isEating() || isOffhandEating()) return;
+        if (homes.isEmpty() || !spareClick() || mc.player == null || mc.interactionManager == null || mc.currentScreen instanceof HandledScreen<?> || isEating() || isOffhandEating()) return;
         if (!mc.player.currentScreenHandler.getCursorStack().isEmpty()) return;
 
         Iterator<Map.Entry<Item, Integer>> it = homes.entrySet().iterator();
@@ -354,8 +363,20 @@ public final class InventoryManager {
         return true;
     }
 
+    public boolean spareClick() {
+        long now = Util.getMeasuringTimeMs();
+        int recent = 0;
+        int second = 0;
+        for (long at : clicks) {
+            if (now - at < SHORT_CLICK_WINDOW) recent++;
+            if (now - at < LONG_CLICK_WINDOW) second++;
+        }
+        return recent < SHORT_CLICK_LIMIT - CLICK_RESERVE && second < LONG_CLICK_LIMIT - CLICK_RESERVE;
+    }
+
     @EventHandler
     private void onSent(PacketEvent.Sent event) {
+        if (event.packet instanceof ClickSlotC2SPacket) clicks[clickHead++ % clicks.length] = Util.getMeasuringTimeMs();
         if (event.packet instanceof PlayerInteractEntityC2SPacket && burst > 0) burstAttacked = true;
         if (!(event.packet instanceof UpdateSelectedSlotC2SPacket packet)) return;
 

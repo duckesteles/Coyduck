@@ -1054,7 +1054,7 @@ public class ElytraPilot extends Feature {
         if (slot == -1) {
             int stored = inventory.find(stack -> stack.isOf(Items.ENCHANTED_GOLDEN_APPLE) || stack.isOf(Items.GOLDEN_APPLE), InventoryManager.HOTBAR_END, InventoryManager.MAIN_END);
             int empty = inventory.find(ItemStack::isEmpty, 0, InventoryManager.HOTBAR_END);
-            if (stored != -1 && empty != -1 && inventory.swapWithHotbar(stored, empty)) return;
+            if (stored != -1 && empty != -1 && (!inventory.spareClick() || inventory.swapWithHotbar(stored, empty))) return;
             if (!warnedApples) warning(stored == -1 ? "No golden apples to eat." : "No free hotbar slot for a golden apple.");
             warnedApples = true;
             return;
