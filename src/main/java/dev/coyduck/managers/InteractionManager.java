@@ -236,7 +236,12 @@ public final class InteractionManager {
     }
 
     public boolean place(BlockPos pos, BlockHitResult hit, SwingMode swing, boolean rotate, int priority) {
+        return place(pos, hit, swing, rotate, false, priority);
+    }
+
+    public boolean place(BlockPos pos, BlockHitResult hit, SwingMode swing, boolean rotate, boolean look, int priority) {
         if (rotate && !aimed(hit.getPos(), new Box(hit.getBlockPos()), priority)) return false;
+        if (look && !rotate) RotationManager.get().lookNow(hit.getPos(), priority);
         mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
         int sequence = ((ClientWorldAccessor) mc.world).coyduck$getPendingUpdateManager().getSequence();
         swing(swing);

@@ -182,6 +182,14 @@ public class Surround extends Feature {
         .build()
     );
 
+    private final Setting<Boolean> look = sgGeneral.add(new BoolSetting.Builder()
+        .name("look")
+        .description("Sends a look at each block right before placing it.")
+        .defaultValue(true)
+        .visible(() -> !rotate.get())
+        .build()
+    );
+
     private final Setting<InteractionManager.SwingMode> swing = sgGeneral.add(new EnumSetting.Builder<InteractionManager.SwingMode>()
         .name("swing")
         .description("How the hand swing is shown.")
@@ -699,7 +707,7 @@ public class Surround extends Feature {
     }
 
     private void commit(BlockPos pos, BlockHitResult hit) {
-        if (!InteractionManager.get().place(pos, hit, swing.get(), rotate.get(), InteractionManager.SURROUND_PRIORITY)) {
+        if (!InteractionManager.get().place(pos, hit, swing.get(), rotate.get(), look.get(), InteractionManager.SURROUND_PRIORITY)) {
             budget = 0;
             return;
         }
