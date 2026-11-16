@@ -6,7 +6,6 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Share;
 import com.llamalad7.mixinextras.sugar.ref.LocalBooleanRef;
 import com.llamalad7.mixinextras.sugar.ref.LocalFloatRef;
-import dev.coyduck.Coyduck;
 import dev.coyduck.core.Bus;
 import dev.coyduck.events.GameJoinedEvent;
 import dev.coyduck.events.GameLeftEvent;
@@ -89,20 +88,9 @@ public abstract class ClientPlayNetworkHandlerMixin {
 
     @WrapOperation(method = "onBundle", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/packet/Packet;apply(Lnet/minecraft/network/listener/PacketListener;)V"))
     private void coyduck$wrapBundled(Packet<?> packet, PacketListener listener, Operation<Void> original) {
-        boolean cancelled = false;
-        try {
-            cancelled = Bus.post(PacketApplyEvent.Pre.get(packet)).isCancelled();
-        } catch (RuntimeException e) {
-            Coyduck.LOG.error("Packet handler failed", e);
-        }
-        if (cancelled) return;
-
+        if (Bus.post(PacketApplyEvent.Pre.get(packet)).isCancelled()) return;
         original.call(packet, listener);
-        try {
-            Bus.post(PacketApplyEvent.Post.get(packet));
-        } catch (RuntimeException e) {
-            Coyduck.LOG.error("Packet handler failed", e);
-        }
+        Bus.post(PacketApplyEvent.Post.get(packet));
     }
 
     @WrapWithCondition(method = "onExplosion", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/world/ClientWorld;addBlockParticleEffects(Lnet/minecraft/util/math/Vec3d;FILnet/minecraft/util/collection/WeightedPool;)V"))

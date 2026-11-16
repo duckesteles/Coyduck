@@ -1,6 +1,5 @@
 package dev.coyduck.mixin;
 
-import dev.coyduck.Coyduck;
 import dev.coyduck.core.Bus;
 import dev.coyduck.events.PacketApplyEvent;
 import net.minecraft.network.NetworkSide;
@@ -28,21 +27,13 @@ public abstract class PacketApplyBatcherEntryMixin {
     @Inject(method = "apply", at = @At("HEAD"), cancellable = true)
     private void coyduck$onApplyHead(CallbackInfo ci) {
         if (!relevant()) return;
-        try {
-            if (Bus.post(PacketApplyEvent.Pre.get(packet)).isCancelled()) ci.cancel();
-        } catch (RuntimeException e) {
-            Coyduck.LOG.error("Packet handler failed", e);
-        }
+        if (Bus.post(PacketApplyEvent.Pre.get(packet)).isCancelled()) ci.cancel();
     }
 
     @Inject(method = "apply", at = @At("TAIL"))
     private void coyduck$onApplyTail(CallbackInfo ci) {
         if (!relevant()) return;
-        try {
-            Bus.post(PacketApplyEvent.Post.get(packet));
-        } catch (RuntimeException e) {
-            Coyduck.LOG.error("Packet handler failed", e);
-        }
+        Bus.post(PacketApplyEvent.Post.get(packet));
     }
 
     @Unique
