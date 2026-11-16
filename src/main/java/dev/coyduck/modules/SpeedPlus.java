@@ -195,6 +195,7 @@ public class SpeedPlus extends Feature {
     private String pauseReason() {
         if (mc.player.isGliding() || mc.player.isClimbing() || mc.player.hasVehicle() || mc.player.getAbilities().flying) return "paused";
         if (!whenSneaking.get() && mc.player.isSneaking()) return "sneaking";
+        if (mc.player.isUsingItem()) return "eating";
         if (pauseTicks > 0) return "pulled back";
         if (liquidTicks > 0) return "liquid";
         if (slowBlocks.get() && slowed()) return "slowed";

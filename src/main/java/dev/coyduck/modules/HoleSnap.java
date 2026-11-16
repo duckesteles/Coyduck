@@ -184,6 +184,7 @@ public class HoleSnap extends Feature {
 
     private static final long SETBACK_PAUSE = 250;
     private static final double WALK_SPEED = 0.221;
+    private static final double USING_SPEED = 0.12;
 
     private record Hole(List<BlockPos> cells, Vec3d middle) {}
 
@@ -261,8 +262,9 @@ public class HoleSnap extends Feature {
         Core.host().timer(MoveBudget.get().spare() ? timer.get() : 1);
 
         double distance = Math.sqrt(dx * dx + dz * dz);
-        double walk = mc.player.isSprinting() ? speed.get() : Math.min(speed.get(), WALK_SPEED);
-        double step = Math.min(boostLeft-- > 0 ? boostSpeed.get() : walk, distance);
+        boolean using = mc.player.isUsingItem();
+        double walk = using ? Math.min(speed.get(), USING_SPEED) : mc.player.isSprinting() ? speed.get() : Math.min(speed.get(), WALK_SPEED);
+        double step = Math.min(!using && boostLeft-- > 0 ? boostSpeed.get() : walk, distance);
         double x = dx / distance * step;
         double z = dz / distance * step;
 
@@ -276,7 +278,7 @@ public class HoleSnap extends Feature {
         }
 
         if (jumpTicks > 0) jumpTicks--;
-        else if (jump.get() && standing()) {
+        else if (jump.get() && !using && standing()) {
             jumpTicks = jumpCooldown.get();
             event.setY(JUMP);
         }
