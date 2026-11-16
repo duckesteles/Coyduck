@@ -81,6 +81,7 @@ public class MaceStrike extends Feature {
     private static final int MAX_RAPID_HITS = 2;
     private static final double CLOSED_PENALTY = 1000;
     private static final double STICK = 4;
+    private static final double EXPOSED = 100;
     private static final double BODY_INSET = 0.1;
     private static final long HEAL_WINDOW = 3000;
     private static final float MAX_RISE = 4.0f;
@@ -1032,6 +1033,7 @@ public class MaceStrike extends Feature {
                 if (!open(player)) score += CLOSED_PENALTY;
                 if (player == target) score -= STICK;
             }
+            if (!Targets.holdsTotem(player)) score -= EXPOSED;
             if (score < bestScore) {
                 best = player;
                 bestScore = score;
