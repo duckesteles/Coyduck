@@ -6,6 +6,7 @@ import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import dev.coyduck.Coyduck;
 import dev.coyduck.events.PacketApplyEvent;
+import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.managers.CrystalTracker;
 import dev.coyduck.managers.HurtTracker;
 import dev.coyduck.managers.InteractionManager;
@@ -97,6 +98,7 @@ public class Surround extends Module {
     private static final double EDGE = 1.0E-4;
     private static final double CENTER_SPEED = 0.2;
     private static final double NEAR = 5 * 5;
+    private static final double EXPLOSION_NEAR = 8 * 8;
     private static final float POP_MARGIN = 1.5f;
     private static final float SHIELD_MARGIN = 0.5f;
     private static final float LOW_HEALTH = 12;
@@ -321,16 +323,28 @@ public class Surround extends Module {
         super(Coyduck.CATEGORY, "surround+", "Surrounds your feet with obsidian.");
     }
 
-    private long feetSeen;
     private long feetHit;
     private int ticks;
     private long tickStartedAt;
+    private boolean reanchor;
+    private boolean destroyedNear;
+    private int maceTick = -1;
+    private boolean maceCached;
     private final Long2LongOpenHashMap preSent = new Long2LongOpenHashMap();
 
     @Override
     public void onDeactivate() {
         MiningManager.get().release(this);
-        feetSeen = 0;
+    }
+
+    @EventHandler
+    private void onWorldReset(WorldResetEvent event) {
+        reanchor = true;
+        rendered.clear();
+        cellStatus.clear();
+        preSent.clear();
+        anchorSeen.clear();
+        maceTick = -1;
     }
 
     @Override
@@ -343,6 +357,8 @@ public class Surround extends Module {
 
         rendered.clear();
         cellStatus.clear();
+        preSent.clear();
+        reanchor = false;
         budget = blocksPerTick.get();
 
         if (!canAct()) return;
@@ -394,13 +410,11 @@ public class Surround extends Module {
         MiningManager mining = MiningManager.get();
         BlockPos climb = clearFeet.get() ? climbable() : null;
         if (climb == null) {
-            feetSeen = 0;
             mining.release(this);
             return;
         }
 
         long now = Util.getMeasuringTimeMs();
-        if (feetSeen == 0) feetSeen = now;
         if (!mining.owns(this) && mining.pos() != null) return;
 
         if (mc.world.getBlockState(climb).isOf(Blocks.SCAFFOLDING)) {
@@ -439,14 +453,39 @@ public class Surround extends Module {
         boolean relevant = switch (event.packet) {
             case BlockUpdateS2CPacket packet -> near(packet.getPos());
             case BlockBreakingProgressS2CPacket packet -> near(packet.getPos());
-            case ChunkDeltaUpdateS2CPacket ignored -> true;
-            case EntitiesDestroyS2CPacket ignored -> true;
-            case ExplosionS2CPacket ignored -> true;
-            case PlayerActionResponseS2CPacket ignored -> true;
+            case ChunkDeltaUpdateS2CPacket packet -> {
+                boolean[] found = {false};
+                packet.visitUpdates((pos, state) -> found[0] |= near(pos));
+                yield found[0];
+            }
+            case EntitiesDestroyS2CPacket ignored -> destroyedNear;
+            case ExplosionS2CPacket packet -> mc.player.squaredDistanceTo(packet.center()) <= EXPLOSION_NEAR;
+            case PlayerActionResponseS2CPacket ignored -> ownPending();
             default -> false;
         };
 
+        destroyedNear = false;
         if (relevant) pass();
+    }
+
+    @EventHandler
+    private void onPacketPre(PacketApplyEvent.Pre event) {
+        if (!(event.packet instanceof EntitiesDestroyS2CPacket packet) || mc.world == null || mc.player == null) return;
+        for (int id : packet.getEntityIds()) {
+            Entity entity = mc.world.getEntityById(id);
+            if (entity != null && near(entity.getBlockPos())) {
+                destroyedNear = true;
+                return;
+            }
+        }
+    }
+
+    private boolean ownPending() {
+        InteractionManager interaction = InteractionManager.get();
+        for (BlockPos pos : Targets.ring(anchored, 0)) {
+            if (interaction.isPending(pos)) return true;
+        }
+        return false;
     }
 
     @EventHandler
@@ -684,7 +723,10 @@ public class Surround extends Module {
         EndCrystalEntity safest = null;
         Verdict safestVerdict = Verdict.Unsafe;
         for (Entity entity : entities) {
-            if (!(entity instanceof EndCrystalEntity crystal)) return false;
+            if (!(entity instanceof EndCrystalEntity)) return false;
+        }
+        for (Entity entity : entities) {
+            EndCrystalEntity crystal = (EndCrystalEntity) entity;
             if (interaction.recentlyAttacked(crystal)) return true;
 
             Verdict verdict = verdict(crystal, true);
@@ -863,6 +905,14 @@ public class Surround extends Module {
     }
 
     private boolean maceAbove() {
+        if (maceTick != ticks) {
+            maceTick = ticks;
+            maceCached = scanMaceAbove();
+        }
+        return maceCached;
+    }
+
+    private boolean scanMaceAbove() {
         for (PlayerEntity player : mc.world.getPlayers()) {
             if (player == mc.player || !player.isAlive() || player.isSpectator() || Friends.get().isFriend(player)) continue;
             double dy = player.getY() - mc.player.getY();
@@ -872,8 +922,8 @@ public class Surround extends Module {
             if (dx * dx + dz * dz > MACE_RANGE * MACE_RANGE) continue;
             if (player.getMainHandStack().isOf(Items.MACE) || player.isGliding()) return true;
         }
-        for (Entity entity : mc.world.getEntities()) {
-            if (!(entity instanceof FallingBlockEntity falling) || !falling.getBlockState().isIn(BlockTags.ANVIL)) continue;
+        Box above = new Box(mc.player.getX() - ANVIL_RANGE, mc.player.getY() + 1, mc.player.getZ() - ANVIL_RANGE, mc.player.getX() + ANVIL_RANGE, mc.player.getY() + MACE_MAX_HEIGHT, mc.player.getZ() + ANVIL_RANGE);
+        for (FallingBlockEntity falling : mc.world.getEntitiesByClass(FallingBlockEntity.class, above, entity -> entity.getBlockState().isIn(BlockTags.ANVIL))) {
             double dy = falling.getY() - mc.player.getY();
             double dx = falling.getX() - mc.player.getX();
             double dz = falling.getZ() - mc.player.getZ();
@@ -922,6 +972,10 @@ public class Surround extends Module {
 
     private boolean updateAnchor() {
         int level = level();
+        if (reanchor) {
+            reanchor = false;
+            return leave(level);
+        }
         boolean ground = mc.player.isOnGround();
         if (mc.player.isGliding() || (!ground && level > anchorY + 1)) return false;
 
