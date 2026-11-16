@@ -235,10 +235,12 @@ public final class InteractionManager {
         return ncpSees(hit.getBlockPos(), hit.getSide(), mc.player.getEyePos());
     }
 
-    public BlockHitResult helper(BlockPos cell, Predicate<BlockPos> allowed) {
+    public record Helper(BlockPos cell, BlockHitResult hit) {}
+
+    public Helper helper(BlockPos cell, Predicate<BlockPos> allowed) {
         Vec3d eye = mc.player.getEyePos();
         double reach = mc.player.getBlockInteractionRange() - REACH_MARGIN;
-        BlockHitResult best = null;
+        Helper best = null;
         double bestDistance = Double.MAX_VALUE;
         for (Direction direction : Direction.values()) {
             BlockPos helper = cell.offset(direction);
@@ -249,7 +251,7 @@ public final class InteractionManager {
             if (!ncpFace(helper, side, eye)) continue;
             BlockHitResult hit = hit(helper, false);
             if (hit == null || !seen(hit) || !opens(helper, side, eye)) continue;
-            best = hit;
+            best = new Helper(helper, hit);
             bestDistance = distance;
         }
         return best;
