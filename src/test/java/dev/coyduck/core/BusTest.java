@@ -4,9 +4,11 @@ import dev.coyduck.events.Cancellable;
 import meteordevelopment.orbit.EventBus;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
+import meteordevelopment.orbit.ICancellable;
 import meteordevelopment.orbit.IEventBus;
+import meteordevelopment.orbit.listeners.IListener;
+import meteordevelopment.orbit.listeners.LambdaListener;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.invoke.MethodHandles;
@@ -25,6 +27,8 @@ class BusTest {
     static final class Stop extends Cancellable {
         int seen;
     }
+
+    static final class Quiet extends Cancellable {}
 
     static final class Listener {
         @EventHandler(priority = EventPriority.HIGH)
@@ -59,10 +63,78 @@ class BusTest {
         }
     }
 
-    @BeforeEach
-    void install() {
+    static final class Late {
+        @EventHandler
+        private void hear(Ping ping) {
+            ping.seen += 10;
+        }
+    }
+
+    static final class Wrapped implements IEventBus {
+        private final IEventBus inner;
+
+        Wrapped(IEventBus inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public void registerLambdaFactory(String packagePrefix, LambdaListener.Factory factory) {
+            inner.registerLambdaFactory(packagePrefix, factory);
+        }
+
+        @Override
+        public boolean isListening(Class<?> eventKlass) {
+            return inner.isListening(eventKlass);
+        }
+
+        @Override
+        public <T> T post(T event) {
+            return inner.post(event);
+        }
+
+        @Override
+        public <T extends ICancellable> T post(T event) {
+            return inner.post(event);
+        }
+
+        @Override
+        public void subscribe(Object object) {
+            inner.subscribe(object);
+        }
+
+        @Override
+        public void subscribe(Class<?> klass) {
+            inner.subscribe(klass);
+        }
+
+        @Override
+        public void subscribe(IListener listener) {
+            inner.subscribe(listener);
+        }
+
+        @Override
+        public void unsubscribe(Object object) {
+            inner.unsubscribe(object);
+        }
+
+        @Override
+        public void unsubscribe(Class<?> klass) {
+            inner.unsubscribe(klass);
+        }
+
+        @Override
+        public void unsubscribe(IListener listener) {
+            inner.unsubscribe(listener);
+        }
+    }
+
+    private static IEventBus orbit() {
         IEventBus bus = new EventBus();
         bus.registerLambdaFactory("dev.coyduck", (lookup, owner) -> (MethodHandles.Lookup) lookup.invoke(null, owner, MethodHandles.lookup()));
+        return bus;
+    }
+
+    private static void install(IEventBus bus) {
         Bus.use(bus);
         Bus.subscribe(new Listener());
     }
@@ -73,25 +145,15 @@ class BusTest {
     }
 
     @Test
-    void failingListenerDoesNotEscape() {
-        assertDoesNotThrow(() -> Bus.post(new Ping()));
-    }
-
-    @Test
     void failingListenerDoesNotSilenceLaterOnes() {
-        Ping ping = Bus.post(new Ping());
+        install(orbit());
+        Ping ping = assertDoesNotThrow(() -> Bus.post(new Ping()));
         assertEquals(2, ping.seen);
     }
 
     @Test
-    void cancelStillWorksAfterAFailure() {
-        Stop stop = Bus.post(new Stop());
-        assertTrue(stop.isCancelled());
-        assertEquals(1, stop.seen);
-    }
-
-    @Test
-    void cancellationStopsDispatch() {
+    void cancelStopsDispatchEvenAfterAFailure() {
+        install(orbit());
         Stop stop = Bus.post(new Stop());
         assertTrue(stop.isCancelled());
         assertEquals(1, stop.seen);
@@ -99,6 +161,7 @@ class BusTest {
 
     @Test
     void cancellationResetsBetweenPosts() {
+        install(orbit());
         Stop stop = new Stop();
         Bus.post(stop);
         Bus.post(stop);
@@ -107,11 +170,34 @@ class BusTest {
     }
 
     @Test
+    void lateSubscribersAreHeard() {
+        install(orbit());
+        Bus.subscribe(new Late());
+        assertEquals(12, Bus.post(new Ping()).seen);
+    }
+
+    @Test
+    void unheardEventsKeepTheirFlag() {
+        install(orbit());
+        Quiet quiet = new Quiet();
+        quiet.cancel();
+        assertTrue(Bus.post(quiet).isCancelled());
+    }
+
+    @Test
     void postWithoutBusIsANoOp() {
-        Bus.use(null);
         Stop stop = new Stop();
         assertSame(stop, Bus.post(stop));
         assertFalse(stop.isCancelled());
         assertEquals(0, stop.seen);
+    }
+
+    @Test
+    void foreignBusFallsBackToGuardedPosting() {
+        install(new Wrapped(orbit()));
+        Stop stop = assertDoesNotThrow(() -> Bus.post(new Stop()));
+        assertFalse(stop.isCancelled());
+        assertEquals(0, stop.seen);
+        assertDoesNotThrow(() -> Bus.post(new Ping()));
     }
 }

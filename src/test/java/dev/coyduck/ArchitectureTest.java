@@ -30,11 +30,12 @@ class ArchitectureTest {
     private static final Set<String> CORE_PACKAGES = Set.of("dev.coyduck.core", "dev.coyduck.events", "dev.coyduck.managers");
     private static final Set<String> LOGIC_PACKAGES = Set.of("dev.coyduck.logic");
     private static final Set<String> SHELL_PACKAGES = Set.of("dev.coyduck.modules", "dev.coyduck.hud", "dev.coyduck.gui", "dev.coyduck.commands", "dev.coyduck.dev");
-    private static final Pattern IMPORT = Pattern.compile("^import (?:static )?(dev\\.coyduck\\.[\\w.]+);", Pattern.MULTILINE);
-    private static final Pattern QUALIFIED = Pattern.compile("\\bdev\\.coyduck\\.[a-z][\\w.]*?\\.[A-Z]\\w*");
+    private static final Pattern WILDCARD = Pattern.compile("^import (dev\\.coyduck(?:\\.[a-z]\\w*)+)\\.\\*;", Pattern.MULTILINE);
+    private static final Pattern QUALIFIED = Pattern.compile("\\bdev\\.coyduck\\.(?:[a-z]\\w*\\.)*[A-Z]\\w*");
     private static final Pattern IDENTIFIER = Pattern.compile("\\b[A-Z]\\w*\\b");
 
     private static Map<String, String> sources;
+    private static Map<String, String> code;
     private static Map<String, String> reachedFrom;
     private static Map<String, String> logicReaches;
 
@@ -46,6 +47,8 @@ class ArchitectureTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+        code = new TreeMap<>();
+        sources.forEach((name, text) -> code.put(name, strip(text)));
         reachedFrom = closure(CORE_PACKAGES);
         logicReaches = closure(LOGIC_PACKAGES);
     }
@@ -58,7 +61,7 @@ class ArchitectureTest {
     @Test
     void coreDoesNotUseMeteor() {
         List<String> offenders = reachedFrom.keySet().stream()
-            .filter(name -> sources.get(name).contains("import meteordevelopment.meteorclient") || sources.get(name).contains("import static meteordevelopment.meteorclient"))
+            .filter(name -> code.get(name).contains("meteordevelopment.meteorclient"))
             .map(name -> chain(reachedFrom, name))
             .toList();
         assertTrue(offenders.isEmpty(), "core reaches Meteor:\n" + String.join("\n", offenders));
@@ -84,10 +87,27 @@ class ArchitectureTest {
     }
 
     @Test
+    void logicStaysOffTheClient() {
+        List<String> offenders = logicReaches.keySet().stream()
+            .filter(name -> code.get(name).contains("meteordevelopment.") || code.get(name).contains("net.minecraft.client."))
+            .toList();
+        assertTrue(offenders.isEmpty(), "logic touches the client or Meteor: " + offenders);
+    }
+
+    @Test
     void scannerSeesKnownLinks() {
         assertTrue(dependencies("dev.coyduck.managers.MiningManager").contains("dev.coyduck.core.Bus"));
         assertTrue(dependencies("dev.coyduck.managers.MiningManager").contains("dev.coyduck.managers.InventoryManager"));
         assertFalse(dependencies("dev.coyduck.managers.PopTracker").contains("dev.coyduck.modules.AutoTotem"));
+        assertTrue(dependencies("dev.coyduck.MeteorHost").contains("dev.coyduck.modules.AutoTotem"));
+        assertTrue(dependencies("dev.coyduck.Coyduck").contains("dev.coyduck.core.Core"));
+    }
+
+    @Test
+    void stripKeepsCodeAroundUrls() {
+        String text = strip("String url = \"https://example.org\"; Object x = dev.coyduck.core.Bus.class; char q = '\"';");
+        assertTrue(text.contains("dev.coyduck.core.Bus"));
+        assertFalse(text.contains("example"));
     }
 
     private static Map<String, String> closure(Set<String> roots) {
@@ -110,10 +130,13 @@ class ArchitectureTest {
     }
 
     private static Set<String> dependencies(String name) {
-        String text = strip(sources.get(name));
+        String text = code.get(name);
         Set<String> out = new TreeSet<>();
-        Matcher imports = IMPORT.matcher(text);
-        while (imports.find()) resolve(imports.group(1)).ifPresent(out::add);
+        Matcher wildcards = WILDCARD.matcher(text);
+        while (wildcards.find()) {
+            String pkg = wildcards.group(1);
+            sources.keySet().stream().filter(other -> packageOf(other).equals(pkg)).forEach(out::add);
+        }
         Matcher qualified = QUALIFIED.matcher(text);
         while (qualified.find()) resolve(qualified.group()).ifPresent(out::add);
         String pkg = packageOf(name);
@@ -143,7 +166,7 @@ class ArchitectureTest {
     }
 
     private static String strip(String text) {
-        return text.replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("//[^\\n]*", "").replaceAll("\"(?:\\\\.|[^\"\\\\])*\"", "\"\"");
+        return text.replaceAll("'(?:\\\\.|[^'\\\\])'", "' '").replaceAll("\"(?:\\\\.|[^\"\\\\])*\"", "\"\"");
     }
 
     private static String packageOf(String name) {
