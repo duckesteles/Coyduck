@@ -25,6 +25,7 @@ import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
+import dev.coyduck.managers.RotationManager;
 import dev.coyduck.render.Argb;
 import dev.coyduck.render.DuckRender;
 import dev.coyduck.render.Shape;
@@ -604,7 +605,7 @@ public class Surround extends Feature {
             cost += needed;
         }
 
-        placeable.sort((a, b) -> Boolean.compare(!interaction.wasRejected(a), !interaction.wasRejected(b)));
+        sweep(placeable, interaction);
         if (!placeable.isEmpty() && interaction.ready(placeable.get(0), airplace.get(), rotate.get(), InteractionManager.SURROUND_PRIORITY)) {
             InventoryManager.get().withItemWhileEating(slot, switchMode.get(), () -> {
                 for (BlockPos pos : placeable) {
@@ -615,6 +616,35 @@ public class Surround extends Feature {
         }
 
         prePlace(slot);
+    }
+
+    private void sweep(List<BlockPos> cells, InteractionManager interaction) {
+        if (cells.size() < 2) return;
+        Vec3d eye = mc.player.getEyePos();
+        float yaw = RotationManager.get().serverYaw();
+        List<BlockPos> left = new ArrayList<>(cells);
+        cells.clear();
+        while (!left.isEmpty()) {
+            BlockPos best = null;
+            float bestTurn = Float.MAX_VALUE;
+            boolean bestFresh = false;
+            for (BlockPos cell : left) {
+                boolean fresh = !interaction.wasRejected(cell);
+                float turn = Math.abs(MathHelper.wrapDegrees(yawTo(eye, cell) - yaw));
+                if (best == null || fresh && !bestFresh || fresh == bestFresh && turn < bestTurn) {
+                    best = cell;
+                    bestTurn = turn;
+                    bestFresh = fresh;
+                }
+            }
+            left.remove(best);
+            cells.add(best);
+            yaw = yawTo(eye, best);
+        }
+    }
+
+    private static float yawTo(Vec3d eye, BlockPos cell) {
+        return (float) Math.toDegrees(Math.atan2(cell.getZ() + 0.5 - eye.z, cell.getX() + 0.5 - eye.x)) - 90.0f;
     }
 
     private void note(BlockPos pos, String status) {
