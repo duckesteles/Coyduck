@@ -3,6 +3,8 @@ package dev.coyduck;
 import dev.coyduck.commands.KitCommand;
 import dev.coyduck.commands.PilotCommand;
 import dev.coyduck.core.Core;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Features;
 import dev.coyduck.gui.ConfigSaver;
 import dev.coyduck.gui.CoyduckTheme;
 import dev.coyduck.hud.ClockHud;
@@ -124,7 +126,7 @@ public class Coyduck extends MeteorAddon {
         Modules.get().add(new KillEffects());
         Modules.get().add(new NoExplosion());
         Modules.get().add(new NoRotate());
-        Modules.get().add(new NoClimb());
+        add(new NoClimb());
         Modules.get().add(new SpeedPlus());
         Modules.get().add(new Esp());
         Modules.get().add(new CrystalChams());
@@ -145,6 +147,10 @@ public class Coyduck extends MeteorAddon {
 
         Commands.add(new PilotCommand());
         Commands.add(new KitCommand());
+    }
+
+    private static void add(Feature feature) {
+        Modules.get().add(new MeteorFeature(Features.add(feature)));
     }
 
     @Override

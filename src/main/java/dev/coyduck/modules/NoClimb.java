@@ -1,18 +1,16 @@
 package dev.coyduck.modules;
 
-import dev.coyduck.Coyduck;
-import meteordevelopment.meteorclient.settings.BoolSetting;
-import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
+import dev.coyduck.feature.BoolSetting;
+import dev.coyduck.feature.Feature;
+import dev.coyduck.feature.Setting;
+import dev.coyduck.feature.SettingGroup;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.registry.tag.BlockTags;
 
-public class NoClimb extends Module {
+public class NoClimb extends Feature {
     private static NoClimb instance;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -39,7 +37,7 @@ public class NoClimb extends Module {
     );
 
     public NoClimb() {
-        super(Coyduck.CATEGORY, "no-climb", "Ignores ladders, scaffolding and webs.");
+        super("no-climb", "Ignores ladders, scaffolding and webs.");
         instance = this;
     }
 
@@ -55,7 +53,7 @@ public class NoClimb extends Module {
     }
 
     private static NoClimb active(Entity entity) {
-        if (instance == null || entity != MinecraftClient.getInstance().player || !Modules.get().isActive(NoClimb.class)) return null;
+        if (instance == null || entity != MinecraftClient.getInstance().player || !instance.isActive()) return null;
         return instance;
     }
 }
