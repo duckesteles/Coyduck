@@ -18,6 +18,7 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket;
+import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket;
 import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
@@ -179,7 +180,7 @@ public final class InventoryManager {
         boolean hands = preferHands && PlayerInventory.isValidHotbarIndex(index) && !mc.player.isUsingItem() && !(mc.currentScreen instanceof HandledScreen<?>);
 
         if (id != -1 && !hands) {
-            mc.interactionManager.clickSlot(handler.syncId, id, OFFHAND, SlotActionType.SWAP, mc.player);
+            unsprinted(() -> mc.interactionManager.clickSlot(handler.syncId, id, OFFHAND, SlotActionType.SWAP, mc.player));
             return Swap.CLICK;
         }
 
@@ -213,7 +214,7 @@ public final class InventoryManager {
         int id = handlerSlot(handler, index);
         if (id == -1) return false;
 
-        mc.interactionManager.clickSlot(handler.syncId, id, hotbar, SlotActionType.SWAP, mc.player);
+        unsprinted(() -> mc.interactionManager.clickSlot(handler.syncId, id, hotbar, SlotActionType.SWAP, mc.player));
         if (hotbar == serverSlot()) noteSelectChange(hotbar, hotbar);
         return true;
     }
@@ -223,10 +224,24 @@ public final class InventoryManager {
         int source = handlerSlot(handler, from);
         int target = handlerSlot(handler, to);
         if (source == -1 || target == -1) return false;
-        mc.interactionManager.clickSlot(handler.syncId, source, 0, SlotActionType.PICKUP, mc.player);
-        mc.interactionManager.clickSlot(handler.syncId, target, 0, SlotActionType.PICKUP, mc.player);
-        if (!handler.getCursorStack().isEmpty()) mc.interactionManager.clickSlot(handler.syncId, source, 0, SlotActionType.PICKUP, mc.player);
+        unsprinted(() -> {
+            mc.interactionManager.clickSlot(handler.syncId, source, 0, SlotActionType.PICKUP, mc.player);
+            mc.interactionManager.clickSlot(handler.syncId, target, 0, SlotActionType.PICKUP, mc.player);
+            if (!handler.getCursorStack().isEmpty()) mc.interactionManager.clickSlot(handler.syncId, source, 0, SlotActionType.PICKUP, mc.player);
+        });
         return true;
+    }
+
+    private void unsprinted(Runnable clicks) {
+        if (!mc.player.isSprinting()) {
+            clicks.run();
+            return;
+        }
+        PacketBatch.run(() -> {
+            mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
+            clicks.run();
+            mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_SPRINTING));
+        });
     }
 
     public boolean withItem(int index, SwitchMode mode, Runnable action) {
