@@ -45,4 +45,8 @@ public interface Host {
     default double keepHealth() {
         return 0;
     }
+
+    default boolean quarantine(String owner, Throwable cause) {
+        return false;
+    }
 }

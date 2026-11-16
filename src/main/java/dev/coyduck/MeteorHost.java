@@ -10,7 +10,9 @@ import dev.coyduck.modules.NoRotate;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
+import meteordevelopment.meteorclient.utils.player.ChatUtils;
 import net.minecraft.block.BlockState;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.player.PlayerEntity;
 
 public final class MeteorHost implements Host {
@@ -58,6 +60,20 @@ public final class MeteorHost implements Host {
     public PlayerEntity preferredTarget() {
         AutoCrystal autoCrystal = Modules.get().get(AutoCrystal.class);
         return autoCrystal == null ? null : autoCrystal.target();
+    }
+
+    @Override
+    public boolean quarantine(String owner, Throwable cause) {
+        int inner = owner.indexOf('$');
+        String type = inner < 0 ? owner : owner.substring(0, inner);
+        Module module = Modules.get().getAll().stream().filter(candidate -> candidate.getClass().getName().equals(type)).findFirst().orElse(null);
+        if (module == null) return false;
+        MinecraftClient.getInstance().execute(() -> {
+            if (!module.isActive()) return;
+            module.toggle();
+            ChatUtils.errorPrefix("Coyduck", "%s turned off after repeated errors: %s", module.title, cause);
+        });
+        return true;
     }
 
     @Override

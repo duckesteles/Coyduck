@@ -12,6 +12,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -134,14 +138,28 @@ class BusTest {
         return bus;
     }
 
+    static final class Watch implements Host {
+        final List<String> quarantined = new ArrayList<>();
+
+        @Override
+        public boolean quarantine(String owner, Throwable cause) {
+            quarantined.add(owner);
+            return true;
+        }
+    }
+
     private static void install(IEventBus bus) {
-        Bus.use(bus);
+        install(bus, Host.NONE);
+    }
+
+    private static void install(IEventBus bus, Host host) {
+        Bus.use(bus, host);
         Bus.subscribe(new Listener());
     }
 
     @AfterEach
     void uninstall() {
-        Bus.use(null);
+        Bus.use(null, Host.NONE);
     }
 
     @Test
@@ -182,6 +200,34 @@ class BusTest {
         Quiet quiet = new Quiet();
         quiet.cancel();
         assertTrue(Bus.post(quiet).isCancelled());
+    }
+
+    @Test
+    void repeatedFailuresQuarantineTheOwnerOnce() {
+        Watch watch = new Watch();
+        install(orbit(), watch);
+        for (int i = 0; i < 9; i++) Bus.post(new Ping());
+        assertTrue(watch.quarantined.isEmpty());
+        for (int i = 0; i < 30; i++) Bus.post(new Ping());
+        assertEquals(List.of(Listener.class.getName()), watch.quarantined);
+    }
+
+    @Test
+    void ownerIsTheListeningClass() {
+        IEventBus bus = orbit();
+        install(bus);
+        assertEquals(Listener.class.getName(), Bus.owner(listeners(bus).get(Ping.class).get(0)));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<Class<?>, List<IListener>> listeners(IEventBus bus) {
+        try {
+            Field map = EventBus.class.getDeclaredField("listenerMap");
+            map.setAccessible(true);
+            return (Map<Class<?>, List<IListener>>) map.get(bus);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
     }
 
     @Test
