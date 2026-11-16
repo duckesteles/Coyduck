@@ -921,7 +921,7 @@ public class AutoAnchor extends Feature {
             Vec3d feet = new Vec3d((box.minX + box.maxX) / 2, box.minY, (box.minZ + box.maxZ) / 2);
             float health = player.getHealth() + player.getAbsorptionAmount();
             float min = health <= facePlaceHealth.get() ? facePlaceDamage.get().floatValue() : minDamage.get().floatValue();
-            targets.add(new Target(player, box, feet, BlockPos.ofFloored(feet), health, min, Blast.Defense.of(player), player == focus));
+            targets.add(new Target(player, box, feet, BlockPos.ofFloored(feet), health, min, Blast.Defense.of(player), player == focus, Targets.holdsTotem(player)));
         }
         if (targets.size() > MAX_TARGETS) {
             targets.sort(Comparator.comparingDouble(target -> target.player().squaredDistanceTo(mc.player)));
@@ -1068,7 +1068,7 @@ public class AutoAnchor extends Feature {
     }
 
     private Rules rules() {
-        return new Rules(maxSelfDamage.get(), minHealth.get());
+        return new Rules(maxSelfDamage.get(), minHealth.get(), AutoTotem.canAffordPop());
     }
 
     private static void addSpot(List<Spot> spots, Spot spot) {

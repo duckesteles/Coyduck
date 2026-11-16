@@ -13,12 +13,13 @@ public final class AnchorScore {
     public static final float FIRE_MARGIN = 1.0f;
     static final float LETHAL_BONUS = 100.0f;
     static final float FOCUS_BONUS = 1.0f;
+    static final float KILL_BONUS = 50.0f;
     static final float AIM_BONUS = 1.0f;
     static final float CHARGED_TIE = 1.0f;
     static final float SELF_WEIGHT = 0.05f;
     static final float HARMLESS = 0.5f;
 
-    public record Target(PlayerEntity player, Box box, Vec3d feet, BlockPos block, float health, float minDamage, Blast.Defense defense, boolean focused) {}
+    public record Target(PlayerEntity player, Box box, Vec3d feet, BlockPos block, float health, float minDamage, Blast.Defense defense, boolean focused, boolean totem) {}
 
     public record Choice(BlockPos pos, Target target, float damage, float self, float score, boolean charged) {
         float rank() {
@@ -32,7 +33,7 @@ public final class AnchorScore {
 
     public record Spot(BlockPos pos, boolean charged, float potential, float timedPotential, long reachable, long timedReachable) {}
 
-    public record Rules(double maxSelf, double minHealth) {}
+    public record Rules(double maxSelf, double minHealth, boolean affordPop) {}
 
     public interface Model {
         float rawBound(Target target, Vec3d center);
@@ -130,7 +131,8 @@ public final class AnchorScore {
                 if (costly == 1) continue;
             }
 
-            float score = damage + bonus + (target.focused ? FOCUS_BONUS : 0) + (damage >= target.health ? LETHAL_BONUS : 0);
+            boolean lethal = damage >= target.health;
+            float score = damage + bonus + (target.focused ? FOCUS_BONUS : 0) + (lethal ? LETHAL_BONUS : 0) + (lethal && !target.totem ? KILL_BONUS : 0);
             Choice choice = new Choice(pos, target, damage, 0, score, charged);
             if (choice.beats(best)) best = choice;
         }
@@ -140,7 +142,8 @@ public final class AnchorScore {
         float full = model.selfFull(selfRaw);
         float self = model.selfTimed(selfRaw, arrival);
         boolean finishing = best.damage >= best.target.health;
-        if (full + FIRE_MARGIN >= health || self > rules.maxSelf || self >= HARMLESS && !finishing && health - self - FIRE_MARGIN < rules.minHealth) {
+        boolean pops = full + FIRE_MARGIN >= health;
+        if (pops && !(rules.affordPop && finishing && !best.target.totem) || !pops && self > rules.maxSelf || self >= HARMLESS && !finishing && health - self - FIRE_MARGIN < rules.minHealth) {
             verdicts.self = true;
             return null;
         }

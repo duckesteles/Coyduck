@@ -754,10 +754,6 @@ public class AutoCrystal extends Feature {
             selfWeight.get().floatValue(), antiSurround.get(), AutoTotem.canAffordPop());
     }
 
-    private boolean holdsTotem(PlayerEntity player) {
-        return player.getMainHandStack().isOf(Items.TOTEM_OF_UNDYING) || player.getOffHandStack().isOf(Items.TOTEM_OF_UNDYING);
-    }
-
     private void prepare() {
         preparedAt = Clock.ticks();
         rules = rules();
@@ -1525,7 +1521,7 @@ public class AutoCrystal extends Feature {
         float health = player.getHealth() + player.getAbsorptionAmount();
         LongSet gaps = new LongOpenHashSet();
         for (BlockPos cell : Targets.ring(Targets.columns(Targets.box(player)), 0)) gaps.add(cell.asLong());
-        return new Target(player, box, feet, health, minDamage(player, health), gaps, Blast.Defense.of(player), player == focus, holdsTotem(player));
+        return new Target(player, box, feet, health, minDamage(player, health), gaps, Blast.Defense.of(player), player == focus, Targets.holdsTotem(player));
     }
 
     private float minDamage(PlayerEntity player, float health) {

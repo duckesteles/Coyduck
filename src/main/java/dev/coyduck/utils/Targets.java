@@ -9,6 +9,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.Items;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.predicate.entity.EntityPredicates;
 import net.minecraft.registry.tag.BlockTags;
@@ -30,6 +31,10 @@ public final class Targets {
     private static final int MAX_DROP = 3;
 
     private Targets() {}
+
+    public static boolean holdsTotem(PlayerEntity player) {
+        return player.getMainHandStack().isOf(Items.TOTEM_OF_UNDYING) || player.getOffHandStack().isOf(Items.TOTEM_OF_UNDYING);
+    }
 
     public static PlayerEntity find(double range, PlayerEntity keep) {
         return valid(keep, range) ? keep : find(range);

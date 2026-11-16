@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AnchorScoreTest {
     private static final Blast.Defense BARE = new Blast.Defense(0, 0, -1, 0);
-    private static final Rules RULES = new Rules(10, 4);
+    private static final Rules RULES = new Rules(10, 4, false);
     private static final BlockPos A = new BlockPos(1, 0, 0);
     private static final BlockPos B = new BlockPos(2, 0, 0);
     private static final float EPSILON = 1.0E-4f;
@@ -108,7 +108,7 @@ class AnchorScoreTest {
     }
 
     private static Target target(float health, float minDamage, boolean focused) {
-        return new Target(null, new Box(0, 0, 0, 1, 2, 1), Vec3d.ZERO, BlockPos.ORIGIN, health, minDamage, BARE, focused);
+        return new Target(null, new Box(0, 0, 0, 1, 2, 1), Vec3d.ZERO, BlockPos.ORIGIN, health, minDamage, BARE, focused, true);
     }
 
     private static AnchorScore scorer(Model model) {
@@ -119,6 +119,21 @@ class AnchorScoreTest {
 
     private static long all(int count) {
         return (1L << count) - 1;
+    }
+
+    @Test
+    void tradesAPopOnlyForAKill() {
+        Target armed = target(4, 6);
+        Target bare = new Target(null, new Box(0, 0, 0, 1, 2, 1), Vec3d.ZERO, BlockPos.ORIGIN, 4, 6, BARE, false, false);
+        Model model = new Model().hit(A, armed, 5).hit(B, bare, 5);
+        model.self.put(A, 9.0f);
+        model.self.put(B, 9.0f);
+        AnchorScore score = new AnchorScore(model);
+        score.rules(new Rules(10, 4, true));
+        assertNull(score.evaluate(List.of(armed), A, 8, 0, 0, false, all(1)));
+        assertNotNull(score.evaluate(List.of(bare), B, 8, 0, 0, false, all(1)));
+        score.rules(RULES);
+        assertNull(score.evaluate(List.of(bare), B, 8, 0, 0, false, all(1)));
     }
 
     @Test
