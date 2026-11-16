@@ -12,6 +12,7 @@ import dev.coyduck.utils.PacketBatch;
 import dev.coyduck.utils.Trace;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
 import meteordevelopment.orbit.EventHandler;
+import meteordevelopment.orbit.EventPriority;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.EquipmentSlot;
@@ -22,6 +23,7 @@ import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerInteractBlockC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket;
 import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.network.packet.s2c.play.UpdateSelectedSlotS2CPacket;
@@ -80,6 +82,7 @@ public final class InventoryManager {
     }
 
     private final long[] clicks = new long[LONG_CLICK_LIMIT];
+    private Hand reuse;
     private int clickHead;
 
     private InventoryManager() {}
@@ -335,6 +338,16 @@ public final class InventoryManager {
         refill();
     }
 
+    @EventHandler(priority = EventPriority.LOWEST)
+    private void onTickEnd(TickEvent.Post event) {
+        Hand hand = reuse;
+        reuse = null;
+        if (hand == null || mc.player == null || mc.interactionManager == null || !mc.player.isUsingItem() || mc.player.getActiveHand() != hand) return;
+        Trace.log("eating resumed after a place");
+        mc.player.clearActiveItem();
+        mc.interactionManager.interactItem(mc.player, hand);
+    }
+
     private boolean switchedNow(int index, SwitchMode mode, Runnable action) {
         int selected = selectedSlot();
         if (index == selected) {
@@ -394,6 +407,7 @@ public final class InventoryManager {
     private void onSent(PacketEvent.Sent event) {
         if (event.packet instanceof ClickSlotC2SPacket) clicks[clickHead++ % clicks.length] = Util.getMeasuringTimeMs();
         if (event.packet instanceof PlayerInteractEntityC2SPacket && burst > 0) burstAttacked = true;
+        if (event.packet instanceof PlayerInteractBlockC2SPacket && mc.player != null && mc.player.isUsingItem() && mc.player.getActiveItem().contains(DataComponentTypes.CONSUMABLE)) reuse = mc.player.getActiveHand();
         if (!(event.packet instanceof UpdateSelectedSlotC2SPacket packet)) return;
 
         int slot = packet.getSelectedSlot();
