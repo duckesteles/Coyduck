@@ -33,7 +33,10 @@ public final class Bus {
 
     public static <T> T post(T event) {
         Map<Class<?>, List<IListener>> map = listeners;
-        if (map == null) return guarded(event);
+        if (map == null) {
+            if (bus != null) call(() -> bus.post(event), event);
+            return event;
+        }
         List<IListener> targets = map.get(event.getClass());
         if (targets == null) return event;
         for (IListener listener : targets) call(listener, event);
@@ -42,7 +45,10 @@ public final class Bus {
 
     public static <T extends ICancellable> T post(T event) {
         Map<Class<?>, List<IListener>> map = listeners;
-        if (map == null) return guarded(event);
+        if (map == null) {
+            if (bus != null) call(() -> bus.post(event), event);
+            return event;
+        }
         List<IListener> targets = map.get(event.getClass());
         if (targets == null) return event;
         event.setCancelled(false);
@@ -61,14 +67,12 @@ public final class Bus {
         }
     }
 
-    private static <T> T guarded(T event) {
-        if (bus == null) return event;
+    private static void call(Runnable dispatch, Object event) {
         try {
-            bus.post(event);
+            dispatch.run();
         } catch (RuntimeException e) {
             report(event, e);
         }
-        return event;
     }
 
     @SuppressWarnings("unchecked")

@@ -7,7 +7,7 @@ import dev.coyduck.events.WorldResetEvent;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
-import meteordevelopment.meteorclient.utils.world.TickRate;
+import dev.coyduck.managers.TickRate;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
@@ -183,7 +183,7 @@ public class AirMine extends Module {
         float delta = delta(state, pos, false);
         if (delta <= 0) return false;
 
-        float rate = Math.min(TickRate.INSTANCE.getTickRate() / 20.0f, 1.0f);
+        float rate = Math.min(TickRate.get().tickRate() / 20.0f, 1.0f);
         int margin = (int) Math.ceil(LatencyManager.get().jitter() / 50.0) + 1;
         return delta / AIR_PENALTY * ((ticks - startTick) * rate - margin) < STOP_NEED;
     }

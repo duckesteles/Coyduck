@@ -1,6 +1,7 @@
 package dev.coyduck.hud;
 
 import dev.coyduck.managers.LatencyManager;
+import dev.coyduck.managers.TickRate;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
@@ -9,7 +10,6 @@ import meteordevelopment.meteorclient.systems.hud.HudElement;
 import meteordevelopment.meteorclient.systems.hud.HudElementInfo;
 import meteordevelopment.meteorclient.systems.hud.HudRenderer;
 import meteordevelopment.meteorclient.utils.Utils;
-import meteordevelopment.meteorclient.utils.world.TickRate;
 import net.minecraft.client.network.ServerInfo;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
@@ -71,7 +71,7 @@ public class InfoHud extends HudElement {
             lines.add(new Line("Ping", latency + "ms", latency > 250 ? CoyHud.BAD : latency > 150 ? CoyHud.WARN : CoyHud.TEXT));
         }
         if (tps.get()) {
-            float rate = TickRate.INSTANCE.getTickRate();
+            float rate = TickRate.get().tickRate();
             lines.add(new Line("TPS", String.format(Locale.ROOT, "%.1f", rate), rate < 15 ? CoyHud.BAD : rate < 19 ? CoyHud.WARN : CoyHud.TEXT));
         }
         if (speed.get() && mc.player != null) {
