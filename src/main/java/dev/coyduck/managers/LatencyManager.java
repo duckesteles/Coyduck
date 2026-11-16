@@ -37,6 +37,7 @@ public final class LatencyManager {
     private final Int2LongOpenHashMap sequences = new Int2LongOpenHashMap();
     private int probeTimer;
     private volatile long lastPacketAt;
+    private volatile int tabLatency;
     private long lastSetbackAt;
 
     private LatencyManager() {}
@@ -53,7 +54,7 @@ public final class LatencyManager {
     public int measuredPing() {
         long now = Util.getMeasuringTimeMs();
         if (network.fresh(now)) return (int) network.mean();
-        int tab = tabLatency();
+        int tab = tabLatency;
         if (tab > 0) return tab;
         if (action.fresh(now)) return (int) Math.max(action.mean() - TICK_WAIT, 0);
         return -1;
@@ -63,7 +64,7 @@ public final class LatencyManager {
         long now = Util.getMeasuringTimeMs();
         if (action.fresh(now)) return (int) action.mean();
         if (network.fresh(now)) return (int) network.mean() + TICK_WAIT;
-        int tab = tabLatency();
+        int tab = tabLatency;
         if (tab > 0) return tab + TICK_WAIT;
         return FALLBACK;
     }
@@ -129,6 +130,8 @@ public final class LatencyManager {
     @EventHandler
     private void onTick(TickEvent.Post event) {
         if (mc.getNetworkHandler() == null) return;
+        PlayerListEntry self = mc.player == null ? null : mc.getNetworkHandler().getPlayerListEntry(mc.player.getUuid());
+        tabLatency = self == null ? 0 : self.getLatency();
 
         if (++probeTimer >= PROBE_INTERVAL && Core.host().anyModuleActive()) {
             probeTimer = 0;
@@ -155,6 +158,7 @@ public final class LatencyManager {
         probeTimer = 0;
         lastPacketAt = 0;
         lastSetbackAt = 0;
+        tabLatency = 0;
         synchronized (sequences) {
             sequences.clear();
         }
@@ -169,11 +173,6 @@ public final class LatencyManager {
         };
     }
 
-    private static int tabLatency() {
-        if (mc.player == null || mc.getNetworkHandler() == null) return 0;
-        PlayerListEntry entry = mc.getNetworkHandler().getPlayerListEntry(mc.player.getUuid());
-        return entry == null ? 0 : entry.getLatency();
-    }
 
     private static final class Estimator {
         private double mean = -1;
