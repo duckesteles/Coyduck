@@ -8,6 +8,9 @@ import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.DamageUtil;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
@@ -19,6 +22,23 @@ import net.minecraft.world.Difficulty;
 import net.minecraft.world.RaycastContext;
 
 public final class Blast {
+    public record Defense(float armor, float toughness, int resistance, int protection) {
+        public static Defense of(LivingEntity target) {
+            StatusEffectInstance effect = target.getStatusEffect(StatusEffects.RESISTANCE);
+            return new Defense(target.getArmor(), (float) target.getAttributeValue(EntityAttributes.ARMOR_TOUGHNESS), effect == null ? -1 : effect.getAmplifier(), protectionPoints(target));
+        }
+
+        public float reduce(float damage) {
+            if (damage <= 0) return 0;
+            damage = Blast.armor(damage, armor, toughness);
+            if (resistance >= 0) {
+                damage = Blast.resistance(damage, resistance);
+                if (damage <= 0) return 0;
+            }
+            return Blast.protection(damage, protection);
+        }
+    }
+
     private Blast() {}
 
     public static double distance(Vec3d position, Vec3d center, float power) {

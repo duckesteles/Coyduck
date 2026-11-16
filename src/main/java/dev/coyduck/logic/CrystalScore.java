@@ -12,14 +12,14 @@ import java.util.List;
 public final class CrystalScore {
     public static final float TIE = 0.5f;
     public static final float KEEP_BONUS = 0.75f;
-    public static final float LETHAL_MARGIN = 0.5f;
+    static final float LETHAL_MARGIN = 0.5f;
     static final float LETHAL_BONUS = 100.0f;
     static final float FOCUS_BONUS = 1.0f;
     static final float GAP_BONUS = 2.0f;
     static final float OTHERS_WEIGHT = 0.3f;
     static final float LOW_HEALTH_BONUS = 3.0f;
 
-    public record Target(PlayerEntity player, Box box, Vec3d feet, float health, float minDamage, LongSet gaps) {}
+    public record Target(PlayerEntity player, Box box, Vec3d feet, float health, float minDamage, LongSet gaps, Blast.Defense defense, boolean focused, boolean totem) {}
 
     public record Choice(Target target, float damage, float raw, float self, float score) {
         public boolean beats(Choice other) {
@@ -33,33 +33,17 @@ public final class CrystalScore {
         }
     }
 
-    public interface Rules {
-        double maxSelf();
-
-        double minHealth();
-
-        boolean chip();
-
-        float chipDamage();
-
-        double chipSelf();
-
-        double balance();
-
-        float selfWeight();
-
-        boolean antiSurround();
-
-        default boolean leavesLow(float self, float health) {
-            return self > 0 && health - self < minHealth();
+    public record Rules(double maxSelf, double minHealth, boolean chip, float chipDamage, double chipSelf, double balance, float selfWeight, boolean antiSurround, boolean affordPop) {
+        public boolean leavesLow(float self, float health) {
+            return self > 0 && health - self < minHealth;
         }
 
-        default boolean balanced(float damage, float self, float health) {
-            return balance() <= 0 || damage >= health || damage >= self * balance();
+        public boolean balanced(float damage, float self, float health) {
+            return balance <= 0 || damage >= health || damage >= self * balance;
         }
 
-        default float floor(Target target, boolean chipping) {
-            return chip() && chipping ? Math.min(target.minDamage, chipDamage()) : target.minDamage;
+        float floor(Target target, boolean chipping) {
+            return chip && chipping ? Math.min(target.minDamage, chipDamage) : target.minDamage;
         }
     }
 
@@ -73,12 +57,6 @@ public final class CrystalScore {
         float self(Vec3d crystal, BlockView view, long arrival);
 
         boolean hurtsFriend(Vec3d crystal, BlockView view);
-
-        boolean focused(Target target);
-
-        boolean holdsTotem(Target target);
-
-        boolean canAffordPop();
     }
 
     public static final class Verdicts {
@@ -106,14 +84,22 @@ public final class CrystalScore {
     }
 
     private final Model model;
-    private final Rules rules;
     private final Verdicts verdicts = new Verdicts();
+    private Rules rules;
     private float[] raws = new float[0];
     private float[] damages = new float[0];
 
     public CrystalScore(Model model, Rules rules) {
         this.model = model;
         this.rules = rules;
+    }
+
+    public void rules(Rules value) {
+        rules = value;
+    }
+
+    public Rules rules() {
+        return rules;
     }
 
     public Verdicts verdicts() {
@@ -171,14 +157,15 @@ public final class CrystalScore {
             return null;
         }
         boolean low = rules.leavesLow(self, health);
-        boolean overSelf = self > rules.maxSelf();
+        boolean overSelf = self > rules.maxSelf;
         if (model.hurtsFriend(crystal, view)) {
             verdicts.friend = true;
             return null;
         }
 
-        boolean chipping = !low && self <= rules.chipSelf();
-        Choice best = null;
+        boolean chipping = !low && self <= rules.chipSelf;
+        int best = -1;
+        float bestScore = 0;
         float total = 0;
         for (int i = 0; i < count; i++) {
             float damage = damages[i];
@@ -186,8 +173,7 @@ public final class CrystalScore {
             Target target = targets.get(i);
             if (damage < rules.floor(target, chipping) && damage < target.health) continue;
             boolean lethal = damage >= target.health + LETHAL_MARGIN;
-            boolean kills = lethal && !model.holdsTotem(target);
-            if (overSelf && !(kills && !low) || low && !(lethal && model.canAffordPop())) {
+            if (overSelf && !(lethal && !target.totem && !low) || low && !(lethal && rules.affordPop)) {
                 verdicts.self = true;
                 continue;
             }
@@ -198,24 +184,24 @@ public final class CrystalScore {
 
             float counted = Math.min(damage, target.health);
             total += counted;
-            float score = counted - self * rules.selfWeight() + (model.focused(target) ? FOCUS_BONUS : 0)
-                + LOW_HEALTH_BONUS * Math.min(damage / Math.max(target.health, 1.0f), 1.0f);
-            if (lethal) score += LETHAL_BONUS;
-            if (kills) score += LETHAL_BONUS;
-            if (rules.antiSurround() && target.gaps.contains(key)) score += GAP_BONUS;
-            Choice choice = new Choice(target, damage, raws[i], self, score);
-            if (choice.beats(best)) best = choice;
+            float score = counted - self * rules.selfWeight + bonuses(target, damage, key);
+            if (best < 0 || score > bestScore + TIE) {
+                best = i;
+                bestScore = score;
+            }
         }
 
-        if (best == null) return null;
-        float others = total - Math.min(best.damage, best.target.health);
-        return others > 0 ? best.withScore(best.score + others * OTHERS_WEIGHT) : best;
+        if (best < 0) return null;
+        Target target = targets.get(best);
+        float damage = damages[best];
+        float others = total - Math.min(damage, target.health);
+        return new Choice(target, damage, raws[best], self, others > 0 ? bestScore + others * OTHERS_WEIGHT : bestScore);
     }
 
     private float bonuses(Target target, float damage, long key) {
-        float bonus = (model.focused(target) ? FOCUS_BONUS : 0) + LOW_HEALTH_BONUS * Math.min(damage / Math.max(target.health, 1.0f), 1.0f);
-        if (damage >= target.health + LETHAL_MARGIN) bonus += LETHAL_BONUS * (model.holdsTotem(target) ? 1 : 2);
-        if (rules.antiSurround() && target.gaps.contains(key)) bonus += GAP_BONUS;
+        float bonus = (target.focused ? FOCUS_BONUS : 0) + LOW_HEALTH_BONUS * Math.min(damage / Math.max(target.health, 1.0f), 1.0f);
+        if (damage >= target.health + LETHAL_MARGIN) bonus += LETHAL_BONUS * (target.totem ? 1 : 2);
+        if (rules.antiSurround && target.gaps.contains(key)) bonus += GAP_BONUS;
         return bonus;
     }
 }

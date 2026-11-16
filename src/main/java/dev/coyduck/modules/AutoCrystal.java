@@ -6,6 +6,7 @@ import dev.coyduck.events.MineStopEvent;
 import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.logic.Blast;
 import dev.coyduck.logic.BlockOverlay;
 import dev.coyduck.logic.CrystalScore;
 import dev.coyduck.logic.CrystalScore.Choice;
@@ -521,8 +522,7 @@ public class AutoCrystal extends Module {
     private PlayerEntity predictedTarget;
     private String status;
     private final Long2LongOpenHashMap clearing = new Long2LongOpenHashMap();
-    private final ScoreRules rules = new ScoreRules();
-    private final CrystalScore scorer = new CrystalScore(new ScoreModel(), rules);
+    private final CrystalScore scorer = new CrystalScore(new ScoreModel(), rules());
 
     public AutoCrystal() {
         super(Coyduck.CATEGORY, "auto-crystal", "Places and breaks crystals.");
@@ -764,7 +764,17 @@ public class AutoCrystal extends Module {
         }
     }
 
+    private CrystalScore.Rules rules() {
+        return new CrystalScore.Rules(maxSelfDamage.get(), minHealth.get(), chip.get(), chipDamage.get().floatValue(), chipSelf.get(), balance.get(),
+            selfWeight.get().floatValue(), antiSurround.get(), AutoTotem.canAffordPop());
+    }
+
+    private boolean holdsTotem(PlayerEntity player) {
+        return player.getMainHandStack().isOf(Items.TOTEM_OF_UNDYING) || player.getOffHandStack().isOf(Items.TOTEM_OF_UNDYING) || popped.containsKey(player.getId());
+    }
+
     private void prepare() {
+        scorer.rules(rules());
         Difficulty now = mc.world.getDifficulty();
         if (now != difficulty) {
             difficulty = now;
@@ -1060,10 +1070,10 @@ public class AutoCrystal extends Module {
     private boolean selfSafe(Vec3d crystal, float health, long arrival, BlockView view) {
         if (arrival == 0) {
             float full = selfDamage(crystal, view);
-            return full < health && !rules.leavesLow(full, health) && full <= maxSelfDamage.get();
+            return full < health && !scorer.rules().leavesLow(full, health) && full <= maxSelfDamage.get();
         }
         float effective = HurtTracker.get().effectiveOnSelf(selfRaw(crystal, view), arrival);
-        return effective < health && !rules.leavesLow(effective, health) && effective <= maxSelfDamage.get();
+        return effective < health && !scorer.rules().leavesLow(effective, health) && effective <= maxSelfDamage.get();
     }
 
     private void fillGaps(List<Target> targets, float health) {
@@ -1137,7 +1147,7 @@ public class AutoCrystal extends Module {
 
         float raw = ExplosionDamage.crystalRaw(target.player(), target.feet(), target.box(), center, mc.world);
         float damage = ExplosionDamage.mitigate(target.player(), raw);
-        return damage >= facePlaceDamage.get() && rules.balanced(damage, selfDamage(center, mc.world), target.health());
+        return damage >= facePlaceDamage.get() && scorer.rules().balanced(damage, selfDamage(center, mc.world), target.health());
     }
 
     private boolean breakCrystals(List<Target> targets, float health) {
@@ -1161,7 +1171,7 @@ public class AutoCrystal extends Module {
                 BlockView view = stopView != null && center.squaredDistanceTo(Vec3d.ofCenter(stoppedAt)) <= aheadRange ? stopView : mc.world;
                 Choice choice = scorer.evaluate(targets, center, health, hurtSync.get() ? arrival : 0, view);
                 if (choice != null && hurtSync.get() && choice.damage() < choice.target().health()
-                    && choice.damage() < ExplosionDamage.mitigate(choice.target().player(), choice.raw()) * HURT_WORTH) choice = null;
+                    && choice.damage() < choice.target().defense().reduce(choice.raw()) * HURT_WORTH) choice = null;
                 if (choice == null) {
                     if (hurtSync.get()) {
                         Choice ready = scorer.evaluate(targets, center, health, 0, view);
@@ -1397,7 +1407,7 @@ public class AutoCrystal extends Module {
                     if (crystalBox(base).squaredMagnitude(eye) > reach || standsOn(base)) continue;
 
                     float self = selfDamage(crystalCenter(base), mc.world);
-                    if (self >= health || rules.leavesLow(self, health) || self > maxSelfDamage.get()) return false;
+                    if (self >= health || scorer.rules().leavesLow(self, health) || self > maxSelfDamage.get()) return false;
                 }
             }
         }
@@ -1527,7 +1537,7 @@ public class AutoCrystal extends Module {
         float health = player.getHealth() + player.getAbsorptionAmount();
         LongSet gaps = new LongOpenHashSet();
         for (BlockPos cell : Targets.ring(Targets.columns(Targets.box(player)), 0)) gaps.add(cell.asLong());
-        return new Target(player, box, feet, health, minDamage(player, health), gaps);
+        return new Target(player, box, feet, health, minDamage(player, health), gaps, Blast.Defense.of(player), player == focus, holdsTotem(player));
     }
 
     private float minDamage(PlayerEntity player, float health) {
@@ -1683,52 +1693,10 @@ public class AutoCrystal extends Module {
             && mc.player.isAlive() && !mc.player.isSpectator();
     }
 
-    private final class ScoreRules implements CrystalScore.Rules {
-        @Override
-        public double maxSelf() {
-            return maxSelfDamage.get();
-        }
-
-        @Override
-        public double minHealth() {
-            return minHealth.get();
-        }
-
-        @Override
-        public boolean chip() {
-            return chip.get();
-        }
-
-        @Override
-        public float chipDamage() {
-            return chipDamage.get().floatValue();
-        }
-
-        @Override
-        public double chipSelf() {
-            return chipSelf.get();
-        }
-
-        @Override
-        public double balance() {
-            return balance.get();
-        }
-
-        @Override
-        public float selfWeight() {
-            return selfWeight.get().floatValue();
-        }
-
-        @Override
-        public boolean antiSurround() {
-            return antiSurround.get();
-        }
-    }
-
     private final class ScoreModel implements CrystalScore.Model {
         @Override
         public float bound(Target target, Vec3d crystal) {
-            return ExplosionDamage.upperBound(target.player(), target.feet(), crystal);
+            return target.defense().reduce(ExplosionDamage.rawBound(target.player(), target.feet(), crystal, ExplosionDamage.CRYSTAL_POWER));
         }
 
         @Override
@@ -1738,7 +1706,7 @@ public class AutoCrystal extends Module {
 
         @Override
         public float damage(Target target, float raw, long arrival) {
-            return arrival != 0 ? HurtTracker.get().effective(target.player(), raw, arrival) : ExplosionDamage.mitigate(target.player(), raw);
+            return arrival != 0 ? HurtTracker.get().effective(target.player(), raw, arrival) : target.defense().reduce(raw);
         }
 
         @Override
@@ -1749,22 +1717,6 @@ public class AutoCrystal extends Module {
         @Override
         public boolean hurtsFriend(Vec3d crystal, BlockView view) {
             return AutoCrystal.this.hurtsFriend(crystal, view);
-        }
-
-        @Override
-        public boolean focused(Target target) {
-            return target.player() == focus;
-        }
-
-        @Override
-        public boolean holdsTotem(Target target) {
-            PlayerEntity player = target.player();
-            return player.getMainHandStack().isOf(Items.TOTEM_OF_UNDYING) || player.getOffHandStack().isOf(Items.TOTEM_OF_UNDYING) || popped.containsKey(player.getId());
-        }
-
-        @Override
-        public boolean canAffordPop() {
-            return AutoTotem.canAffordPop();
         }
     }
 }

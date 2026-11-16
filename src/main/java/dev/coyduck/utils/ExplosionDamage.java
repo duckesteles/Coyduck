@@ -8,10 +8,7 @@ import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.BlocksAttacksComponent;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
@@ -105,17 +102,7 @@ public final class ExplosionDamage {
     }
 
     public static float mitigate(LivingEntity target, float damage) {
-        if (damage <= 0) return 0;
-
-        damage = Blast.armor(damage, target.getArmor(), (float) target.getAttributeValue(EntityAttributes.ARMOR_TOUGHNESS));
-
-        StatusEffectInstance resistance = target.getStatusEffect(StatusEffects.RESISTANCE);
-        if (resistance != null) {
-            damage = Blast.resistance(damage, resistance.getAmplifier());
-            if (damage <= 0) return 0;
-        }
-
-        return Blast.protection(damage, Blast.protectionPoints(target));
+        return Blast.Defense.of(target).reduce(damage);
     }
 
     public static boolean isInvulnerable(LivingEntity target) {

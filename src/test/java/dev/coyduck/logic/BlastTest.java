@@ -12,6 +12,8 @@ import net.minecraft.world.Difficulty;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.util.Random;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -57,6 +59,7 @@ class BlastTest {
     @Test
     void armorCapsAtTwentyPoints() {
         assertEquals(0.928f, Blast.armor(4.0f, 20.0f, 12.0f), EPSILON);
+        assertEquals(2.0f, Blast.armor(10.0f, 30.0f, 0.0f), EPSILON);
         assertEquals(10.0f, Blast.armor(10.0f, 0.0f, 0.0f), EPSILON);
     }
 
@@ -101,11 +104,64 @@ class BlastTest {
     }
 
     @Test
-    void exposureIsAFractionOfFortyFiveRays() {
-        Terrain terrain = new Terrain().fill(1, 0, -2, 1, 0, 2, obsidian());
-        float exposure = Blast.exposure(new Vec3d(2.5, 1.0, 0.0), PLAYER, terrain, CONTEXT);
-        float rays = exposure * 45.0f;
-        assertEquals(Math.round(rays), rays, EPSILON);
+    void cobwebAndWaterDoNotShield() {
+        Terrain webs = new Terrain().fill(2, -1, -2, 2, 3, 2, Blocks.COBWEB.getDefaultState());
+        Terrain water = new Terrain().fill(2, -1, -2, 2, 3, 2, Blocks.WATER.getDefaultState());
+        Vec3d source = new Vec3d(3.5, 0.5, 0.5);
+        assertEquals(1.0f, Blast.exposure(source, PLAYER, webs, CONTEXT));
+        assertEquals(1.0f, Blast.exposure(source, PLAYER, water, CONTEXT));
+    }
+
+    @Test
+    void slabsShieldOnlyTheirHalf() {
+        Terrain slabs = new Terrain().fill(2, 0, -2, 2, 0, 2, Blocks.OBSIDIAN.getDefaultState());
+        Terrain halves = new Terrain().fill(2, 0, -2, 2, 0, 2, Blocks.STONE_SLAB.getDefaultState());
+        Vec3d source = new Vec3d(3.5, 0.6, 0.0);
+        float full = Blast.exposure(source, PLAYER, slabs, CONTEXT);
+        float half = Blast.exposure(source, PLAYER, halves, CONTEXT);
+        assertTrue(full < half && half < 1.0f, full + " " + half);
+    }
+
+    @Test
+    void negativeSourceBlockCountsAsRemoved() {
+        Terrain terrain = new Terrain().set(-4, 0, -1, Blocks.RESPAWN_ANCHOR.getDefaultState());
+        Box box = PLAYER.offset(-7, 0, -1);
+        assertEquals(1.0f, Blast.exposure(new Vec3d(-3.5, 0.5, -0.5), box, terrain, CONTEXT));
+    }
+
+    @Test
+    void defenseAppliesArmorThenResistanceThenProtection() {
+        float armored = Blast.armor(85.0f, 20.0f, 12.0f);
+        float resisted = Blast.resistance(armored, 0);
+        assertEquals(Blast.protection(resisted, 16), new Blast.Defense(20, 12, 0, 16).reduce(85.0f), EPSILON);
+        assertEquals(Blast.protection(armored, 16), new Blast.Defense(20, 12, -1, 16).reduce(85.0f), EPSILON);
+        assertEquals(0.0f, new Blast.Defense(20, 12, 4, 16).reduce(85.0f));
+        assertEquals(0.0f, new Blast.Defense(20, 12, -1, 16).reduce(0.0f));
+    }
+
+    @Test
+    void reductionsNeverIncreaseWithLessDamage() {
+        Random random = new Random(3);
+        for (int round = 0; round < 10000; round++) {
+            float low = random.nextFloat() * 100;
+            float high = low + random.nextFloat() * 100;
+            Blast.Defense defense = new Blast.Defense(random.nextInt(31), random.nextInt(21), random.nextInt(6) - 1, random.nextInt(41));
+            Difficulty difficulty = Difficulty.values()[random.nextInt(4)];
+            assertTrue(defense.reduce(low) <= defense.reduce(high) + EPSILON, "defense " + round);
+            assertTrue(Blast.difficulty(low, difficulty) <= Blast.difficulty(high, difficulty) + EPSILON, "difficulty " + round);
+        }
+    }
+
+    @Test
+    void damageGrowsWithExposureAndCloseness() {
+        Random random = new Random(5);
+        for (int round = 0; round < 10000; round++) {
+            double distance = random.nextDouble();
+            double exposure = random.nextDouble();
+            float damage = Blast.damage(distance, exposure, CRYSTAL);
+            assertTrue(damage <= Blast.damage(distance, Math.min(1.0, exposure + random.nextDouble() * 0.2), CRYSTAL), "exposure " + round);
+            assertTrue(damage <= Blast.damage(Math.max(0.0, distance - random.nextDouble() * 0.2), exposure, CRYSTAL), "distance " + round);
+        }
     }
 
     private static BlockState obsidian() {
