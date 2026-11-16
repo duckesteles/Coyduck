@@ -22,6 +22,7 @@ import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.network.packet.s2c.play.EntitiesDestroyS2CPacket;
 import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
+import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -46,6 +47,7 @@ public final class CrystalTracker {
     private final Long2LongOpenHashMap failures = new Long2LongOpenHashMap();
     private final Int2LongOpenHashMap own = new Int2LongOpenHashMap();
     private final Int2LongOpenHashMap dead = new Int2LongOpenHashMap();
+    private final Int2LongOpenHashMap killedAt = new Int2LongOpenHashMap();
     private final Int2ObjectOpenHashMap<Removed> removed = new Int2ObjectOpenHashMap<>();
 
     private record Removed(Vec3d pos, long time) {}
@@ -98,7 +100,9 @@ public final class CrystalTracker {
     }
 
     public void kill(Entity crystal, long duration) {
-        dead.put(crystal.getId(), Util.getMeasuringTimeMs() + duration);
+        long now = Util.getMeasuringTimeMs();
+        dead.put(crystal.getId(), now + duration);
+        killedAt.put(crystal.getId(), now);
     }
 
     public boolean isDead(Entity entity) {
@@ -206,8 +210,17 @@ public final class CrystalTracker {
             case EntitiesDestroyS2CPacket packet -> {
                 for (int id : packet.getEntityIds()) {
                     dead.remove(id);
+                    killedAt.remove(id);
                     own.remove(id);
                 }
+            }
+            case PlayerPositionLookS2CPacket ignored -> {
+                long since = Util.getMeasuringTimeMs() - LatencyManager.get().rtt();
+                killedAt.int2LongEntrySet().removeIf(entry -> {
+                    if (entry.getLongValue() < since) return false;
+                    dead.remove(entry.getIntKey());
+                    return true;
+                });
             }
             default -> {}
         }
@@ -244,6 +257,7 @@ public final class CrystalTracker {
             stale.remove();
         }
         dead.values().removeIf(until -> now >= until);
+        killedAt.keySet().removeIf(id -> !dead.containsKey(id));
         own.values().removeIf(time -> now - time > OWN_LIFETIME);
         removed.values().removeIf(entry -> now - entry.time > REMOVED_LIFETIME);
     }
@@ -264,6 +278,7 @@ public final class CrystalTracker {
         placing.clear();
         own.clear();
         dead.clear();
+        killedAt.clear();
         removed.clear();
         lastBroken = -1;
         highestId = 0;

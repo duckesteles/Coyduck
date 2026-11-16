@@ -43,6 +43,7 @@ import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerActionResponseS2CPacket;
+import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Util;
@@ -109,6 +110,8 @@ public final class InteractionManager {
     private boolean trackDrops;
     private final ArrayDeque<OwnBreak> ownBreaks = new ArrayDeque<>();
     private final NcpVisible visible = new NcpVisible();
+    private long voidFrom;
+    private long voidTo;
     private final NcpVisible.Solid solid = this::solid;
     private final BlockPos.Mutable scratch = new BlockPos.Mutable();
 
@@ -589,6 +592,10 @@ public final class InteractionManager {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onApply(PacketApplyEvent.Post event) {
+        if (event.packet instanceof PlayerPositionLookS2CPacket) {
+            voidTo = Util.getMeasuringTimeMs();
+            voidFrom = voidTo - LatencyManager.get().rtt();
+        }
         if (mc.world != null) {
             switch (event.packet) {
                 case BlockUpdateS2CPacket packet -> serverSays(packet.getPos(), packet.getState());
@@ -603,11 +610,16 @@ public final class InteractionManager {
             pending.long2ObjectEntrySet().removeIf(entry -> {
                 if (entry.getValue().sequence > acked) return false;
                 long key = entry.getLongKey();
-                if (mc.world.getBlockState(BlockPos.fromLong(key)).isReplaceable()) rejectedAt.put(key, now);
-                else rejectedAt.remove(key);
+                if (!mc.world.getBlockState(BlockPos.fromLong(key)).isReplaceable()) rejectedAt.remove(key);
+                else if (!voided(key)) rejectedAt.put(key, now);
                 return true;
             });
         }
+    }
+
+    private boolean voided(long key) {
+        long at = placedAt.get(key);
+        return at != 0 && at >= voidFrom && at <= voidTo;
     }
 
     private void serverSays(BlockPos pos, BlockState state) {
@@ -619,7 +631,7 @@ public final class InteractionManager {
 
         mc.world.setBlockState(pos, state, Block.NOTIFY_ALL_AND_REDRAW);
         pending.remove(key);
-        rejectedAt.put(key, Util.getMeasuringTimeMs());
+        if (!voided(key)) rejectedAt.put(key, Util.getMeasuringTimeMs());
         Trace.log("ghost {} removed, the server says {} {}ms after our place", pos, Registries.BLOCK.getId(state.getBlock()).getPath(), since);
     }
 
