@@ -141,6 +141,29 @@ class FeatureTest {
     }
 
     @Test
+    void valuesSetBeforeBindingReachTheBackend() {
+        Sample sample = new Sample();
+        sample.count.set(5);
+        int[] stored = {0};
+        sample.count.bind(new Setting.Backend<>() {
+            @Override
+            public Integer get() {
+                return stored[0];
+            }
+
+            @Override
+            public boolean set(Integer value) {
+                stored[0] = value;
+                return true;
+            }
+
+            @Override
+            public void reset() {}
+        });
+        assertEquals(5, stored[0]);
+    }
+
+    @Test
     void shellDrivesStateAndMessages() {
         Sample sample = new Sample();
         assertFalse(sample.isActive());

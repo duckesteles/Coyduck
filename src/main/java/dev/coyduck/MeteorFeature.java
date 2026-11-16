@@ -183,7 +183,7 @@ public final class MeteorFeature extends Module implements Shell {
 
     private static Bind bind(Keybind keybind) {
         if (!keybind.isSet()) return Bind.NONE;
-        return keybind.isKey() ? Bind.key(keybind.getValue()) : Bind.button(keybind.getValue());
+        return new Bind(keybind.isKey(), keybind.getValue(), keybind.toTag().getInt("modifiers", 0));
     }
 
     private static <E extends Enum<?>> meteordevelopment.meteorclient.settings.Setting<E> mirrorEnum(EnumSetting<E> s) {
