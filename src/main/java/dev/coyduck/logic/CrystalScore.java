@@ -123,7 +123,8 @@ public final class CrystalScore {
         if (upper == -Float.MAX_VALUE || upper + spread * OTHERS_WEIGHT + KEEP_BONUS < beat) return null;
 
         float self = model.self(crystal, view, arrival);
-        if (self >= health) {
+        boolean pops = self >= health;
+        if (pops && !rules.affordPop) {
             verdicts.self = true;
             return null;
         }
@@ -144,7 +145,7 @@ public final class CrystalScore {
             Target target = targets.get(i);
             if (damage < rules.floor(target, chipping) && damage < target.health) continue;
             boolean lethal = damage >= target.health + LETHAL_MARGIN;
-            if (overSelf && !(lethal && !target.totem && !low) || low && !(lethal && rules.affordPop)) {
+            if (pops ? !(lethal && !target.totem) : overSelf && !(lethal && !target.totem && !low) || low && !(lethal && rules.affordPop)) {
                 verdicts.self = true;
                 continue;
             }

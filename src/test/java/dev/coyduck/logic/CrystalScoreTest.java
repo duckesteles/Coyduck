@@ -263,6 +263,17 @@ class CrystalScoreTest {
     }
 
     @Test
+    void tradesAPopOnlyForAKill() {
+        Target open = target(10, 4, false, false, false);
+        Target guarded = target(10, 4, false, true, false);
+        Model model = new Model().hit(open, 20).hit(guarded, 20);
+        model.self = 12;
+        assertNotNull(evaluate(model, rules(false, 0, false, true), List.of(open), 8));
+        assertNull(evaluate(model, rules(false, 0, false, false), List.of(open), 8));
+        assertNull(evaluate(model, rules(false, 0, false, true), List.of(guarded), 8));
+    }
+
+    @Test
     void choicesAreAlwaysSurvivable() {
         Random random = new Random(11);
         for (int round = 0; round < 5000; round++) {
@@ -270,9 +281,11 @@ class CrystalScoreTest {
             Model model = new Model().hit(enemy, random.nextFloat() * 40);
             model.self = random.nextFloat() * 40;
             float health = 1 + random.nextInt(36);
-            Choice choice = evaluate(model, rules(false, 0, false, random.nextBoolean()), List.of(enemy), health);
+            boolean affordPop = random.nextBoolean();
+            Choice choice = evaluate(model, rules(false, 0, false, affordPop), List.of(enemy), health);
             if (choice == null) continue;
-            assertTrue(choice.self() < health, "round " + round);
+            boolean kill = choice.damage() >= enemy.health() + CrystalScore.LETHAL_MARGIN && !enemy.totem();
+            assertTrue(choice.self() < health || affordPop && kill, "round " + round);
             assertTrue(choice.self() <= 12 || choice.damage() >= enemy.health() + CrystalScore.LETHAL_MARGIN && !enemy.totem(), "round " + round);
         }
     }
