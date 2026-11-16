@@ -7,6 +7,8 @@ public final class MineStopEvent {
 
     public BlockPos pos;
 
+    private MineStopEvent() {}
+
     public static MineStopEvent get(BlockPos pos) {
         INSTANCE.pos = pos;
         return INSTANCE;

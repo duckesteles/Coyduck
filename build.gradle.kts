@@ -73,7 +73,9 @@ tasks {
     test {
         useJUnitPlatform()
         systemProperty("fabric.debug.disableModIds", "meteor-client,coyduck")
-        systemProperty("coyduck.sources", file("src/main/java").absolutePath)
+        val sources = file("src/main/java")
+        inputs.dir(sources).withPropertyName("sources").withPathSensitivity(PathSensitivity.RELATIVE)
+        systemProperty("coyduck.sources", sources.absolutePath)
         val runDir = layout.buildDirectory.dir("test-run").get().asFile
         workingDir = runDir
         doFirst { runDir.mkdirs() }

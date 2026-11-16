@@ -16,14 +16,13 @@ import meteordevelopment.orbit.IEventBus;
 import net.minecraft.client.MinecraftClient;
 
 public final class Core {
-    public static MinecraftClient mc = MinecraftClient.getInstance();
+    public static final MinecraftClient mc = MinecraftClient.getInstance();
 
     private static Host host = Host.NONE;
 
     private Core() {}
 
     public static void start(IEventBus bus, Host environment) {
-        mc = MinecraftClient.getInstance();
         host = environment;
         Bus.use(bus);
         Bus.subscribe(TickRate.get());

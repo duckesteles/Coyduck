@@ -19,12 +19,12 @@ public abstract class MinecraftClientMixin {
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void coyduck$tickPre(CallbackInfo ci) {
-        Bus.post(TickEvent.Pre.get());
+        Bus.post(TickEvent.Pre.INSTANCE);
     }
 
     @Inject(method = "tick", at = @At("TAIL"))
     private void coyduck$tickPost(CallbackInfo ci) {
-        Bus.post(TickEvent.Post.get());
+        Bus.post(TickEvent.Post.INSTANCE);
     }
 
     @Inject(method = "disconnect(Lnet/minecraft/client/gui/screen/Screen;ZZ)V", at = @At("HEAD"))

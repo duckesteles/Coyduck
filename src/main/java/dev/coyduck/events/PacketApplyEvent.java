@@ -10,6 +10,8 @@ public final class PacketApplyEvent {
 
         public Packet<?> packet;
 
+        private Pre() {}
+
         public static Pre get(Packet<?> packet) {
             INSTANCE.setCancelled(false);
             INSTANCE.packet = packet;
@@ -21,6 +23,8 @@ public final class PacketApplyEvent {
         private static final Post INSTANCE = new Post();
 
         public Packet<?> packet;
+
+        private Post() {}
 
         public static Post get(Packet<?> packet) {
             INSTANCE.packet = packet;
