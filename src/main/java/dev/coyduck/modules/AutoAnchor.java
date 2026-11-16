@@ -765,6 +765,7 @@ public class AutoAnchor extends Feature {
         BlockPos pos = choice.pos();
         InteractionManager interaction = InteractionManager.get();
         boolean placed = mc.world.getBlockState(pos).isOf(Blocks.RESPAWN_ANCHOR);
+        if (placed) interaction.notePlaced(pos);
         BlockHitResult placeHit = placed ? null : interaction.hit(pos, airplace.get());
         if (!placed && placeHit == null) {
             status = "no spot";

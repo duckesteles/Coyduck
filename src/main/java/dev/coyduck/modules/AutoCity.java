@@ -78,7 +78,6 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
     private static final long REFILL_BAN = 5000;
     private static final long WORTHLESS_LIMIT = 500;
     private static final long HOLD_STALE = 1000;
-    private static final long REFILL_MEMORY = 1_000;
     private static final float BURROW_PREEMPT = 0.7f;
     private static final float HOLD_TOLERANCE = 1;
     private static final int TOUCHED_UPDATES = 2;
@@ -343,15 +342,11 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
         boolean[] touched = {false};
         boolean relevant = switch (event.packet) {
             case BlockUpdateS2CPacket packet -> {
-                noteRefill(packet.getPos(), packet.getState());
                 touched[0] = ours(packet.getPos());
                 yield packet.getPos().isWithinDistance(center, 3);
             }
             case ChunkDeltaUpdateS2CPacket packet -> {
-                packet.visitUpdates((pos, state) -> {
-                    noteRefill(pos, state);
-                    touched[0] |= ours(pos);
-                });
+                packet.visitUpdates((pos, state) -> touched[0] |= ours(pos));
                 yield Targets.touches(packet, center, 3);
             }
             default -> false;
@@ -368,9 +363,20 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
         }
     }
 
+    @EventHandler
+    private void onPacketPre(PacketApplyEvent.Pre event) {
+        if (target == null || mc.world == null || !eats(target) || eatRefills.contains(target.getId())) return;
+        switch (event.packet) {
+            case BlockUpdateS2CPacket packet -> noteRefill(packet.getPos(), packet.getState());
+            case ChunkDeltaUpdateS2CPacket packet -> packet.visitUpdates((pos, state) -> noteRefill(pos.toImmutable(), state));
+            default -> {}
+        }
+    }
+
     private void noteRefill(BlockPos pos, BlockState state) {
-        if (state.isReplaceable() || !eats(target) || eatRefills.contains(target.getId())) return;
-        if (!Targets.ring(Targets.columns(Targets.box(target)), 0).contains(pos) || InteractionManager.get().placedByUs(pos, REFILL_MEMORY)) return;
+        if (state.isReplaceable() || !mc.world.getBlockState(pos).isReplaceable() || eatRefills.contains(target.getId())) return;
+        if (pos.equals(current) || pos.equals(currentSupport)) return;
+        if (!Targets.ring(Targets.columns(Targets.box(target)), 0).contains(pos) || InteractionManager.get().placedByUs(pos, LatencyManager.get().timeout())) return;
         eatRefills.add(target.getId());
         Trace.log("city {} refills while eating, holds stay on", target.getName().getString());
     }

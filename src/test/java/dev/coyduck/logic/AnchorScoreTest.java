@@ -137,6 +137,23 @@ class AnchorScoreTest {
     }
 
     @Test
+    void killTradeAcceptsHeavySelfDamageWithoutAPop() {
+        Target bare = new Target(null, new Box(0, 0, 0, 1, 2, 1), Vec3d.ZERO, BlockPos.ORIGIN, 4, 6, BARE, false, false);
+        Model model = new Model().hit(A, bare, 5);
+        model.self.put(A, 15.0f);
+        AnchorScore score = new AnchorScore(model);
+        score.rules(new Rules(10, 4, true));
+        assertNotNull(score.evaluate(List.of(bare), A, 20, 0, 0, false, all(1)));
+    }
+
+    @Test
+    void bareKillsRaiseTheSpotCeiling() {
+        Target bare = new Target(null, new Box(0, 0, 0, 1, 2, 1), Vec3d.ZERO, BlockPos.ORIGIN, 4, 6, BARE, false, false);
+        Spot spot = scorer(new Model().hit(A, bare, 5)).spot(List.of(bare), A, false, 0);
+        assertEquals(5 + AnchorScore.LETHAL_BONUS + AnchorScore.KILL_BONUS, spot.potential(), EPSILON);
+    }
+
+    @Test
     void weakSpotsAreUnreachable() {
         Target enemy = target(36, 6);
         assertNull(scorer(new Model().hit(A, enemy, 5)).spot(List.of(enemy), A, false, 0));

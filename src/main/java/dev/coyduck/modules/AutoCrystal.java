@@ -1214,7 +1214,7 @@ public class AutoCrystal extends Feature {
             if (hurt.effectiveOnSelf(raw, arrival) > DEFENSE_FREE) continue;
             if (full >= health && hurt.effectiveOnSelf(raw + LETHAL_DEFENSE_RAW_MARGIN, arrival + LETHAL_DEFENSE_TIME_MARGIN) > DEFENSE_FREE) continue;
             if (hurtsFriend(center, mc.world)) continue;
-            if (scorer.evaluate(targets, center, health, 0, mc.world) != null || destroysReady(targets, center, health)) continue;
+            if (!lethalOnly && (scorer.evaluate(targets, center, health, 0, mc.world) != null || destroysReady(targets, center, health))) continue;
 
             if (!InteractionManager.get().canAttack()) return broke;
             if (!breakReady(crystal, DEFEND_PRIORITY)) return broke;

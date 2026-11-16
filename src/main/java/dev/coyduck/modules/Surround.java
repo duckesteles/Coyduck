@@ -457,17 +457,11 @@ public class Surround extends Feature {
         if (!canAct()) return;
 
         boolean relevant = switch (event.packet) {
-            case BlockUpdateS2CPacket packet -> {
-                noteAnchor(packet.getPos(), packet.getState());
-                yield near(packet.getPos());
-            }
+            case BlockUpdateS2CPacket packet -> near(packet.getPos());
             case BlockBreakingProgressS2CPacket packet -> near(packet.getPos());
             case ChunkDeltaUpdateS2CPacket packet -> {
                 boolean[] found = {false};
-                packet.visitUpdates((pos, state) -> {
-                    noteAnchor(pos, state);
-                    found[0] |= near(pos);
-                });
+                packet.visitUpdates((pos, state) -> found[0] |= near(pos));
                 yield found[0];
             }
             case EntitiesDestroyS2CPacket ignored -> destroyedNear;
@@ -482,6 +476,12 @@ public class Surround extends Feature {
 
     @EventHandler
     private void onPacketPre(PacketApplyEvent.Pre event) {
+        if (mc.player == null || mc.world == null) return;
+        switch (event.packet) {
+            case BlockUpdateS2CPacket packet -> noteAnchor(packet.getPos(), packet.getState());
+            case ChunkDeltaUpdateS2CPacket packet -> packet.visitUpdates((pos, state) -> noteAnchor(pos.toImmutable(), state));
+            default -> {}
+        }
         if (!(event.packet instanceof EntitiesDestroyS2CPacket packet) || mc.world == null || mc.player == null) return;
         for (int id : packet.getEntityIds()) {
             Entity entity = mc.world.getEntityById(id);
@@ -688,6 +688,7 @@ public class Surround extends Feature {
 
                 mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
                 interaction.swing(swing.get());
+                interaction.notePlaced(pos);
                 Trace.log("surround pre-place {} about to break", pos);
                 preSent.put(pos.asLong(), ticks);
                 budget--;
@@ -926,7 +927,7 @@ public class Surround extends Feature {
     }
 
     private void noteAnchor(BlockPos pos, BlockState state) {
-        if (!state.isOf(Blocks.RESPAWN_ANCHOR) || mc.player.squaredDistanceTo(Vec3d.ofCenter(pos)) > FACE_ENEMY_RANGE * FACE_ENEMY_RANGE) return;
+        if (!state.isOf(Blocks.RESPAWN_ANCHOR) || mc.world.getBlockState(pos).isOf(Blocks.RESPAWN_ANCHOR) || mc.player.squaredDistanceTo(Vec3d.ofCenter(pos)) > FACE_ENEMY_RANGE * FACE_ENEMY_RANGE) return;
         if (InteractionManager.get().placedByUs(pos, ANCHOR_MEMORY)) return;
         anchorPlacedUntil = Util.getMeasuringTimeMs() + ANCHOR_MEMORY;
     }

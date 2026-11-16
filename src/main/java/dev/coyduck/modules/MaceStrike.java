@@ -1033,7 +1033,7 @@ public class MaceStrike extends Feature {
                 if (!open(player)) score += CLOSED_PENALTY;
                 if (player == target) score -= STICK;
             }
-            if (!Targets.holdsTotem(player)) score -= EXPOSED;
+            if (reachOnly && !Targets.holdsTotem(player)) score -= EXPOSED;
             if (score < bestScore) {
                 best = player;
                 bestScore = score;

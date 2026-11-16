@@ -86,12 +86,12 @@ public final class AnchorScore {
             float bound = target.defense.reduce(rawBound);
             if (bound < target.minDamage && bound < target.health) continue;
             float extra = bonus + (target.focused ? FOCUS_BONUS : 0);
-            potential = Math.max(potential, bound + extra + (bound >= target.health ? LETHAL_BONUS : 0));
+            potential = Math.max(potential, bound + extra + finish(target, bound));
             reachable |= 1L << i;
 
             float timed = timing != 0 ? model.timed(target, rawBound, timing) : bound;
             if (timed < target.minDamage && timed < target.health) continue;
-            timedPotential = Math.max(timedPotential, timed + extra + (timed >= target.health ? LETHAL_BONUS : 0));
+            timedPotential = Math.max(timedPotential, timed + extra + finish(target, timed));
             timedReachable |= 1L << i;
         }
         return reachable == 0 ? null : new Spot(pos, charged, potential, timedPotential, reachable, timedReachable);
@@ -131,8 +131,7 @@ public final class AnchorScore {
                 if (costly == 1) continue;
             }
 
-            boolean lethal = damage >= target.health;
-            float score = damage + bonus + (target.focused ? FOCUS_BONUS : 0) + (lethal ? LETHAL_BONUS : 0) + (lethal && !target.totem ? KILL_BONUS : 0);
+            float score = damage + bonus + (target.focused ? FOCUS_BONUS : 0) + finish(target, damage);
             Choice choice = new Choice(pos, target, damage, 0, score, charged);
             if (choice.beats(best)) best = choice;
         }
@@ -142,8 +141,8 @@ public final class AnchorScore {
         float full = model.selfFull(selfRaw);
         float self = model.selfTimed(selfRaw, arrival);
         boolean finishing = best.damage >= best.target.health;
-        boolean pops = full + FIRE_MARGIN >= health;
-        if (pops && !(rules.affordPop && finishing && !best.target.totem) || !pops && self > rules.maxSelf || self >= HARMLESS && !finishing && health - self - FIRE_MARGIN < rules.minHealth) {
+        boolean trade = rules.affordPop && finishing && !best.target.totem;
+        if (!trade && (full + FIRE_MARGIN >= health || self > rules.maxSelf) || self >= HARMLESS && !finishing && health - self - FIRE_MARGIN < rules.minHealth) {
             verdicts.self = true;
             return null;
         }
@@ -152,6 +151,11 @@ public final class AnchorScore {
             return null;
         }
         return new Choice(pos, best.target, best.damage, self, best.score, charged);
+    }
+
+    private static float finish(Target target, float damage) {
+        if (damage < target.health) return 0;
+        return target.totem ? LETHAL_BONUS : LETHAL_BONUS + KILL_BONUS;
     }
 
     private static float ceiling(Spot spot, boolean timed) {
