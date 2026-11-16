@@ -5,6 +5,7 @@ import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.PacketEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.events.WorldResetEvent;
+import dev.coyduck.logic.NcpVisible;
 import dev.coyduck.mixin.ClientWorldAccessor;
 import dev.coyduck.utils.BlockRules;
 import dev.coyduck.utils.ExplosionDamage;
@@ -106,6 +107,8 @@ public final class InteractionManager {
     private volatile long lastDropRisk;
     private boolean trackDrops;
     private final ArrayDeque<OwnBreak> ownBreaks = new ArrayDeque<>();
+    private final NcpVisible visible = new NcpVisible();
+    private final BlockPos.Mutable scratch = new BlockPos.Mutable();
 
     private InteractionManager() {}
 
@@ -154,10 +157,9 @@ public final class InteractionManager {
         double reach = mc.player.getBlockInteractionRange() - REACH_MARGIN;
         double reachSquared = reach * reach;
 
-        BlockHitResult facing = null;
-        double facingDistance = Double.MAX_VALUE;
-        BlockHitResult seen = null;
-        double seenDistance = Double.MAX_VALUE;
+        BlockHitResult best = null;
+        int bestRank = -1;
+        double bestDistance = Double.MAX_VALUE;
         boolean support = false;
 
         for (Direction direction : Direction.values()) {
@@ -172,42 +174,54 @@ public final class InteractionManager {
             Vec3d normal = Vec3d.of(side.getVector());
             Vec3d center = Vec3d.ofCenter(neighbor).add(normal.multiply(0.5));
             boolean inside = new Box(neighbor).contains(eye);
-            if (!inside && eye.subtract(center).dotProduct(normal) <= 0) continue;
+            boolean facing = inside || eye.subtract(center).dotProduct(normal) > 0;
+            boolean seenByServer = ncpSees(neighbor, side, eye);
+            if (!facing && !seenByServer) continue;
             support = true;
 
-            if (distance < facingDistance) {
-                facing = new BlockHitResult(center, side, neighbor, false);
-                facingDistance = distance;
-            }
-            if (distance >= seenDistance) continue;
-            Vec3d point = inside ? center : visiblePoint(neighbor, side, eye, reachSquared);
-            if (point != null) {
-                seen = new BlockHitResult(point, side, neighbor, false);
-                seenDistance = distance;
-            }
+            Vec3d point = !facing ? null : inside ? center : visiblePoint(neighbor, side, eye, reachSquared);
+            int rank = (seenByServer ? 2 : 0) + (point != null ? 1 : 0);
+            if (rank < bestRank || rank == bestRank && distance >= bestDistance) continue;
+            best = new BlockHitResult(point != null ? point : center, side, neighbor, false);
+            bestRank = rank;
+            bestDistance = distance;
         }
 
-        if (seen != null) return seen;
+        if (bestRank >= 2) return best;
         boolean reachable = new Box(pos).squaredMagnitude(eye) < reachSquared && centerReach(pos);
-        if (airplace && reachable && (openAir || !support)) {
+        if (airplace && reachable && (openAir || !support) && (!support || ncpSees(pos, Direction.UP, eye))) {
             for (Direction direction : Direction.values()) {
                 Vec3d point = visiblePoint(pos, direction, eye, reachSquared);
                 if (point != null) return new BlockHitResult(point, direction, pos, false);
             }
         }
-        if (facing != null || support || !airplace) return facing;
+        if (best != null || support || !airplace) return best;
         if (!reachable) return null;
         Direction side = null;
-        double best = 0;
+        double most = 0;
         for (Direction direction : Direction.values()) {
             Vec3d normal = Vec3d.of(direction.getVector());
             double facingBy = eye.subtract(Vec3d.ofCenter(pos).add(normal.multiply(0.5))).dotProduct(normal);
-            if (facingBy > best) {
+            if (facingBy > most) {
                 side = direction;
-                best = facingBy;
+                most = facingBy;
             }
         }
         return side == null ? null : new BlockHitResult(Vec3d.ofCenter(pos).add(Vec3d.of(side.getVector()).multiply(0.5)), side, pos, false);
+    }
+
+    private boolean ncpSees(BlockPos block, Direction side, Vec3d eye) {
+        int axis = switch (side.getAxis()) {
+            case X -> NcpVisible.X;
+            case Y -> NcpVisible.Y;
+            case Z -> NcpVisible.Z;
+        };
+        return visible.sees(this::solid, block.getX(), block.getY(), block.getZ(), axis, eye.x, eye.y, eye.z);
+    }
+
+    private boolean solid(int x, int y, int z) {
+        scratch.set(x, y, z);
+        return mc.world.getBlockState(scratch).isFullCube(mc.world, scratch);
     }
 
     public Vec3d visiblePoint(BlockPos block, Direction side, Vec3d eye, double reachSquared) {
