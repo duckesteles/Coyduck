@@ -11,6 +11,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayDeque;
@@ -28,6 +29,8 @@ public final class MotionTracker {
     private static final double GROUND_FRICTION = 0.546;
     private static final double AIR_FRICTION = 0.91;
     private static final double MAX_GLIDE = 2.5;
+    private static final double SELF_LEAD_SPEED = 0.25;
+    private static final int MAX_SELF_LEAD = 6;
     private static final double TELEPORT = 4.0 * 4.0;
     private static final double GLIDING_TELEPORT = 10.0 * 10.0;
 
@@ -79,6 +82,13 @@ public final class MotionTracker {
         }
 
         return box;
+    }
+
+    public Vec3d selfLead() {
+        Vec3d velocity = mc.player.getVelocity();
+        if (velocity.lengthSquared() <= SELF_LEAD_SPEED * SELF_LEAD_SPEED) return Vec3d.ZERO;
+        int ticks = MathHelper.clamp(MathHelper.ceil(LatencyManager.get().rtt() / 50.0), 1, MAX_SELF_LEAD);
+        return new Vec3d(velocity.x * ticks, mc.player.isOnGround() ? 0 : velocity.y * ticks, velocity.z * ticks);
     }
 
     public Sample selfAt(long time) {

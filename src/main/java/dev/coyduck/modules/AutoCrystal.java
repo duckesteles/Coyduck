@@ -96,8 +96,6 @@ public class AutoCrystal extends Feature {
     private static final int DEFEND_PRIORITY = 106;
     private static final int BREAK_PRIORITY = 110;
     private static final int PREDICT_DROP = 3;
-    private static final double SELF_PREDICT_SPEED = 0.25;
-    private static final int MAX_SELF_PREDICT = 6;
     private static final float DEFENSE_THREAT = 4.0f;
     private static final float DEFENSE_FREE = 0.5f;
     private static final double RAY_SLACK = 2.0;
@@ -783,10 +781,7 @@ public class AutoCrystal extends Feature {
     }
 
     private Vec3d selfMove() {
-        Vec3d velocity = mc.player.getVelocity();
-        if (velocity.horizontalLengthSquared() <= SELF_PREDICT_SPEED * SELF_PREDICT_SPEED) return Vec3d.ZERO;
-        int ticks = MathHelper.clamp(MathHelper.ceil(LatencyManager.get().rtt() / 50.0), 1, MAX_SELF_PREDICT);
-        return new Vec3d(velocity.x * ticks, mc.player.isOnGround() ? 0 : velocity.y * ticks, velocity.z * ticks);
+        return MotionTracker.get().selfLead();
     }
 
     private void run() {
@@ -1437,6 +1432,8 @@ public class AutoCrystal extends Feature {
             Vec3d move = cached ? selfMove : selfMove();
             raw = ExplosionDamage.rawUnshielded(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), crystal, ExplosionDamage.CRYSTAL_POWER, view);
             if (!move.equals(Vec3d.ZERO)) {
+                Vec3d half = move.multiply(0.5);
+                raw = Math.max(raw, ExplosionDamage.rawUnshielded(mc.player, mc.player.getEntityPos().add(half), mc.player.getBoundingBox().offset(half), crystal, ExplosionDamage.CRYSTAL_POWER, view));
                 raw = Math.max(raw, ExplosionDamage.rawUnshielded(mc.player, mc.player.getEntityPos().add(move), mc.player.getBoundingBox().offset(move), crystal, ExplosionDamage.CRYSTAL_POWER, view));
             }
             if (cached) selfCache.put(key, raw);

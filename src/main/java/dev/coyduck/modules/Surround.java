@@ -675,6 +675,7 @@ public class Surround extends Feature {
         List<BlockPos> ready = new ArrayList<>();
         for (BlockPos pos : Targets.ring(anchored, 0)) {
             if (ready.size() >= budget || preSent.containsKey(pos.asLong()) && ticks - preSent.get(pos.asLong()) < preInterval() || !aboutToBreak(pos)) continue;
+            if (!interaction.obstructions(pos).isEmpty()) continue;
             if (interaction.hit(pos, airplace.get(), true) != null) ready.add(pos);
         }
         if (ready.isEmpty()) return;

@@ -65,6 +65,7 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.dimension.DimensionTypes;
@@ -1123,7 +1124,17 @@ public class AutoAnchor extends Feature {
         @Override
         public float selfRaw(BlockPos pos) {
             Raws cached = raws(pos);
-            if (Float.isNaN(cached.self)) cached.self = ExplosionDamage.raw(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), cached.center, POWER, view(cached, pos));
+            if (Float.isNaN(cached.self)) {
+                BlockView view = view(cached, pos);
+                Vec3d lead = MotionTracker.get().selfLead();
+                float raw = ExplosionDamage.raw(mc.player, mc.player.getEntityPos(), mc.player.getBoundingBox(), cached.center, POWER, view);
+                if (!lead.equals(Vec3d.ZERO)) {
+                    Vec3d half = lead.multiply(0.5);
+                    raw = Math.max(raw, ExplosionDamage.raw(mc.player, mc.player.getEntityPos().add(half), mc.player.getBoundingBox().offset(half), cached.center, POWER, view));
+                    raw = Math.max(raw, ExplosionDamage.raw(mc.player, mc.player.getEntityPos().add(lead), mc.player.getBoundingBox().offset(lead), cached.center, POWER, view));
+                }
+                cached.self = raw;
+            }
             return cached.self;
         }
 
