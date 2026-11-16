@@ -191,9 +191,9 @@ public class MaceStrike extends Feature {
     );
 
     private final Setting<Boolean> holdMace = sgGeneral.add(new BoolSetting.Builder()
-        .name("hold-mace")
-        .description("Keeps a hotbar mace in hand so it charges.")
-        .defaultValue(true)
+        .name("keep-mace")
+        .description("Keeps the mace in hand; off swaps it in only for the hit.")
+        .defaultValue(false)
         .build()
     );
 
