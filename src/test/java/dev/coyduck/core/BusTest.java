@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -64,6 +63,22 @@ class BusTest {
         @EventHandler(priority = EventPriority.LOW)
         private void late(Stop stop) {
             stop.seen++;
+        }
+    }
+
+    static final class Linkage {
+        int seen;
+    }
+
+    static final class Broken {
+        @EventHandler(priority = EventPriority.HIGH)
+        private void missing(Linkage linkage) {
+            throw new NoSuchMethodError("gone");
+        }
+
+        @EventHandler(priority = EventPriority.LOW)
+        private void after(Linkage linkage) {
+            linkage.seen++;
         }
     }
 
@@ -138,28 +153,14 @@ class BusTest {
         return bus;
     }
 
-    static final class Watch implements Host {
-        final List<String> quarantined = new ArrayList<>();
-
-        @Override
-        public boolean quarantine(String owner, Throwable cause) {
-            quarantined.add(owner);
-            return true;
-        }
-    }
-
     private static void install(IEventBus bus) {
-        install(bus, Host.NONE);
-    }
-
-    private static void install(IEventBus bus, Host host) {
-        Bus.use(bus, host);
+        Bus.use(bus);
         Bus.subscribe(new Listener());
     }
 
     @AfterEach
     void uninstall() {
-        Bus.use(null, Host.NONE);
+        Bus.use(null);
     }
 
     @Test
@@ -188,6 +189,14 @@ class BusTest {
     }
 
     @Test
+    void linkageErrorsAreContainedToo() {
+        install(orbit());
+        Bus.subscribe(new Broken());
+        Linkage linkage = assertDoesNotThrow(() -> Bus.post(new Linkage()));
+        assertEquals(1, linkage.seen);
+    }
+
+    @Test
     void lateSubscribersAreHeard() {
         install(orbit());
         Bus.subscribe(new Late());
@@ -203,20 +212,10 @@ class BusTest {
     }
 
     @Test
-    void repeatedFailuresQuarantineTheOwnerOnce() {
-        Watch watch = new Watch();
-        install(orbit(), watch);
-        for (int i = 0; i < 9; i++) Bus.post(new Ping());
-        assertTrue(watch.quarantined.isEmpty());
-        for (int i = 0; i < 30; i++) Bus.post(new Ping());
-        assertEquals(List.of(Listener.class.getName()), watch.quarantined);
-    }
-
-    @Test
     void ownerIsTheListeningClass() {
         IEventBus bus = orbit();
         install(bus);
-        assertEquals(Listener.class.getName(), Bus.owner(listeners(bus).get(Ping.class).get(0)));
+        assertEquals(BusTest.class, Bus.owner(listeners(bus).get(Ping.class).get(0)));
     }
 
     @SuppressWarnings("unchecked")

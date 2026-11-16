@@ -24,7 +24,7 @@ public final class Core {
 
     public static void start(IEventBus bus, Host environment) {
         host = environment;
-        Bus.use(bus, environment);
+        Bus.use(bus);
         Bus.subscribe(TickRate.get());
         Bus.subscribe(LatencyManager.get());
         Bus.subscribe(InventoryManager.get());
