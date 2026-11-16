@@ -46,7 +46,7 @@ public final class MiningManager {
     private static final MiningManager INSTANCE = new MiningManager();
 
     private static final float SERVER_THRESHOLD = 1.0f;
-    private static final float STOP_THRESHOLD = 1.1f;
+    private static final float STOP_THRESHOLD = 1.0f;
     private static final double REACH_MARGIN = 0.05;
     private static final double BREAK_REACH = 5.2 - REACH_MARGIN;
 
@@ -177,6 +177,7 @@ public final class MiningManager {
         startTime = Util.getMeasuringTimeMs();
         boolean hide = owner instanceof HidesMining hides && hides.hideMining();
         PacketBatch.run(() -> {
+            keepTool();
             send(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK);
             if (hide) send(PlayerActionC2SPacket.Action.ABORT_DESTROY_BLOCK);
             InteractionManager.get().swing(swing);
