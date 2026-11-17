@@ -85,15 +85,6 @@ public class ModuleList extends Widget {
         .build()
     );
 
-    private final Setting<Integer> maxRows = sgLayout.add(new IntSetting.Builder()
-        .name("max-rows")
-        .description("Most modules listed. The rest are shown as a count.")
-        .defaultValue(14)
-        .range(1, 100)
-        .sliderRange(4, 40)
-        .build()
-    );
-
     private final Setting<Boolean> bar = sgLayout.add(new BoolSetting.Builder()
         .name("bar")
         .description("Draws an accent line on each row's outer edge.")
@@ -151,15 +142,11 @@ public class ModuleList extends Widget {
         if (sort.get() == Sort.Length) list.sort((a, b) -> Double.compare(widths.get(b), widths.get(a)));
         else list.sort((a, b) -> a.title().compareToIgnoreCase(b.title()));
 
-        int overflow = Math.max(0, list.size() - maxRows.get());
-        if (overflow > 0) list = list.subList(0, maxRows.get());
-        String more = overflow > 0 ? "+" + overflow + " more" : null;
-
         double textHeight = r.textHeight(shadow, s);
         double rowHeight = textHeight + (compact.get() ? 1 : 4) * s + (boxed ? 2 * s : 0);
         double side = side(s, boxed);
-        double widest = more == null ? 0 : r.textWidth(more, shadow, s) + side * 2;
-        double total = more == null ? 0 : rowHeight;
+        double widest = 0;
+        double total = 0;
         for (Listing module : list) {
             widest = Math.max(widest, widths.get(module));
             total += rowHeight * shown.get(module);
@@ -206,12 +193,6 @@ public class ModuleList extends Widget {
                 }
             }
             rowY += h;
-        }
-        if (more != null) {
-            double w = r.textWidth(more, shadow, s) + side * 2;
-            double rowX = right ? x + width() - w : x;
-            if (boxed) r.quad(rowX, rowY, w, rowHeight, Argb.fade(Palette.BACKGROUND | 0xFF000000, alpha));
-            r.text(more, rowX + side, rowY + (rowHeight - textHeight) / 2, Palette.MUTED, shadow, s);
         }
     }
 
