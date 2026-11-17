@@ -3,7 +3,6 @@ package dev.coyduck.core;
 import dev.coyduck.render.Palette;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.text.Text;
 
 import java.util.List;
@@ -81,9 +80,6 @@ public interface Host {
 
     default int accent() {
         return Palette.ACCENT;
-    }
-
-    default void keepAirborne(PlayerMoveC2SPacket packet) {
     }
 
     default List<? extends Listing> modules() {
