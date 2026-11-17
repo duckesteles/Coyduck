@@ -9,7 +9,6 @@ import dev.coyduck.managers.LatencyManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.MiningTracker;
 import dev.coyduck.managers.MotionTracker;
-import dev.coyduck.managers.MoveBudget;
 import dev.coyduck.managers.PopTracker;
 import dev.coyduck.managers.RotationManager;
 import dev.coyduck.managers.TickRate;
@@ -36,7 +35,6 @@ public final class Core {
         Bus.subscribe(HurtTracker.get());
         Bus.subscribe(RotationManager.get());
         Bus.subscribe(MiningManager.get());
-        Bus.subscribe(MoveBudget.get());
         Bus.subscribe(PopTracker.get());
         Bus.subscribe(FightTracker.get());
     }

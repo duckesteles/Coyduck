@@ -13,7 +13,6 @@ import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.logic.Holes;
-import dev.coyduck.managers.MoveBudget;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
 import net.minecraft.block.BlockState;
@@ -185,7 +184,6 @@ public class HoleSnap extends Feature {
     );
 
     private static final long SETBACK_PAUSE = 250;
-    private static final double WALK_SPEED = 0.221;
     private static final double USING_SPEED = 0.12;
 
     private record Hole(List<BlockPos> cells, Vec3d middle) {}
@@ -273,11 +271,11 @@ public class HoleSnap extends Feature {
             Core.host().timer(1);
             return;
         }
-        Core.host().timer(MoveBudget.get().spare() ? timer.get() : 1);
+        Core.host().timer(timer.get());
 
         double distance = Math.sqrt(dx * dx + dz * dz);
         boolean using = mc.player.isUsingItem();
-        double walk = using ? Math.min(speed.get(), USING_SPEED) : mc.player.isSprinting() ? speed.get() : Math.min(speed.get(), WALK_SPEED);
+        double walk = using ? Math.min(speed.get(), USING_SPEED) : speed.get();
         double step = Math.min(!using && boostLeft-- > 0 ? boostSpeed.get() : walk, distance);
         double x = dx / distance * step;
         double z = dz / distance * step;
