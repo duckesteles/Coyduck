@@ -51,14 +51,11 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 
 import java.util.ArrayDeque;
-import java.util.Locale;
 
 public class MaceStrike extends Feature {
     private static final int PRIORITY = 85;
     private static final float ROTATE_SPEED = 180.0f;
     private static final double MIN_DROP = 2.0;
-    private static final double FALL_GRAVITY = 0.08;
-    private static final double FALL_DRAG = 0.98;
     private static final double HEIGHT_STEP = 0.5;
     private static final double AIM_INSET = 0.05;
     private static final double STANDING_EYE = 1.62;
@@ -115,14 +112,12 @@ public class MaceStrike extends Feature {
         Ground,
         Dive,
         Descend,
-        Ascend,
-        Drop
+        Ascend
     }
 
     public enum Mode {
         Ticks,
-        Burst,
-        Drop
+        Burst
     }
 
     public enum Unglide {
@@ -153,8 +148,8 @@ public class MaceStrike extends Feature {
 
     private final Setting<Mode> mode = sgGeneral.add(new EnumSetting.Builder<Mode>()
         .name("mode")
-        .description("Drop falls like gravity in one tick, Burst dives while gliding, Ticks one move per tick.")
-        .defaultValue(Mode.Drop)
+        .description("Burst sends the dive in one tick, Ticks one move per tick.")
+        .defaultValue(Mode.Burst)
         .build()
     );
 
@@ -494,14 +489,13 @@ public class MaceStrike extends Feature {
         }
         noStrikeSince = 0;
         stuckLimit = STUCK_MS;
-        boolean drops = mode.get() == Mode.Drop;
-        boolean burst = mode.get() == Mode.Burst || drops;
+        boolean burst = mode.get() == Mode.Burst;
         int diveTicks = burst ? 0 : (int) Math.ceil((mc.player.getY() - y) / step.get());
         long hitAt = Util.getMeasuringTimeMs() + diveTicks * 50L + LatencyManager.get().rtt() / 2;
         float charge = AttackCharge.server(diveTicks + 0.5f);
         double drop = mc.player.getY() - y;
         double counted = burst && Double.isNaN(learnedFall) ? drop : countedFall();
-        double fall = drops ? drop : Math.min(burst ? drop : Math.min(drop, step.get()) + 1, counted);
+        double fall = Math.min(burst ? drop : Math.min(drop, step.get()) + 1, counted);
         if (HurtTracker.get().releaseTime(target) > Util.getMeasuringTimeMs() + diveTicks * 50L) {
             float raw = smashRaw(fall, charge);
             if (HurtTracker.get().effective(target, raw, hitAt) < ExplosionDamage.mitigate(target, raw) * HURT_SHARE) return;
@@ -516,8 +510,7 @@ public class MaceStrike extends Feature {
         strikeY = y;
         serverY = mc.player.getY();
         ElytraFly.pilot(Vec3d.ZERO);
-        if (drops) phase = Phase.Drop;
-        else if (stopGlide.get()) phase = Phase.Ground;
+        if (stopGlide.get()) phase = Phase.Ground;
         else phase = mode.get() == Mode.Ticks ? Phase.Descend : Phase.Dive;
     }
 
@@ -769,36 +762,8 @@ public class MaceStrike extends Feature {
                     mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
                 }
             }
-            case Drop -> {
-                phase = Phase.Idle;
-                if (!ready() || !inReachFrom(new Vec3d(x, strikeY, z))) {
-                    move(new PlayerMoveC2SPacket.PositionAndOnGround(x, y, z, false, collision));
-                    return;
-                }
-                boolean gliding = mc.player.isGliding();
-                if (gliding) glideCommand();
-                int moves = fall(x, y, strikeY, z, collision);
-                strike(false);
-                if (gliding) glideCommand();
-                path(x, strikeY, y, z, collision);
-                Trace.log("mace dropped {} blocks in {} moves", String.format(Locale.ROOT, "%.1f", y - strikeY), moves);
-            }
             default -> phase = Phase.Idle;
         }
-    }
-
-    private int fall(double x, double from, double to, double z, boolean collision) {
-        double speed = 0;
-        double at = from;
-        int moves = 0;
-        while (at - to > 1.0E-3) {
-            speed = (speed + FALL_GRAVITY) * FALL_DRAG;
-            at = Math.max(to, at - speed);
-            move(new PlayerMoveC2SPacket.PositionAndOnGround(x, at, z, false, collision));
-            endTick();
-            moves++;
-        }
-        return moves;
     }
 
     private void path(double x, double from, double to, double z, boolean collision) {
@@ -830,10 +795,6 @@ public class MaceStrike extends Feature {
     }
 
     private void strike() {
-        strike(true);
-    }
-
-    private void strike(boolean glides) {
         PlayerEntity victim = target;
         int slot = maceSlot(InventoryManager.MAIN_END);
         if (slot == -1 || victim == null) return;
@@ -851,7 +812,7 @@ public class MaceStrike extends Feature {
             learnMixed = false;
         }
         Runnable hit = () -> {
-            boolean toggle = glides && unglide.get() == Unglide.Command && mc.player.isGliding();
+            boolean toggle = unglide.get() == Unglide.Command && mc.player.isGliding();
             boolean sprinting = mc.player.isSprinting();
             if (sprinting) mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
             if (toggle) glideCommand();
