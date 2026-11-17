@@ -11,6 +11,8 @@ import dev.coyduck.modules.MaceStrike;
 import dev.coyduck.modules.NoRotate;
 import dev.coyduck.modules.Shaders;
 import dev.coyduck.render.Argb;
+import meteordevelopment.meteorclient.mixin.PlayerMoveC2SPacketAccessor;
+import meteordevelopment.meteorclient.mixininterface.IPlayerMoveC2SPacket;
 import meteordevelopment.meteorclient.systems.config.Config;
 import meteordevelopment.meteorclient.systems.friends.Friends;
 import meteordevelopment.meteorclient.systems.modules.Module;
@@ -22,12 +24,15 @@ import meteordevelopment.meteorclient.utils.player.PlayerUtils;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
 import java.util.List;
 
 public final class MeteorHost implements Host {
+    private static final int NO_FALL_EXEMPT = 1337;
+
     private record Entry(Module module) implements Listing {
         @Override
         public String name() {
@@ -148,6 +153,12 @@ public final class MeteorHost implements Host {
     @Override
     public int accent() {
         return ClickGui.accentColor();
+    }
+
+    @Override
+    public void keepAirborne(PlayerMoveC2SPacket packet) {
+        ((IPlayerMoveC2SPacket) packet).meteor$setTag(NO_FALL_EXEMPT);
+        ((PlayerMoveC2SPacketAccessor) packet).meteor$setOnGround(false);
     }
 
     @Override
