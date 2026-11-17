@@ -669,7 +669,7 @@ public class Surround extends Feature {
     }
 
     private void prePlace(int slot) {
-        if (!predict.get() || rotate.get() || budget <= 0 || eating()) return;
+        if (!predict.get() || rotate.get() || budget <= 0 || eating() || !InteractionManager.get().spareClicks(InteractionManager.CLICK_RESERVE)) return;
 
         InteractionManager interaction = InteractionManager.get();
         List<BlockPos> ready = new ArrayList<>();

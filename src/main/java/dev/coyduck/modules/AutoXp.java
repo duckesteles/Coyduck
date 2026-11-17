@@ -7,6 +7,7 @@ import dev.coyduck.feature.Feature;
 import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
+import dev.coyduck.managers.InteractionManager;
 import dev.coyduck.managers.InventoryManager;
 import dev.coyduck.managers.MiningManager;
 import dev.coyduck.managers.RotationManager;
@@ -133,7 +134,8 @@ public class AutoXp extends Feature {
             float cameraYaw = mc.player.getYaw();
             mc.player.setPitch(90);
             mc.player.setYaw(yaw);
-            for (int i = 0; i < throwable && mc.player.getMainHandStack().isOf(Items.EXPERIENCE_BOTTLE); i++) {
+            InteractionManager interaction = InteractionManager.get();
+            for (int i = 0; i < throwable && mc.player.getMainHandStack().isOf(Items.EXPERIENCE_BOTTLE) && interaction.spareClicks(InteractionManager.CLICK_RESERVE); i++) {
                 mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND);
             }
             mc.player.setPitch(pitch);

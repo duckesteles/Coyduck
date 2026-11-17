@@ -38,7 +38,9 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.HandSwingC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractBlockC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
 import net.minecraft.network.packet.s2c.play.BlockUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ChunkDeltaUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
@@ -67,6 +69,11 @@ public final class InteractionManager {
     public static final int SURROUND_PRIORITY = 121;
     public static final int DEFENSE_PRIORITY = 120;
     public static final int TRAP_PRIORITY = 90;
+    public static final int CLICK_RESERVE = 15;
+    private static final long CLICK_WINDOW = 2_000;
+    private static final int CLICK_LIMIT = 55;
+    private static final int CLICK_MARGIN = 5;
+    private static final double SERVER_RAY = 4.5;
     private static final float ROTATE_SPEED = 180;
     private static final double[][] FACE_POINTS = {{0, 0}, {0.3, 0.3}, {-0.3, 0.3}, {0.3, -0.3}, {-0.3, -0.3}, {0.45, 0}, {-0.45, 0}, {0, 0.45}, {0, -0.45}};
     private static final InteractionManager INSTANCE = new InteractionManager();
@@ -112,6 +119,8 @@ public final class InteractionManager {
     private final ArrayDeque<OwnBreak> ownBreaks = new ArrayDeque<>();
     private final NcpVisible visible = new NcpVisible();
     private BlockPos assumed;
+    private final long[] clickTimes = new long[64];
+    private int clickHead;
     private long voidFrom;
     private long voidTo;
     private final NcpVisible.Solid solid = this::solid;
@@ -327,6 +336,7 @@ public final class InteractionManager {
     }
 
     public boolean place(BlockPos pos, BlockHitResult hit, SwingMode swing, boolean rotate, boolean look, int priority) {
+        if (!spareClicks(priority >= DEFENSE_PRIORITY ? 0 : CLICK_RESERVE)) return false;
         if (rotate && !aimed(hit.getPos(), new Box(hit.getBlockPos()), priority)) return false;
         if (look && !rotate) RotationManager.get().lookNow(hit.getPos(), priority);
         mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
@@ -413,6 +423,7 @@ public final class InteractionManager {
     }
 
     public boolean placeCrystal(BlockPos base, InventoryManager.SwitchMode mode, SwingMode swing, Runnable after, boolean whileEating) {
+        if (!spareClicks(0)) return false;
         BlockHitResult hit = new BlockHitResult(crystalAim(base), crystalFace(base), base, false);
         extinguish(base.up());
 
@@ -522,6 +533,36 @@ public final class InteractionManager {
     public boolean recentDropRisk() {
         LatencyManager latency = LatencyManager.get();
         return Util.getMeasuringTimeMs() - lastDropRisk < latency.rtt() + 2L * latency.jitter() + DROP_WINDOW;
+    }
+
+    public boolean spareClicks(int reserve) {
+        return blockClicks() < CLICK_LIMIT - CLICK_MARGIN - reserve;
+    }
+
+    public int blockClicks() {
+        long now = Util.getMeasuringTimeMs();
+        int count = 0;
+        for (long at : clickTimes) {
+            if (at != 0 && now - at < CLICK_WINDOW) count++;
+        }
+        return count;
+    }
+
+    @EventHandler
+    private void onSent(PacketEvent.Sent event) {
+        boolean counted = switch (event.packet) {
+            case PlayerInteractBlockC2SPacket ignored -> true;
+            case PlayerActionC2SPacket packet -> packet.getAction() == PlayerActionC2SPacket.Action.START_DESTROY_BLOCK;
+            case PlayerInteractItemC2SPacket packet -> mc.player != null && mc.world != null && looksAtBlock(packet.getYaw(), packet.getPitch());
+            default -> false;
+        };
+        if (counted) clickTimes[clickHead++ % clickTimes.length] = Util.getMeasuringTimeMs();
+    }
+
+    private static boolean looksAtBlock(float yaw, float pitch) {
+        Vec3d eye = mc.player.getEyePos();
+        Vec3d end = eye.add(Vec3d.fromPolar(pitch, yaw).multiply(SERVER_RAY));
+        return mc.world.raycast(new RaycastContext(eye, end, RaycastContext.ShapeType.OUTLINE, RaycastContext.FluidHandling.NONE, mc.player)).getType() == HitResult.Type.BLOCK;
     }
 
     @EventHandler
