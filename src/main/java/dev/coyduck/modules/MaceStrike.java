@@ -561,7 +561,7 @@ public class MaceStrike extends Feature {
         double z = horizontal < 1.0E-4 ? 0 : delta.z / horizontal * speed;
         double y = MathHelper.clamp(delta.y, -fly.downSpeed(), fly.upSpeed());
         Box own = mc.player.getBoundingBox();
-        if (!mc.world.isSpaceEmpty(mc.player, own.stretch(x * LOOK_AHEAD, y * LOOK_AHEAD, z * LOOK_AHEAD))) {
+        if (!mc.world.isSpaceEmpty(mc.player, own.stretch(x * LOOK_AHEAD, 0, z * LOOK_AHEAD))) {
             boolean roofed = !mc.world.isSpaceEmpty(mc.player, own.stretch(0, fly.upSpeed() * LOOK_AHEAD, 0));
             ElytraFly.pilot(roofed ? Vec3d.ZERO : new Vec3d(0, fly.upSpeed(), 0));
             return;
