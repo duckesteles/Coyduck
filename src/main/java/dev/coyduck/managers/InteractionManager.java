@@ -231,6 +231,11 @@ public final class InteractionManager {
         };
     }
 
+    public boolean sees(BlockPos block, Direction side) {
+        Vec3d eye = mc.player.getEyePos();
+        return ncpFace(block, side, eye) && ncpSees(block, side, eye);
+    }
+
     public boolean seen(BlockHitResult hit) {
         return ncpSees(hit.getBlockPos(), hit.getSide(), mc.player.getEyePos());
     }

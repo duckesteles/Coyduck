@@ -64,6 +64,8 @@ public final class MiningManager {
     private static final double STOP_FACE_COS = Math.cos(Math.toRadians(15));
     private static final int STOP_FACE_PRIORITY = 95;
     private static final long STOP_FACE_WAIT = 300;
+    private static final double START_FACE_ANGLE = 15;
+    private static final long RESTART_SLACK = 100;
     private static final float STOP_TURN_SPEED = 60.0f;
     private static final long QUIET = 150;
     private static final long QUIET_CAP = 400;
@@ -100,6 +102,7 @@ public final class MiningManager {
     private long lastStopAt;
     private long readySince;
     private long faceRefusedAt;
+    private long startFaceAt;
     private int faceRefusedTick;
     private boolean heldAway;
 
@@ -170,6 +173,7 @@ public final class MiningManager {
     private void begin() {
         readySince = 0;
         faceRefusedAt = 0;
+        startFaceAt = 0;
         heldAway = false;
         startPending = true;
         startTick = ticks;
@@ -178,9 +182,22 @@ public final class MiningManager {
     }
 
     private void sendStart() {
-        if (Trace.on()) Trace.log("mine start-sent {} waited {}ms", pos, Util.getMeasuringTimeMs() - startTime);
+        side = seenSide(pos);
+        boolean visible = InteractionManager.get().sees(pos, side);
+        double aim = aimOff(pos, side);
+        boolean looked = false;
+        if (aim > START_FACE_ANGLE && !Core.host().freezesRotation()) {
+            long now = Util.getMeasuringTimeMs();
+            if (startFaceAt == 0) startFaceAt = now;
+            looked = RotationManager.get().lookNow(facePoint(pos, side), STOP_FACE_PRIORITY);
+            if (!looked && now - startFaceAt < STOP_FACE_WAIT) {
+                RotationManager.get().request(STOP_FACE_PRIORITY, facePoint(pos, side), STOP_TURN_SPEED, false);
+                return;
+            }
+        }
+        startFaceAt = 0;
+        if (Trace.on()) Trace.log("mine start-sent {} waited {}ms vis={} aim={} looked={}", pos, Util.getMeasuringTimeMs() - startTime, visible ? "open" : "blocked", (int) aim, looked);
         startPending = false;
-        side = facing(pos);
         startTick = ticks;
         startTime = Util.getMeasuringTimeMs();
         boolean hide = owner instanceof HidesMining hides && hides.hideMining();
@@ -190,6 +207,27 @@ public final class MiningManager {
             if (hide) send(PlayerActionC2SPacket.Action.ABORT_DESTROY_BLOCK);
             InteractionManager.get().swing(swing);
         });
+    }
+
+    private static Direction seenSide(BlockPos target) {
+        Direction preferred = facing(target);
+        InteractionManager interaction = InteractionManager.get();
+        if (interaction.sees(target, preferred)) return preferred;
+        for (Direction direction : Direction.values()) {
+            if (direction != preferred && interaction.sees(target, direction)) return direction;
+        }
+        return preferred;
+    }
+
+    private static Vec3d facePoint(BlockPos target, Direction face) {
+        return Vec3d.ofCenter(target).add(face.getOffsetX() * 0.5, face.getOffsetY() * 0.5, face.getOffsetZ() * 0.5);
+    }
+
+    private static double aimOff(BlockPos target, Direction face) {
+        RotationManager rotations = RotationManager.get();
+        Vec3d look = Vec3d.fromPolar(rotations.serverPitch(), rotations.serverYaw());
+        Vec3d want = facePoint(target, face).subtract(mc.player.getEyePos()).normalize();
+        return Math.toDegrees(Math.acos(Math.clamp(look.dotProduct(want), -1, 1)));
     }
 
     public BlockPos background() {
@@ -470,10 +508,12 @@ public final class MiningManager {
         if (startPending) {
             if (Util.getMeasuringTimeMs() - lastStopAt < START_GAP) return;
             sendStart();
+            if (startPending) return;
         }
 
         boolean waited = Util.getMeasuringTimeMs() - lastStop > LatencyManager.get().timeout();
-        if (stops >= MAX_STOPS && waited && !mc.world.getBlockState(pos).isReplaceable()) {
+        boolean lost = Util.getMeasuringTimeMs() - lastStop > LatencyManager.get().timeout() + RESTART_SLACK;
+        if (stops >= MAX_STOPS && lost && !mc.world.getBlockState(pos).isReplaceable()) {
             Trace.log("mine restart {} stop not confirmed after {}ms", pos, Util.getMeasuringTimeMs() - lastStop);
             restart();
             return;
