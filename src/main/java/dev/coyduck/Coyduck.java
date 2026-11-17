@@ -19,6 +19,7 @@ import dev.coyduck.modules.ChestSorter;
 import dev.coyduck.modules.ChestSearch;
 import dev.coyduck.modules.DiscordWebhook;
 import dev.coyduck.modules.Regear;
+import dev.coyduck.modules.HudStyle;
 import dev.coyduck.modules.AntiRegear;
 import dev.coyduck.modules.LogoutSpots;
 import dev.coyduck.modules.PhaseEsp;
@@ -125,6 +126,7 @@ public class Coyduck extends MeteorAddon {
         add(new AutoEz());
         add(new HideRich());
         Modules.get().add(new ClickGui());
+        add(new HudStyle());
         add(new KillEffects());
         add(new NoExplosion());
         add(new NoRotate());

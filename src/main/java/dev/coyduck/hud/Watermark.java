@@ -100,7 +100,7 @@ public class Watermark extends Widget {
         if (logoSize > 0) r.texture(MASCOT, logoX, y + pad + (contentHeight - logoSize) / 2, logoSize, logoSize, 0xFFFFFFFF);
 
         double textY = y + pad + (contentHeight - textHeight) / 2;
-        r.text(name, textX, textY, CoyHud.accent(), shadow, s);
+        r.text(name, textX, textY, CoyHud.color(textY), shadow, s);
         if (!tail.isEmpty()) r.text(tail, textX + nameWidth, textY, (whiteVersion.get() ? Palette.TEXT : Palette.SUBTLE), shadow, s);
     }
 }

@@ -6,6 +6,7 @@ import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.Setting;
 import dev.coyduck.feature.SettingGroup;
 import dev.coyduck.feature.Settings;
+import dev.coyduck.modules.HudStyle;
 import dev.coyduck.render.Argb;
 import dev.coyduck.render.Palette;
 import dev.coyduck.render.Panel;
@@ -54,6 +55,19 @@ public final class CoyHud {
 
     public static int accent() {
         return Core.host().accent();
+    }
+
+    public static int color(double y) {
+        return HudStyle.color(y);
+    }
+
+    public static double eased(double t) {
+        double rest = 1 - t;
+        return 1 - rest * rest * rest * rest;
+    }
+
+    public static double toward(double value, boolean up, double delta, double perSecond) {
+        return Math.clamp(value + (up ? delta : -delta) * perSecond, 0, 1);
     }
 
     public static void panel(Panel r, double x, double y, double w, double h, double alpha) {

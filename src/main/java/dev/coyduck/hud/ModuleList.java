@@ -102,6 +102,7 @@ public class ModuleList extends Widget {
     private final CoyHud.Background background = new CoyHud.Background(settings);
 
     private static final double BAR = 2;
+    private static final double ROW_SPEED = 4;
 
     private final Map<Listing, Double> shown = new HashMap<>();
     private final Map<Listing, String> extras = new HashMap<>();
@@ -126,7 +127,7 @@ public class ModuleList extends Widget {
         for (Listing module : Core.host().modules()) {
             boolean wanted = module.active() && !hide.contains(module.name()) && !module.hidden() && (!onlyCoyduck.get() || module.ours());
             double value = shown.getOrDefault(module, 0.0);
-            value = slide.get() ? CoyHud.approach(value, wanted ? 1 : 0, delta, 12) : wanted ? 1 : 0;
+            value = slide.get() ? CoyHud.toward(value, wanted, delta, ROW_SPEED) : wanted ? 1 : 0;
             if (!wanted && value < 0.01) shown.remove(module);
             else shown.put(module, value);
         }
@@ -149,7 +150,7 @@ public class ModuleList extends Widget {
         double total = 0;
         for (Listing module : list) {
             widest = Math.max(widest, widths.get(module));
-            total += rowHeight * shown.get(module);
+            total += rowHeight * CoyHud.eased(shown.get(module));
         }
         if (list.isEmpty() && inEditor()) {
             widest = r.textWidth("Modules", shadow, s) + side * 2;
@@ -173,24 +174,25 @@ public class ModuleList extends Widget {
         double rowY = y;
         for (Listing module : list) {
             double t = shown.get(module);
+            double e = CoyHud.eased(t);
             double w = widths.get(module);
-            double h = rowHeight * t;
-            double offset = (1 - t) * (w * 0.6);
+            double h = rowHeight * e;
+            double offset = (1 - e) * w;
+            double fade = Math.clamp(t * 2, 0.1, 1);
             double rowX = right ? x + width() - w + offset : x - offset;
 
-            if (boxed) r.quad(rowX, rowY, w, h, Argb.fade(Palette.BACKGROUND | 0xFF000000, t * alpha));
-            if (bar.get()) r.quad(right ? rowX + w - BAR : rowX, rowY, BAR, h, Argb.fade(CoyHud.accent(), t));
+            int color = CoyHud.color(rowY);
+            if (boxed) r.quad(rowX, rowY, w, h, Argb.fade(Palette.BACKGROUND | 0xFF000000, fade * alpha));
+            if (bar.get()) r.quad(right ? rowX + w - BAR : rowX, rowY, BAR, h, Argb.fade(color, fade));
 
-            if (t > 0.5) {
-                double tx = rowX + side;
-                double ty = rowY + (h - textHeight) / 2;
-                tx = r.text(module.title(), tx, ty, Argb.fade(CoyHud.accent(), t), shadow, s);
-                String extra = extras.get(module);
-                if (extra != null) {
-                    tx = r.text(" [", tx, ty, Argb.fade(Palette.SUBTLE, t), shadow, s);
-                    tx = r.text(extra, tx, ty, Argb.fade(Palette.TEXT, t), shadow, s);
-                    r.text("]", tx, ty, Argb.fade(Palette.SUBTLE, t), shadow, s);
-                }
+            double tx = rowX + side;
+            double ty = rowY + (h - textHeight) / 2;
+            tx = r.text(module.title(), tx, ty, Argb.fade(color, fade), shadow, s);
+            String extra = extras.get(module);
+            if (extra != null) {
+                tx = r.text(" [", tx, ty, Argb.fade(Palette.SUBTLE, fade), shadow, s);
+                tx = r.text(extra, tx, ty, Argb.fade(Palette.TEXT, fade), shadow, s);
+                r.text("]", tx, ty, Argb.fade(Palette.SUBTLE, fade), shadow, s);
             }
             rowY += h;
         }
