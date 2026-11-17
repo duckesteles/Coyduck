@@ -250,6 +250,8 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
 
     private final Long2LongOpenHashMap banned = new Long2LongOpenHashMap();
 
+    private final Vec3d[] gapCrystals = new Vec3d[9];
+    private final float[] gapBounds = new float[9];
     private PlayerEntity target;
     private final IntOpenHashSet eatRefills = new IntOpenHashSet();
     private BlockPos current;
@@ -939,35 +941,41 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
     private float gapDamage(BlockPos gap, Box box, Vec3d feet, BlockPos support) {
         BlockOverlay view = new BlockOverlay(mc.world).set(gap, Blocks.AIR.getDefaultState());
         if (support != null) view.set(support, Blocks.OBSIDIAN.getDefaultState());
+        int count = rankBases(gap, feet, view);
+
+        float best = 0;
+        for (int i = 0; i < count; i++) {
+            if (gapBounds[i] <= best) break;
+            if (Targets.safe(gapCrystals[i], view, maxSelfDamage.get())) best = Math.max(best, ExplosionDamage.crystal(target, feet, box, gapCrystals[i], view));
+        }
+        return best;
+    }
+
+    private int rankBases(BlockPos gap, Vec3d feet, BlockOverlay view) {
         AutoCrystal autoCrystal = Features.get(AutoCrystal.class);
         double range = autoCrystal != null && autoCrystal.isActive() ? autoCrystal.placeRange() : 5.5;
+        double rangeSquared = range * range;
         Vec3d eye = mc.player.getEyePos();
-        Vec3d[] crystals = new Vec3d[9];
-        float[] bounds = new float[9];
         int count = 0;
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
                 BlockPos base = gap.add(dx, -1, dz);
-                if (new Box(base).squaredMagnitude(eye) > range * range || !Targets.canHoldCrystal(view, base)) continue;
-
+                if (new Box(base).squaredMagnitude(eye) > rangeSquared || !Targets.canHoldCrystal(view, base)) continue;
                 Vec3d crystal = Targets.crystalCenter(base);
-                float bound = ExplosionDamage.upperBound(target, feet, crystal);
-                int at = count++;
-                while (at > 0 && bounds[at - 1] < bound) {
-                    bounds[at] = bounds[at - 1];
-                    crystals[at] = crystals[at - 1];
-                    at--;
-                }
-                bounds[at] = bound;
-                crystals[at] = crystal;
+                insert(count++, crystal, ExplosionDamage.upperBound(target, feet, crystal));
             }
         }
+        return count;
+    }
 
-        float best = 0;
-        for (int i = 0; i < count && bounds[i] > best; i++) {
-            if (!Targets.safe(crystals[i], view, maxSelfDamage.get())) continue;
-            best = Math.max(best, ExplosionDamage.crystal(target, feet, box, crystals[i], view));
+    private void insert(int at, Vec3d crystal, float bound) {
+        while (at > 0) {
+            if (gapBounds[at - 1] >= bound) break;
+            gapBounds[at] = gapBounds[at - 1];
+            gapCrystals[at] = gapCrystals[at - 1];
+            at--;
         }
-        return best;
+        gapBounds[at] = bound;
+        gapCrystals[at] = crystal;
     }
 }
