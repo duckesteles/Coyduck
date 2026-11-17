@@ -113,6 +113,12 @@ public final class RotationManager {
         return true;
     }
 
+    public boolean calm() {
+        if (!known) return true;
+        long now = Util.getMeasuringTimeMs();
+        return yawRate.allows(serverYaw, serverYaw, now, now, LatencyManager.get().jitter());
+    }
+
     public boolean afterRotation(Vec3d target, int priority, Runnable action) {
         if (mc.player == null || mc.getNetworkHandler() == null || Core.host().holdsMovement()) return false;
         if (Core.host().freezesRotation()) {

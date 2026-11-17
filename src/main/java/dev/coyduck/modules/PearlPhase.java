@@ -63,7 +63,10 @@ public class PearlPhase extends Feature {
     private static final int WALL_TICKS = 10;
     private static final long AUTO_GAP = 1000;
     private static final long VERIFY_MIN = 600;
-    private static final int MAX_RETRIES = 1;
+    private static final int MAX_RETRIES = 3;
+    private static final long RETRY_WAIT = 500;
+    private static final long RETRY_BUDGET = 2500;
+    private static final int CALM_TICKS = 6;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
@@ -111,7 +114,7 @@ public class PearlPhase extends Feature {
         .build()
     );
 
-    private enum State { Idle, Cell, Decoration, Wall, Aim, Verify }
+    private enum State { Idle, Cell, Decoration, Wall, Aim, Verify, Retry }
 
     private State state = State.Idle;
     private boolean blind;
@@ -123,6 +126,9 @@ public class PearlPhase extends Feature {
     private int retries;
     private long verifyUntil;
     private long thrownAt;
+    private long firstThrowAt;
+    private long retryAt;
+    private int calmTicks;
     private long nextAuto;
     private BlockPos cell;
     private BlockPos wall;
@@ -140,6 +146,7 @@ public class PearlPhase extends Feature {
         }
         state = State.Idle;
         retries = 0;
+        firstThrowAt = 0;
         nextAuto = 0;
         if (auto.get()) {
             if (pearlSlot() == -1) {
@@ -190,6 +197,7 @@ public class PearlPhase extends Feature {
             return;
         }
         aimTicks = 0;
+        calmTicks = 0;
         clearTicks = 0;
         blind = false;
         prepare(clearCell.get());
@@ -274,6 +282,7 @@ public class PearlPhase extends Feature {
             case Idle -> {
                 if (wantsAuto()) {
                     retries = 0;
+                    firstThrowAt = 0;
                     start();
                 }
             }
@@ -284,6 +293,9 @@ public class PearlPhase extends Feature {
             case Wall -> buildWall();
             case Aim -> aim(rotations);
             case Verify -> verify();
+            case Retry -> {
+                if (Util.getMeasuringTimeMs() >= retryAt) start();
+            }
         }
     }
 
@@ -344,6 +356,8 @@ public class PearlPhase extends Feature {
             return;
         }
 
+        if (!rotations.calm() && calmTicks++ < CALM_TICKS) return;
+
         slot = pearlSlot();
         if (slot == -1) {
             fail("No ender pearls.");
@@ -356,6 +370,7 @@ public class PearlPhase extends Feature {
             mc.player.setYaw(targetYaw);
             mc.player.setPitch(targetPitch);
             mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND);
+            InteractionManager.get().swing(InteractionManager.SwingMode.Packet);
             mc.player.setYaw(yaw);
             mc.player.setPitch(pitch);
         });
@@ -363,8 +378,9 @@ public class PearlPhase extends Feature {
             fail("Couldn't switch to the pearl while eating.");
             return;
         }
-        Trace.log("phase pearl thrown yaw {} pitch {} from {}", targetYaw, targetPitch, mc.player.getEntityPos());
+        Trace.log("phase pearl thrown yaw {} pitch {} from {} calm {} waited {}t", targetYaw, targetPitch, mc.player.getEntityPos(), rotations.calm(), calmTicks);
         thrownAt = Util.getMeasuringTimeMs();
+        if (firstThrowAt == 0) firstThrowAt = thrownAt;
         verifyUntil = thrownAt + Math.max(VERIFY_MIN, 2L * LatencyManager.get().rtt() + 150);
         state = State.Verify;
     }
@@ -375,17 +391,19 @@ public class PearlPhase extends Feature {
             done();
             return;
         }
+        long now = Util.getMeasuringTimeMs();
         if (!coolingDown()) {
-            Trace.log("phase pearl refused by the server after {}ms, retry {}", Util.getMeasuringTimeMs() - thrownAt, retries);
-            if (retries++ < MAX_RETRIES) {
-                start();
+            Trace.log("phase pearl refused by the server after {}ms, retry {}", now - thrownAt, retries);
+            if (retries++ < MAX_RETRIES && now + RETRY_WAIT - firstThrowAt <= RETRY_BUDGET) {
+                retryAt = now + RETRY_WAIT;
+                state = State.Retry;
                 return;
             }
             fail("The server refused the pearl.");
             return;
         }
-        if (Util.getMeasuringTimeMs() > verifyUntil) {
-            Trace.log("phase saw no pearl within {}ms", Util.getMeasuringTimeMs() - thrownAt);
+        if (now > verifyUntil) {
+            Trace.log("phase pearl accepted by cooldown after {}ms", now - thrownAt);
             done();
         }
     }
