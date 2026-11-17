@@ -464,7 +464,8 @@ public class MaceStrike extends Feature {
         double above = reachableHover(goalX, now.y, goalZ, wanted);
         if (Double.isNaN(above)) {
             if (stuck("no room above them")) return;
-            above = Math.min(MIN_HOVER, wanted);
+            steer(new Vec3d(mc.player.getX(), Math.max(mc.player.getY(), now.y + wanted), mc.player.getZ()));
+            return;
         }
         steer(new Vec3d(goalX, now.y + goalY + above, goalZ));
 
