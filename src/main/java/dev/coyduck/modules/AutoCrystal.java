@@ -563,6 +563,29 @@ public class AutoCrystal extends Feature {
         return canFillGap(gap, target, mc.player.getHealth() + mc.player.getAbsorptionAmount());
     }
 
+    public float cityDamage(BlockPos gap, BlockPos support, PlayerEntity player) {
+        if (preparedAt != Clock.ticks()) prepare();
+        List<Target> one = List.of(makeTarget(player, predictTicks()));
+        Surround surround = Features.get(Surround.class);
+        ownCells = surround != null && surround.isActive() ? Targets.ownRing() : List.of();
+        BlockOverlay view = new BlockOverlay(mc.world).set(gap, Blocks.AIR.getDefaultState());
+        if (support != null) view.set(support, Blocks.OBSIDIAN.getDefaultState());
+        float health = mc.player.getHealth() + mc.player.getAbsorptionAmount();
+
+        float best = 0;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                BlockPos base = gap.add(dx, -1, dz);
+                if (!isBase(view.getBlockState(base)) || !view.getBlockState(base.up()).isAir()) continue;
+                if (!inPlaceRange(base) || !breakable(base) || blocked(base) || overlapsOwnCells(base) || CrystalTracker.get().isBlacklisted(base)) continue;
+                if ((dx != 0 || dz != 0) && !canUse(base)) continue;
+                Choice choice = scorer.evaluate(one, crystalCenter(base), health, 0, view);
+                if (choice != null) best = Math.max(best, choice.damage());
+            }
+        }
+        return best;
+    }
+
     @Override
     public String getInfoString() {
         String name = focus == null ? null : focus.getName().getString();

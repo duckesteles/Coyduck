@@ -944,6 +944,8 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
     }
 
     private float gapDamage(BlockPos gap, Box box, Vec3d feet, BlockPos support) {
+        AutoCrystal autoCrystal = Features.get(AutoCrystal.class);
+        if (autoCrystal != null && autoCrystal.isActive()) return autoCrystal.cityDamage(gap, support, target);
         BlockOverlay view = new BlockOverlay(mc.world).set(gap, Blocks.AIR.getDefaultState());
         if (support != null) view.set(support, Blocks.OBSIDIAN.getDefaultState());
         int count = rankBases(gap, feet, view);
