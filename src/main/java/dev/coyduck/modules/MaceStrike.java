@@ -76,6 +76,8 @@ public class MaceStrike extends Feature {
     private static final double CHASE_ALIGN = 1.2;
     private static final double CHASE_SPEED = 0.4;
     private static final double CHASE_OVER = 2.0;
+    private static final int MODE_DWELL = 10;
+    private static final double LOOK_AHEAD = 2.0;
     private static final float MIN_LEARN = 2.0f;
     private static final long SETBACK_PAUSE = 1000;
     private static final int MAX_RAPID_HITS = 2;
@@ -308,6 +310,7 @@ public class MaceStrike extends Feature {
     private boolean waitTraced;
     private boolean roofTraced;
     private Boolean chasing;
+    private int modeTicks;
     private Vec3d strikeLead = Vec3d.ZERO;
     private float learnAbsorption;
     private boolean learnImmune;
@@ -451,7 +454,10 @@ public class MaceStrike extends Feature {
         lastTarget = target;
 
         double speed = Math.sqrt(motion.x * motion.x + motion.z * motion.z);
-        boolean chase = target.isGliding() && motion.length() > (Boolean.TRUE.equals(chasing) ? CHASE_SPEED / 2 : CHASE_SPEED);
+        boolean wants = target.isGliding() && motion.length() > (Boolean.TRUE.equals(chasing) ? CHASE_SPEED / 2 : CHASE_SPEED);
+        if (chasing != null && chasing != wants && ++modeTicks < MODE_DWELL) wants = chasing;
+        else modeTicks = 0;
+        boolean chase = wants;
         if (chasing == null || chasing != chase) Trace.log("mace {} {}", chase ? "chases flying" : "hovers over", target.getName().getString());
         chasing = chase;
         double wanted = chase ? chaseHover.get() : hover.get();
@@ -554,6 +560,12 @@ public class MaceStrike extends Feature {
         double x = horizontal < 1.0E-4 ? 0 : delta.x / horizontal * speed;
         double z = horizontal < 1.0E-4 ? 0 : delta.z / horizontal * speed;
         double y = MathHelper.clamp(delta.y, -fly.downSpeed(), fly.upSpeed());
+        Box own = mc.player.getBoundingBox();
+        if (!mc.world.isSpaceEmpty(mc.player, own.stretch(x * LOOK_AHEAD, y * LOOK_AHEAD, z * LOOK_AHEAD))) {
+            boolean roofed = !mc.world.isSpaceEmpty(mc.player, own.stretch(0, fly.upSpeed() * LOOK_AHEAD, 0));
+            ElytraFly.pilot(roofed ? Vec3d.ZERO : new Vec3d(0, fly.upSpeed(), 0));
+            return;
+        }
         ElytraFly.pilot(new Vec3d(x, y, z));
     }
 
