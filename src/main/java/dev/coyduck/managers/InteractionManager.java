@@ -235,6 +235,13 @@ public final class InteractionManager {
         return ncpSees(hit.getBlockPos(), hit.getSide(), mc.player.getEyePos());
     }
 
+    public boolean clear(BlockHitResult hit) {
+        Vec3d eye = mc.player.getEyePos();
+        if (new Box(hit.getBlockPos()).contains(eye)) return true;
+        BlockHitResult ray = mc.world.raycast(new RaycastContext(eye, hit.getPos(), RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player));
+        return ray.getType() == HitResult.Type.MISS || ray.getBlockPos().equals(hit.getBlockPos()) && ray.getSide() == hit.getSide();
+    }
+
     public record Helper(BlockPos cell, BlockHitResult hit) {}
 
     public Helper helper(BlockPos cell, Predicate<BlockPos> allowed) {
@@ -250,7 +257,7 @@ public final class InteractionManager {
             Direction side = direction.getOpposite();
             if (!ncpFace(helper, side, eye)) continue;
             BlockHitResult hit = hit(helper, false);
-            if (hit == null || !seen(hit) || !opens(helper, side, eye)) continue;
+            if (hit == null || !seen(hit) || !clear(hit) || !opens(helper, side, eye)) continue;
             best = new Helper(helper, hit);
             bestDistance = distance;
         }

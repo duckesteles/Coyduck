@@ -747,7 +747,7 @@ public class Surround extends Feature {
             if (budget <= 0 || !isBlock(mc.player.getMainHandStack())) return;
             hit = interaction.hit(pos, false);
         }
-        if (hit != null && !interaction.seen(hit)) {
+        if (hit != null && (!interaction.seen(hit) || !interaction.clear(hit))) {
             InteractionManager.Helper helper = interaction.helper(pos, cell -> true);
             if (helper != null) {
                 commit(helper.cell(), helper.hit());
