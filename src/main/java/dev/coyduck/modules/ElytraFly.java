@@ -138,7 +138,7 @@ public class ElytraFly extends Feature {
     private final Setting<Double> minSpeed = sgSpeed.add(new DoubleSetting.Builder()
         .name("min-speed")
         .description("Starting speed in blocks per tick, reset on release.")
-        .defaultValue(5.999)
+        .defaultValue(2.999)
         .min(0)
         .sliderRange(0, 5)
         .visible(this::ultra)
