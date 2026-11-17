@@ -71,6 +71,7 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
     private static final long SWITCH_COOLDOWN = 1000;
     private static final float FACE_PENALTY = 1.5f;
     private static final float STICK_BONUS = 3.0f;
+    private static final float SEEN_BONUS = 6.0f;
     private static final double EYE_SHARE = 0.9;
     private static final float SPEED_BONUS = 3;
     private static final float SUPPORT_PENALTY = 1;
@@ -847,7 +848,7 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
 
             if (obsidian < 0) obsidian = bestDelta(Blocks.OBSIDIAN.getDefaultState(), pos);
             float stick = refillable(pos, box) ? 0 : STICK_BONUS;
-            choices.add(new Choice(pos, damage + speedBonus(pos, obsidian) + stick, support));
+            choices.add(new Choice(pos, damage + speedBonus(pos, obsidian) + stick + seenBonus(pos), support));
         }
 
         for (BlockPos pos : Targets.ring(columns, 1)) {
@@ -855,7 +856,7 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
             float damage = gapDamage(pos, box, feet, null);
             if (damage < minDamage.get()) continue;
             if (obsidian < 0) obsidian = bestDelta(Blocks.OBSIDIAN.getDefaultState(), pos);
-            choices.add(new Choice(pos, damage - FACE_PENALTY + speedBonus(pos, obsidian), null));
+            choices.add(new Choice(pos, damage - FACE_PENALTY + speedBonus(pos, obsidian) + seenBonus(pos), null));
         }
 
         if (cev.get()) {
@@ -865,12 +866,16 @@ public class AutoCity extends Feature implements MiningManager.StopGate, MiningM
                 if (!mc.world.getBlockState(pos).isOf(Blocks.OBSIDIAN) || !mc.world.getBlockState(pos.up()).isAir() || roofBlocked(pos)) continue;
                 float damage = cevDamage(pos, box, feet);
                 if (damage < minDamage.get()) continue;
-                choices.add(new Choice(pos, damage - FACE_PENALTY, null));
+                choices.add(new Choice(pos, damage - FACE_PENALTY + seenBonus(pos), null));
             }
         }
 
         choices.sort((a, b) -> Float.compare(b.score, a.score));
         return choices;
+    }
+
+    private static float seenBonus(BlockPos pos) {
+        return InteractionManager.get().seesAny(pos) ? SEEN_BONUS : 0;
     }
 
     private boolean roofCrystal(BlockPos pos) {

@@ -245,6 +245,13 @@ public final class InteractionManager {
         return ncpFace(block, side, eye) && ncpSees(block, side, eye);
     }
 
+    public boolean seesAny(BlockPos block) {
+        for (Direction side : Direction.values()) {
+            if (sees(block, side)) return true;
+        }
+        return false;
+    }
+
     public boolean seen(BlockHitResult hit) {
         return ncpSees(hit.getBlockPos(), hit.getSide(), mc.player.getEyePos());
     }
