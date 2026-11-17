@@ -214,7 +214,7 @@ public class Surround extends Feature {
     );
 
     private final Setting<Boolean> allowPop = sgProtect.add(new BoolSetting.Builder()
-        .name("trade-pop")
+        .name("allow-pop")
         .description("Breaks popping crystals in your ring if you have a spare totem.")
         .defaultValue(true)
         .visible(breakCrystals::get)
