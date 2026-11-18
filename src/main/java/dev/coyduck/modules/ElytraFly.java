@@ -195,8 +195,8 @@ public class ElytraFly extends Feature {
 
     private final Setting<Boolean> overdrive = sgSpeed.add(new BoolSetting.Builder()
         .name("overdrive")
-        .description("Extra flight ticks to reach max speed sooner.")
-        .defaultValue(true)
+        .description("Extra flight ticks to reach max speed sooner; setbacks pause it.")
+        .defaultValue(false)
         .visible(this::ultra)
         .build()
     );
@@ -448,8 +448,9 @@ public class ElytraFly extends Feature {
     private static final int TAKEOFF_WINDOW = 40;
     private static final int TAKEOFF_EVERY = 10;
 
-    private static final double MAX_VERTICAL = 2.99;
-    private static final double WALL_SLOW = 0.5;
+    private static final double MAX_VERTICAL = 2.9995;
+    private static final double CAP_BAND = 1.05;
+    private static final long OVERDRIVE_REST = 6_000;
     private static final long REPLACE_EVERY = 1_000;
     private static final int RAMP_DELAY = 1;
     private static final int REWIND_TICKS = 15;
@@ -472,6 +473,7 @@ public class ElytraFly extends Feature {
     private int nextTakeoff;
 
     private double ramp;
+    private long overdriveRestUntil;
     private int rampDelay;
     private double lastSpeed;
     private int capTicks;
@@ -600,7 +602,7 @@ public class ElytraFly extends Feature {
 
     private boolean stalled() {
         if (pilot != null || !mc.player.isAlive() || !mc.player.isGliding() || mc.player.isUsingItem() || inFluid()) return true;
-        if (waitingChunks || buildingEngaged || capTicks > 0 || overdriveSpent) return true;
+        if (waitingChunks || buildingEngaged || capTicks > 0 || overdriveSpent || Util.getMeasuringTimeMs() < overdriveRestUntil) return true;
         double top = speedCap() * OVERDRIVE_TOP;
         if (vanillaFlight) {
             if (lastSpeed > 1.0E-4 && lastSpeed < top) return false;
@@ -663,7 +665,9 @@ public class ElytraFly extends Feature {
     private void onPacket(PacketApplyEvent.Pre event) {
         if (!(event.packet instanceof PlayerPositionLookS2CPacket) || mc.player == null || !mc.player.isGliding()) return;
 
-        if (ultra() && rubberbandCap.get() && lastSpeed * 20 >= capSpeed.get()) {
+        overdriveRestUntil = Util.getMeasuringTimeMs() + OVERDRIVE_REST;
+        double speed = lastSpeed * 20;
+        if (ultra() && rubberbandCap.get() && speed >= capSpeed.get() && speed <= capSpeed.get() * CAP_BAND) {
             long now = Util.getMeasuringTimeMs();
             pullBacks.addLast(now);
             while (now - pullBacks.peekFirst() > CAP_WINDOW) pullBacks.pollFirst();
@@ -782,14 +786,6 @@ public class ElytraFly extends Feature {
                 z = 0;
                 held = true;
             } else if (ahead) {
-                double free = freeScale(x / intended * reach, z / intended * reach, y) * reach;
-                if (free < reach && ultra()) {
-                    double cap = Math.sqrt(WALL_SLOW * free);
-                    if (cap < intended) {
-                        x *= cap / intended;
-                        z *= cap / intended;
-                    }
-                }
                 x *= freeScale(x, 0, y);
                 z *= freeScale(0, z, y);
                 double both = freeScale(x, z, y);
