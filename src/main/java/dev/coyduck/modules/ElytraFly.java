@@ -600,7 +600,7 @@ public class ElytraFly extends Feature {
 
     private boolean stalled() {
         if (pilot != null || !mc.player.isAlive() || !mc.player.isGliding() || mc.player.isUsingItem() || inFluid()) return true;
-        if (waitingChunks || buildingEngaged || capTicks > 0 || overdriveSpent || LatencyManager.get().frozen()) return true;
+        if (waitingChunks || buildingEngaged || capTicks > 0 || overdriveSpent) return true;
         double top = speedCap() * OVERDRIVE_TOP;
         if (vanillaFlight) {
             if (lastSpeed > 1.0E-4 && lastSpeed < top) return false;
@@ -759,7 +759,7 @@ public class ElytraFly extends Feature {
         }
         if (limitHeight.get() && y > 0) y = Math.max(0, Math.min(y, maxHeight.get() - mc.player.getY()));
 
-        if (LatencyManager.get().frozen()) {
+        if (!ultra() && LatencyManager.get().frozen()) {
             x = 0;
             z = 0;
             y = 0;
@@ -776,11 +776,12 @@ public class ElytraFly extends Feature {
         boolean held = false;
         if (wallGuard.get() && intended > 0) {
             double reach = intended + 1;
-            if (!loaded(mc.player.getX() + x, mc.player.getZ() + z) || !loaded(mc.player.getX() + x / intended * reach, mc.player.getZ() + z / intended * reach)) {
+            boolean ahead = loaded(mc.player.getX() + x, mc.player.getZ() + z) && loaded(mc.player.getX() + x / intended * reach, mc.player.getZ() + z / intended * reach);
+            if (!ahead && !ultra()) {
                 x = 0;
                 z = 0;
                 held = true;
-            } else {
+            } else if (ahead) {
                 double free = freeScale(x / intended * reach, z / intended * reach, y) * reach;
                 if (free < reach && ultra()) {
                     double cap = Math.sqrt(WALL_SLOW * free);
