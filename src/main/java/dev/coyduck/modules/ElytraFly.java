@@ -3,13 +3,11 @@ package dev.coyduck.modules;
 import dev.coyduck.core.Bus;
 import dev.coyduck.core.Core;
 import dev.coyduck.events.GameLeftEvent;
-import dev.coyduck.events.PacketApplyEvent;
 import dev.coyduck.events.PlayerMoveEvent;
 import dev.coyduck.events.TickEvent;
 import dev.coyduck.feature.Bind;
 import dev.coyduck.feature.BoolSetting;
 import dev.coyduck.feature.DoubleSetting;
-import dev.coyduck.feature.EnumSetting;
 import dev.coyduck.feature.Feature;
 import dev.coyduck.feature.IntSetting;
 import dev.coyduck.feature.KeybindSetting;
@@ -30,42 +28,21 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
-import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.util.Hand;
 import net.minecraft.util.PlayerInput;
 import net.minecraft.util.Util;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.ChunkSectionPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.RaycastContext;
-
-import java.util.ArrayDeque;
 
 public class ElytraFly extends Feature {
-    public enum Style {
-        Casual,
-        Ultra
-    }
-
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgSpeed = settings.createGroup("Speed");
-    private final SettingGroup sgLanding = settings.createGroup("Landing");
     private final SettingGroup sgModes = settings.createGroup("Modes");
     private final SettingGroup sgAutopilot = settings.createGroup("Autopilot");
     private final SettingGroup sgInventory = settings.createGroup("Inventory");
     private final SettingGroup sgKeybinds = settings.createGroup("Keybinds");
-
-    private final Setting<Style> style = sgGeneral.add(new EnumSetting.Builder<Style>()
-        .name("mode")
-        .description("Casual keeps one speed, ultra ramps up while moving.")
-        .defaultValue(Style.Casual)
-        .onChanged(mode -> resetRamp())
-        .build()
-    );
 
     private final Setting<Boolean> wallGuard = sgGeneral.add(new BoolSetting.Builder()
         .name("wall-guard")
@@ -131,47 +108,6 @@ public class ElytraFly extends Feature {
         .defaultValue(2.9)
         .min(0)
         .sliderRange(0, 5)
-        .visible(() -> !ultra())
-        .build()
-    );
-
-    private final Setting<Double> minSpeed = sgSpeed.add(new DoubleSetting.Builder()
-        .name("min-speed")
-        .description("Starting speed in blocks per tick, reset on release.")
-        .defaultValue(2.999)
-        .min(0)
-        .sliderRange(0, 5)
-        .visible(this::ultra)
-        .build()
-    );
-
-    private final Setting<Double> maxSpeed = sgSpeed.add(new DoubleSetting.Builder()
-        .name("max-speed")
-        .description("Top speed in blocks per tick while moving.")
-        .defaultValue(14.999)
-        .min(0)
-        .sliderRange(0, 17)
-        .visible(this::ultra)
-        .build()
-    );
-
-    private final Setting<Double> acceleration = sgSpeed.add(new DoubleSetting.Builder()
-        .name("acceleration")
-        .description("Speed gained per tick from a standstill.")
-        .defaultValue(0.3)
-        .min(0)
-        .sliderRange(0, 2)
-        .visible(this::ultra)
-        .build()
-    );
-
-    private final Setting<Double> plateau = sgSpeed.add(new DoubleSetting.Builder()
-        .name("plateau")
-        .description("Speed where acceleration fades to zero.")
-        .defaultValue(14.999)
-        .min(0.1)
-        .sliderRange(1, 30)
-        .visible(this::ultra)
         .build()
     );
 
@@ -190,70 +126,6 @@ public class ElytraFly extends Feature {
         .defaultValue(MAX_VERTICAL)
         .range(0, MAX_VERTICAL)
         .sliderRange(0, MAX_VERTICAL)
-        .build()
-    );
-
-    private final Setting<Boolean> overdrive = sgSpeed.add(new BoolSetting.Builder()
-        .name("overdrive")
-        .description("Extra flight ticks to reach max speed sooner; setbacks pause it.")
-        .defaultValue(false)
-        .visible(this::ultra)
-        .build()
-    );
-
-    private final Setting<Boolean> rubberbandCap = sgSpeed.add(new BoolSetting.Builder()
-        .name("rubberband-cap")
-        .description("Slows on pull backs, caps speed after repeated ones.")
-        .defaultValue(true)
-        .visible(this::ultra)
-        .build()
-    );
-
-    private final Setting<Double> capSpeed = sgSpeed.add(new DoubleSetting.Builder()
-        .name("cap-speed")
-        .description("Blocks per second the rubberband cap holds you at.")
-        .defaultValue(200)
-        .min(1)
-        .sliderRange(20, 340)
-        .visible(() -> ultra() && rubberbandCap.get())
-        .build()
-    );
-
-    private final Setting<Boolean> antiSlam = sgLanding.add(new BoolSetting.Builder()
-        .name("anti-slam")
-        .description("Slows the descent near the ground. Ultra only.")
-        .defaultValue(true)
-        .visible(this::ultra)
-        .build()
-    );
-
-    private final Setting<Double> slamDistance = sgLanding.add(new DoubleSetting.Builder()
-        .name("slow-from")
-        .description("Height where the descent starts slowing.")
-        .defaultValue(10)
-        .range(1, 30)
-        .sliderRange(1, 30)
-        .visible(() -> ultra() && antiSlam.get())
-        .build()
-    );
-
-    private final Setting<Double> slamFloor = sgLanding.add(new DoubleSetting.Builder()
-        .name("floor-height")
-        .description("Height where the descent is slowest.")
-        .defaultValue(0.5)
-        .range(0, 10)
-        .sliderRange(0, 5)
-        .visible(() -> ultra() && antiSlam.get())
-        .build()
-    );
-
-    private final Setting<Double> slamSpeed = sgLanding.add(new DoubleSetting.Builder()
-        .name("landing-speed")
-        .description("Slowest descent in blocks per tick.")
-        .defaultValue(0.45)
-        .range(0.05, MAX_VERTICAL)
-        .sliderRange(0.05, 1)
-        .visible(() -> ultra() && antiSlam.get())
         .build()
     );
 
@@ -408,34 +280,6 @@ public class ElytraFly extends Feature {
         .build()
     );
 
-    private final Setting<Bind> antiSlamKey = sgKeybinds.add(new KeybindSetting.Builder()
-        .name("anti-slam-key")
-        .description("Toggles anti-slam.")
-        .defaultValue(Bind.NONE)
-        .action(() -> flip(antiSlam, "Anti slam"))
-        .build()
-    );
-
-    private final Setting<Bind> modeKey = sgKeybinds.add(new KeybindSetting.Builder()
-        .name("mode-key")
-        .description("Switches between casual and ultra.")
-        .defaultValue(Bind.NONE)
-        .action(() -> {
-            if (mc.currentScreen != null) return;
-            style.set(ultra() ? Style.Casual : Style.Ultra);
-            info("Mode %s.", style.get().name().toLowerCase());
-        })
-        .build()
-    );
-
-    private final Setting<Bind> overdriveKey = sgKeybinds.add(new KeybindSetting.Builder()
-        .name("overdrive-key")
-        .description("Toggles overdrive.")
-        .defaultValue(Bind.NONE)
-        .action(() -> flip(overdrive, "Overdrive"))
-        .build()
-    );
-
     private final Setting<Bind> autopilotKey = sgKeybinds.add(new KeybindSetting.Builder()
         .name("autopilot-key")
         .description("Toggles autopilot.")
@@ -449,18 +293,14 @@ public class ElytraFly extends Feature {
     private static final int TAKEOFF_EVERY = 10;
 
     private static final double MAX_VERTICAL = 2.9995;
-    private static final double CAP_BAND = 1.05;
-    private static final long OVERDRIVE_REST = 6_000;
     private static final long REPLACE_EVERY = 1_000;
     private static final int RAMP_DELAY = 1;
     private static final int REWIND_TICKS = 15;
     private static final int CAP_TRIGGERS = 3;
-    private static final long CAP_WINDOW = 3_000;
     private static final int CAP_TICKS = 200;
     private static final int BUILDING_EASE = 5;
     private static final long REPLENISH_EVERY = 500;
     private static final int OVERDRIVE_TICKS = 49;
-    private static final double OVERDRIVE_TOP = 0.995;
 
     private static Vec3d pilot;
     private long replacedAt;
@@ -471,18 +311,6 @@ public class ElytraFly extends Feature {
     private int airTicks;
     private boolean wasGliding;
     private int nextTakeoff;
-
-    private double ramp;
-    private long overdriveRestUntil;
-    private int rampDelay;
-    private double lastSpeed;
-    private int capTicks;
-    private double capLimit;
-    private final ArrayDeque<Long> pullBacks = new ArrayDeque<>();
-    private boolean keyed;
-    private boolean vanillaFlight;
-    private boolean extraTick;
-    private boolean overdriveSpent;
 
     private boolean buildingEngaged;
     private int buildingTicks;
@@ -509,13 +337,6 @@ public class ElytraFly extends Feature {
         takeoffTries = 0;
         airTicks = 0;
         nextTakeoff = 0;
-        resetRamp();
-        lastSpeed = 0;
-        capTicks = 0;
-        overdriveSpent = false;
-        keyed = false;
-        vanillaFlight = false;
-        pullBacks.clear();
         buildingEngaged = false;
         waitingChunks = false;
         fireworkTicks = 0;
@@ -540,7 +361,7 @@ public class ElytraFly extends Feature {
     }
 
     public double horizontalSpeed() {
-        return low();
+        return speed.get();
     }
 
     public double upSpeed() {
@@ -551,72 +372,18 @@ public class ElytraFly extends Feature {
         return down.get();
     }
 
-    public double currentSpeed() {
-        return lastSpeed;
-    }
-
-    public boolean capped() {
-        return capTicks > 0;
-    }
-
     public boolean waitingForChunks() {
         return waitingChunks;
     }
 
     @EventHandler
     private void onTickPost(TickEvent.Post event) {
-        if (ultra() && overdrive.get()) overdrive();
-        else overdriveSpent = false;
         pilot = null;
-    }
-
-    private void overdrive() {
-        if (mc.player == null || mc.getNetworkHandler() == null || mc.isPaused()) return;
-        if (!mc.player.isGliding()) {
-            overdriveSpent = false;
-            return;
-        }
-        double now = vanillaFlight ? lastSpeed : ramp;
-        if (now <= low()) overdriveSpent = false;
-
-        double budget = speedCap();
-        double moved = lastSpeed;
-        for (int i = 0; i < OVERDRIVE_TICKS; i++) {
-            if (stalled()) break;
-            double current = vanillaFlight ? lastSpeed : ramp;
-            if (moved + Math.min(current + gain(current), budget) > budget) break;
-
-            double fall = mc.player.getVelocity().y;
-            extraTick = true;
-            try {
-                mc.player.age++;
-                mc.player.tick();
-            } finally {
-                extraTick = false;
-            }
-            Vec3d after = mc.player.getVelocity();
-            mc.player.setVelocity(after.x, fall, after.z);
-            moved += lastSpeed;
-        }
-    }
-
-    private boolean stalled() {
-        if (pilot != null || !mc.player.isAlive() || !mc.player.isGliding() || mc.player.isUsingItem() || inFluid()) return true;
-        if (waitingChunks || buildingEngaged || capTicks > 0 || overdriveSpent || Util.getMeasuringTimeMs() < overdriveRestUntil) return true;
-        double top = speedCap() * OVERDRIVE_TOP;
-        if (vanillaFlight) {
-            if (lastSpeed > 1.0E-4 && lastSpeed < top) return false;
-        } else if (keyed && rampDelay >= RAMP_DELAY && ramp < top) {
-            return false;
-        }
-        if ((vanillaFlight ? lastSpeed : ramp) >= high() * OVERDRIVE_TOP) overdriveSpent = true;
-        return true;
     }
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         if (mc.player == null) return;
-        if (capTicks > 0) capTicks--;
         if (replace.get() && !mc.player.isOnGround()) replaceElytra();
         if (replenish.get()) replenish();
         if (fireworks.get() && autopilot.get() && mc.player.isGliding()) useFirework();
@@ -661,29 +428,6 @@ public class ElytraFly extends Feature {
         }
     }
 
-    @EventHandler
-    private void onPacket(PacketApplyEvent.Pre event) {
-        if (!(event.packet instanceof PlayerPositionLookS2CPacket) || mc.player == null || !mc.player.isGliding()) return;
-
-        overdriveRestUntil = Util.getMeasuringTimeMs() + OVERDRIVE_REST;
-        double speed = lastSpeed * 20;
-        if (ultra() && rubberbandCap.get() && speed >= capSpeed.get() && speed <= capSpeed.get() * CAP_BAND) {
-            long now = Util.getMeasuringTimeMs();
-            pullBacks.addLast(now);
-            while (now - pullBacks.peekFirst() > CAP_WINDOW) pullBacks.pollFirst();
-            if (pullBacks.size() >= CAP_TRIGGERS) {
-                pullBacks.clear();
-                capTicks = CAP_TICKS;
-                capLimit = capSpeed.get() / 20;
-                Trace.log("elytra rubberband cap at {} b/s", capSpeed.get());
-            }
-        }
-
-        double floor = low();
-        for (int i = 0; i < REWIND_TICKS && ramp > floor; i++) ramp = Math.max(floor, ramp - gain(ramp));
-        rampDelay = 0;
-    }
-
     @EventHandler(priority = EventPriority.HIGHEST)
     private void onMove(PlayerMoveEvent event) {
         if (event.type != MovementType.SELF || mc.player == null || !hasElytra()) return;
@@ -711,9 +455,7 @@ public class ElytraFly extends Feature {
         if (autopilot.get() && forward == 0 && strafe == 0 && mc.player.getY() > autopilotHeight.get()) forward = 1;
 
         boolean piloted = pilot != null;
-        boolean vanilla = !piloted && !fluid && (bypass.get() || ultra() && inCobweb());
-        vanillaFlight = vanilla;
-        keyed = !piloted && !vanilla && (forward != 0 || strafe != 0);
+        boolean vanilla = !piloted && !fluid && bypass.get();
 
         double x = 0;
         double z = 0;
@@ -725,34 +467,19 @@ public class ElytraFly extends Feature {
             x = pilot.x;
             y = pilot.y;
             z = pilot.z;
-            resetRamp();
         } else if (vanilla) {
             double now = Math.hypot(event.x(), event.z());
-            if (now > 1.0E-4) {
-                double next = now;
-                if (rampDelay < RAMP_DELAY) rampDelay++;
-                else next = Math.min(now + gain(now), speedCap());
-                x = event.x() * next / now;
-                z = event.z() * next / now;
-            } else {
-                rampDelay = 0;
-                x = event.x();
-                z = event.z();
-            }
+            double next = Math.min(now, speed.get());
+            x = now > 1.0E-4 ? event.x() * next / now : event.x();
+            z = now > 1.0E-4 ? event.z() * next / now : event.z();
         } else if (forward != 0 || strafe != 0) {
-            if (rampDelay < RAMP_DELAY) rampDelay++;
-            else ramp = ramp + gain(ramp);
-            ramp = Math.min(ramp, speedCap());
             float base = RotationManager.get().physicsYaw(mc.player, mc.player.getYaw());
             double angle = Math.toRadians(base) + Math.atan2(-strafe, forward);
-            x = -Math.sin(angle) * ramp;
-            z = Math.cos(angle) * ramp;
-        } else {
-            resetRamp();
+            x = -Math.sin(angle) * speed.get();
+            z = Math.cos(angle) * speed.get();
         }
 
-        y = extraTick ? 0 : MathHelper.clamp(y, -MAX_VERTICAL, MAX_VERTICAL);
-        if (!piloted && ultra() && antiSlam.get() && y < -slamSpeed.get()) y = -landing(-y);
+        y = MathHelper.clamp(y, -MAX_VERTICAL, MAX_VERTICAL);
         if (!piloted && building.get()) {
             double[] eased = building(x, y, z);
             x = eased[0];
@@ -763,7 +490,7 @@ public class ElytraFly extends Feature {
         }
         if (limitHeight.get() && y > 0) y = Math.max(0, Math.min(y, maxHeight.get() - mc.player.getY()));
 
-        if (!ultra() && LatencyManager.get().frozen()) {
+        if (LatencyManager.get().frozen()) {
             x = 0;
             z = 0;
             y = 0;
@@ -773,19 +500,16 @@ public class ElytraFly extends Feature {
         if (waitingChunks) {
             x = 0;
             z = 0;
-            resetRamp();
         }
 
         double intended = Math.sqrt(x * x + z * z);
-        boolean held = false;
         if (wallGuard.get() && intended > 0) {
             double reach = intended + 1;
             boolean ahead = loaded(mc.player.getX() + x, mc.player.getZ() + z) && loaded(mc.player.getX() + x / intended * reach, mc.player.getZ() + z / intended * reach);
-            if (!ahead && !ultra()) {
+            if (!ahead) {
                 x = 0;
                 z = 0;
-                held = true;
-            } else if (ahead) {
+            } else {
                 x *= freeScale(x, 0, y);
                 z *= freeScale(0, z, y);
                 double both = freeScale(x, z, y);
@@ -794,56 +518,13 @@ public class ElytraFly extends Feature {
             }
         }
 
-        double moved = Math.sqrt(x * x + z * z);
-        if (!piloted && !held && moved < intended - 1.0E-3) {
-            if (vanilla) rampDelay = 0;
-            else {
-                ramp = Math.max(low(), Math.min(ramp, moved));
-                rampDelay = 0;
-            }
-        }
-        lastSpeed = moved;
-
         event.set(x, y, z);
         if (!vanilla) mc.player.setVelocity(0, 0, 0);
     }
 
     private void idle() {
-        keyed = false;
-        vanillaFlight = false;
-        resetRamp();
-        lastSpeed = 0;
         buildingEngaged = false;
         waitingChunks = false;
-    }
-
-    private void resetRamp() {
-        ramp = low();
-        rampDelay = 0;
-    }
-
-    private boolean ultra() {
-        return style.get() == Style.Ultra;
-    }
-
-    private double low() {
-        return ultra() ? minSpeed.get() : speed.get();
-    }
-
-    private double high() {
-        return ultra() ? maxSpeed.get() : speed.get();
-    }
-
-    private double gain(double speed) {
-        if (!ultra()) return 0;
-        double top = plateau.get();
-        return acceleration.get() * Math.max(0, top - speed) / top;
-    }
-
-    private double speedCap() {
-        double cap = high();
-        if (capTicks > 0 && ultra()) cap = Math.min(cap, capLimit);
-        return Math.max(low(), cap);
     }
 
     private double[] building(double x, double y, double z) {
@@ -851,7 +532,6 @@ public class ElytraFly extends Feature {
             buildingEngaged = false;
             return new double[] {x, y, z};
         }
-        resetRamp();
 
         double target = buildingSpeed.get();
         double verticalTarget = target * 1.5;
@@ -894,19 +574,6 @@ public class ElytraFly extends Feature {
         return true;
     }
 
-    private boolean inCobweb() {
-        Box box = mc.player.getBoundingBox();
-        BlockPos.Mutable pos = new BlockPos.Mutable();
-        for (int x = MathHelper.floor(box.minX + 1.0E-5); x <= MathHelper.floor(box.maxX - 1.0E-5); x++) {
-            for (int y = MathHelper.floor(box.minY + 1.0E-5); y <= MathHelper.floor(box.maxY - 1.0E-5); y++) {
-                for (int z = MathHelper.floor(box.minZ + 1.0E-5); z <= MathHelper.floor(box.maxZ - 1.0E-5); z++) {
-                    if (mc.world.getBlockState(pos.set(x, y, z)).isOf(Blocks.COBWEB)) return true;
-                }
-            }
-        }
-        return false;
-    }
-
     private double freeScale(double x, double z, double y) {
         if (x == 0 && z == 0) return 1;
         Box box = mc.player.getBoundingBox().offset(0, y, 0);
@@ -922,26 +589,6 @@ public class ElytraFly extends Feature {
             else high = mid;
         }
         return low;
-    }
-
-    private double landing(double speed) {
-        double start = slamDistance.get();
-        double end = Math.min(slamFloor.get(), start);
-        double floorSpeed = slamSpeed.get();
-        Box box = mc.player.getBoundingBox();
-        double ground = start;
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
-                double px = MathHelper.lerp(i / 2.0, box.minX, box.maxX);
-                double pz = MathHelper.lerp(j / 2.0, box.minZ, box.maxZ);
-                Vec3d from = new Vec3d(px, box.minY, pz);
-                BlockHitResult hit = mc.world.raycast(new RaycastContext(from, from.add(0, -start, 0), RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.ANY, mc.player));
-                if (hit.getType() != HitResult.Type.MISS) ground = Math.min(ground, from.y - hit.getPos().y);
-            }
-        }
-        if (ground >= start) return speed;
-        double share = MathHelper.clamp((ground - end) / Math.max(start - end, 1.0E-4), 0, 1);
-        return Math.min(speed, floorSpeed + share * (speed - floorSpeed));
     }
 
     private boolean loaded(double x, double z) {
